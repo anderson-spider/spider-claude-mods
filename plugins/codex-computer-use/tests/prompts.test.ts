@@ -39,4 +39,10 @@ test('routing instructions steer non-ASCII text to paste and window hints to get
   expect(prompt).toContain('means `cua.getApp("<bundle id>")` here')
 })
 
+test('routing instructions click only fresh indices and keep reused REPL names in let', () => {
+  const prompt = PROMPT('bridge')
+  expect(prompt).toContain('click only indices from the latest read')
+  expect(prompt).toContain('Variables persist across calls; reuse names with `let`, not `const`.')
+})
+
 const DESCRIPTION_BUDGET = 460
