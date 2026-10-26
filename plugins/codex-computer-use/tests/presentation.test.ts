@@ -30,6 +30,28 @@ test('toAnswer words busy, denied and ok replies', () => {
   expect(toAnswer({ status: 'ok', isError: false, content: [{ type: 'text', text: '100' }], notes: [] })).toEqual({ result: '100' })
 })
 
+test('toAnswer turns a Codex MCP image into a Messages API image block, after the notes', () => {
+  const content = [
+    { type: 'image', data: 'AAAA', mimeType: 'image/jpeg', _meta: { 'codex/imageDetail': 'original' } },
+    { type: 'resource_link', uri: 'file:///x' },
+  ]
+
+  expect(toAnswer({ status: 'ok', isError: false, content, notes: ['note'] })).toEqual({
+    result: [
+      { type: 'text', text: 'note' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+    ],
+  })
+})
+
+test('toAnswer drops an image without data and defaults a missing media type to PNG', () => {
+  expect(toAnswer({ status: 'ok', isError: false, content: [{ type: 'image' }, { type: 'text', text: 'ok' }] })).toEqual({ result: 'ok' })
+  expect(toAnswer({ status: 'ok', isError: true, content: [{ type: 'image', data: 'BBBB' }] })).toEqual({
+    result: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'BBBB' } }],
+    isError: true,
+  })
+})
+
 test('toAnswer gives the install command when the helper is not running', () => {
   const answer = toAnswer({ status: 'unreachable', message: 'no socket' })
   expect(answer.isError).toBe(true)
