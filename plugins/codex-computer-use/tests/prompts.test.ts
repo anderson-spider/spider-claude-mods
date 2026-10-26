@@ -32,4 +32,11 @@ test('routing instructions keep consent, fresh state and private-input guardrail
   expect(DESCRIPTION).toContain('read its API documentation before continuing')
 })
 
+test('routing instructions steer non-ASCII text to paste and window hints to getApp', () => {
+  const prompt = PROMPT('bridge')
+  expect(prompt).toContain('`paste(text, { format: "text" })`, not `typeText`')
+  expect(prompt).toContain("check the field's `Value` after")
+  expect(prompt).toContain('means `cua.getApp("<bundle id>")` here')
+})
+
 const DESCRIPTION_BUDGET = 460

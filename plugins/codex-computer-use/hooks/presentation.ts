@@ -5,7 +5,12 @@ import { LEASE_MINUTES } from './routing'
 // Everything the model and the person are told: helper replies, the bridge's
 // refusals, the `/codex-cu` command texts and the approval band's wording. Pure.
 
-export type ToolAnswer = { result: string | ContentBlock[]; isError?: true }
+/** A tool_result content block in Messages API form, the shape the host sends to the model. */
+export type AnswerBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+
+export type ToolAnswer = { result: string | AnswerBlock[]; isError?: true }
 
 /** A tool answer that tells the model the call did not happen. */
 export const refusal = (text: string) => ({ result: text, isError: true as const })
@@ -13,14 +18,29 @@ export const refusal = (text: string) => ({ result: text, isError: true as const
 const withNotes = (text: string, notes: readonly string[] | undefined) =>
   notes === undefined || notes.length === 0 ? text : `${notes.join('\n')}\n\n${text}`
 
+// Codex answers with MCP blocks (`data`, `mimeType`); the API rejects an image without `source`.
+const toBlock = (block: ContentBlock): AnswerBlock[] => {
+  if (block.type === 'text') {
+    return [{ type: 'text', text: block.text ?? '' }]
+  }
+
+  if (block.type === 'image' && typeof block.data === 'string') {
+    return [{ type: 'image', source: { type: 'base64', media_type: block.mimeType ?? 'image/png', data: block.data } }]
+  }
+
+  return []
+}
+
+const isText = (block: AnswerBlock): block is Extract<AnswerBlock, { type: 'text' }> => block.type === 'text'
+
 /** The model-facing answer for a `/call` reply that needs no person. */
 export const toAnswer = (reply: CallResult): ToolAnswer => {
   switch (reply.status) {
     case 'ok': {
-      const blocks = reply.content.filter(block => block.type === 'text' || block.type === 'image')
+      const blocks = reply.content.flatMap(toBlock)
       const notes = reply.notes ?? []
-      const result: ContentBlock[] = notes.length === 0 ? blocks : [{ type: 'text', text: notes.join('\n') }, ...blocks]
-      const answer = result.every(block => block.type === 'text') ? result.map(block => block.text ?? '').join('\n') : result
+      const result: AnswerBlock[] = notes.length === 0 ? blocks : [{ type: 'text', text: notes.join('\n') }, ...blocks]
+      const answer = result.every(isText) ? result.map(block => block.text).join('\n') : result
 
       return reply.isError ? { result: answer, isError: true } : { result: answer }
     }

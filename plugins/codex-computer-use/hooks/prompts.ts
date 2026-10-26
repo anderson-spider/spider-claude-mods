@@ -9,7 +9,9 @@ export const PROMPT = (bridge: string) =>
   [
     '# Native apps',
     `Use \`${bridge}\` for native Mac apps; follow its first-call rule. Prefer browsers, CLIs and purpose-built APIs when they fit.`,
+    '- A window hint that names a bundle id for `request_access` or `app_screenshot` means `cua.getApp("<bundle id>")` here.',
     '- Use fresh accessibility-tree indices and keyboard shortcuts; re-read after each action.',
+    '- Enter text beyond ASCII (accents, emoji) with `paste(text, { format: "text" })`, not `typeText`, which drops those characters; check the field\'s `Value` after.',
     '- Batch deterministic steps, ending with `await app.getAXState()`. Read with `{ emit: false }` and print relevant lines only.',
     '- After errors or surprises, read state before retrying: an action may already have applied. Choose the least-change option for dialogs unless the task calls for a change.',
     '- To show a result, use `performSecondaryAction(<window index>, "Raise")` and name the window. Close windows you opened unless the task needs them.',
