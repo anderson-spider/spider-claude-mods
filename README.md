@@ -14,6 +14,7 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 | [gitlab](plugins/gitlab/README.md) | Opens (as drafts by default), edits, comments on (directly or as draft notes to publish later), reviews and (when asked, behind guards) merges GitLab merge requests, lists yours across projects, lists open review threads, lists and creates labels, runs, retries and cancels pipelines and jobs, waits for and reads pipelines, jobs and job errors, lists a job's artifacts with their URLs, picking the host and its token from the git remote. |
 | [image-preview](plugins/image-preview/README.md) | Shows images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads under its row in the transcript, as the desktop app does. |
 | [session-hud](plugins/session-hud/README.md) | A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; with the `nextSteps` option on, up to four next prompts from a fork of the session to pick one into the prompt box; and `/session-panel`, a pane with the main session, every agent it ran (type, model, effort, time, latest tools and tokens) and the last 15 minutes by agent type, kept across a resume. |
+| [sonarqube](plugins/sonarqube/README.md) | Lets Claude diagnose SonarQube 9.x analyses through the read-only Web API: the quality gate of a branch or pull request, its measures and issues, an issue's rule, security hotspots, and the analyzed branches and pull requests, finding the project in `sonar-project.properties`, with the server and token from the `url` and `token` plugin options or the `SONARQUBE_*` or `SONAR_*` environment variables. |
 | [subagent-effort](plugins/subagent-effort/README.md) | Sets the reasoning effort of every native subagent call from Jev's rating of its task, held to a per-type cap (read-only agents such as Explore at medium by default), leaving the model as it was, and keeps local records to compare efforts. |
 | [tailscale](plugins/tailscale/README.md) | Lets Claude query and modify your tailnet through the Tailscale API, with the key in the sensitive `apiKey` plugin option. |
 
@@ -33,6 +34,7 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.303 
 /plugin install gitlab@spider-claude-mods
 /plugin install image-preview@spider-claude-mods
 /plugin install session-hud@spider-claude-mods
+/plugin install sonarqube@spider-claude-mods
 /plugin install subagent-effort@spider-claude-mods
 /plugin install tailscale@spider-claude-mods
 ```

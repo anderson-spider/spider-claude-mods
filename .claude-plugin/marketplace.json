@@ -48,6 +48,11 @@
       "description": "A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; when turned on, next steps to tick and put in the prompt; and /session-panel, a pane with every agent the session ran and the last 15 minutes."
     },
     {
+      "name": "sonarqube",
+      "source": "./plugins/sonarqube",
+      "description": "Diagnose SonarQube 9.x analyses (quality gate, measures, issues, rules, hotspots, branches and pull requests) through its read-only Web API, using the url and token plugin options or the SONARQUBE_* or SONAR_* environment variables."
+    },
+    {
       "name": "subagent-effort",
       "source": "./plugins/subagent-effort",
       "description": "Sets the reasoning effort of every native subagent call from Jev's rating of its task, leaving the model as it was, and keeps local records to compare efforts."
