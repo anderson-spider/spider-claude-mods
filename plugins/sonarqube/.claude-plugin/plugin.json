@@ -1,0 +1,22 @@
+{
+  "name": "sonarqube",
+  "version": "0.1.0",
+  "description": "Diagnose SonarQube 9.x analyses (quality gate, measures, issues, rules, hotspots, branches and pull requests) through its read-only Web API, using the url and token plugin options or the SONARQUBE_* or SONAR_* environment variables.",
+  "author": {
+    "name": "anderson-spider"
+  },
+  "license": "MIT",
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "SonarQube URL",
+      "description": "Your server's https address, such as https://sonarqube.example.com (with its context path if it has one). The token is sent only there. Leave both options empty to use SONARQUBE_URL/SONARQUBE_TOKEN or SONAR_URL/SONAR_TOKEN. Leave it out of repository settings, which would make the plugin refuse it."
+    },
+    "token": {
+      "type": "string",
+      "title": "SonarQube token",
+      "description": "A user token (My Account > Security) that can browse the projects to read. Sent only to the url, as HTTP Basic auth. Leave it out of repository settings, which would make the plugin refuse it.",
+      "sensitive": true
+    }
+  }
+}
