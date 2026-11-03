@@ -78,17 +78,70 @@ export type OutputDeps = {
   codexHome: string
 }
 
+/**
+ * One run as `$.store` keeps it, under `job:<id>`: a foreground run until its wait runs out, then a background job.
+ * It outlives a plugin reload and the session, since its Codex process runs detached (`RunFiles`).
+ */
 export type Job = {
-  id: number
+  /** Unique across sessions: time-based with a random suffix. */
+  id: string
   kind: Kind
   prompt: string
-  status: 'running' | 'done' | 'failed'
+  status: 'running' | 'done' | 'failed' | 'lost'
   startedAt: number
   endedAt?: number
   threadId?: string
   paths?: string[]
-  /** Why a failed job failed, as its notice said. */
+  /** Why a failed or lost job ended so, as its notice said. */
   error?: string
+  /** The session watching it, which gets its end notice: the one that started it, or one that took it over. */
+  sessionId: string
+  /** The folder of the session that started it: jobs are listed and taken over within one project. */
+  project: string
+  /** When its watcher last saw it running; a job not seen for a while has no watcher and is taken over. */
+  seenAt: number
+  /** The watcher that owns it now: a watcher whose token is no longer here stops, so one job has one watcher. */
+  watcher?: string
+  /** Its run folder: events, stderr, pid and exit status. */
+  dir: string
+  /** False while a foreground call still waits on it: such a run is not listed as a job. */
+  background: boolean
+  /** Its end notice went out. */
+  notified?: boolean
+  /** What it runs, without its images and files, to save its result the same way whichever session sees it end. */
+  request: Request
+  /** For an image follow-up: the images its thread already had, left out of its result. */
+  before: string[]
+}
+
+/**
+ * What a detached run's folder says now: the start of its events (the thread), and once it ended its exit status and
+ * time, the end of its events and stderr (why it failed), and its last message as `-o` wrote it.
+ */
+export type RunState = { head: string; exit?: number; endedAt?: number; tail?: string; stderr?: string; answer?: string }
+
+/** A Codex process that runs detached, its output in a folder of files, so it survives a plugin reload. */
+export type RunFiles = {
+  /** Starts `argv` in `cwd` (the session's folder when absent), writing into `dir`; rejects when it cannot start. */
+  launch(dir: string, argv: string[], cwd: string | undefined): Promise<void>
+  /** The run's state, or undefined when its folder is gone (a reboot cleared it). */
+  read(dir: string): Promise<RunState | undefined>
+  /** Whether the run's process is still that Codex run; true while its pid is not written yet. */
+  alive(dir: string): Promise<boolean>
+  /** Stops the run when its process is still that Codex run; false when it was not (gone, or a reused pid). */
+  stop(dir: string): Promise<boolean>
+  /** Deletes the run's folder. */
+  remove(dir: string): Promise<void>
+  /** Codex's last answer in a thread since `sinceMs`, read back from its own session files, or undefined. */
+  recover(threadId: string, sinceMs: number): Promise<string | undefined>
+}
+
+/** The part of `$.store` the jobs use. */
+export type JobStore = {
+  get(key: string): Promise<unknown>
+  set(key: string, value: unknown): Promise<void>
+  delete(key: string): Promise<void>
+  keys(): Promise<string[]>
 }
 
 export type Check = { name: string; ok: boolean; detail: string }

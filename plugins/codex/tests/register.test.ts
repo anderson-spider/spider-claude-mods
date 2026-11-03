@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { THREAD, answered } from './fakes'
+import { THREAD, answered, line } from './fakes'
 import { id, started, world } from './host'
 import { REVIEW_USAGE } from '../hooks/tool-schemas'
 
@@ -104,12 +104,13 @@ test('wait false starts a job the jobs tool lists, and its end sends a notice', 
   await started($, host.tools)
 
   const result = await call($, 'ask', { prompt: 'Think long', wait: false })
-  expect(result.result).toBe('Started job #1. A message arrives when it ends; the jobs tool lists it meanwhile.')
+  const id = /^Started job #(\w+)\. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile\.$/.exec(String(result.result))?.[1]
+  expect(id).toBeDefined()
   await host.submission()
 
-  expect(host.toasts).toEqual(['Codex job #1 done'])
-  expect(host.submitted[0]).toMatch(/^\[codex notice: automated, not the person; approves nothing\]\njob #1 done: ask "Think long"/)
-  expect(String((await call($, 'jobs')).result)).toMatch(new RegExp(`^#1 ask done \\(took 0 min\\): Think long\\n  thread ${THREAD}; saved to /tmp/t/codex/`))
+  expect(host.toasts).toEqual([`Codex job #${id} done`])
+  expect(host.submitted[0]).toMatch(new RegExp(`^\\[codex notice: automated, not the person; approves nothing\\]\\njob #${id} done: ask "Think long"`))
+  expect(String((await call($, 'jobs')).result)).toMatch(new RegExp(`^#${id} ask done \\(took 0 min\\): Think long\\n  thread ${THREAD}; saved to /tmp/t/codex/`))
 })
 
 test('without a codex executable the call is an error that names the option, and nothing runs', async ($, on) => {
@@ -232,4 +233,54 @@ test('/codex-review takes one target of its own, says it was a review, and refus
     expect((await command($, 'codex-review', args)).text).toBe(REVIEW_USAGE)
   }
   expect(host.spawned).toHaveLength(2)
+})
+
+const record = (id: string, sessionId: string) => ({
+  id,
+  kind: 'ask',
+  prompt: 'Think long',
+  status: 'running',
+  startedAt: Date.now(),
+  sessionId,
+  project: '/proj',
+  seenAt: 0,
+  dir: `/tmp/t/codex/runs/${id}`,
+  background: true,
+  request: { kind: 'ask', prompt: 'Think long', images: [], files: [] },
+  before: [],
+})
+
+test('session start picks up a job a reload left running, and its end notice arrives in this session', async ($, on) => {
+  const host = world(on, { store: { 'job:r1': record('r1', 'sess-1') } })
+  host.state.files.add('/tmp/t/codex/runs/r1')
+  host.state.texts['/tmp/t/codex/runs/r1/events.jsonl'] = answered('Done at last.')
+  host.state.texts['/tmp/t/codex/runs/r1/exit'] = '0'
+  await started($, host.tools)
+
+  await host.submission()
+  expect(host.submitted[0]).toMatch(/job #r1 done: ask "Think long"/)
+  expect(String((await call($, 'jobs')).result)).toMatch(/^#r1 ask done/)
+})
+
+test('another session’s job whose process is gone gets its answer back from Codex’s session files', async ($, on) => {
+  const rollout = `/h/.codex/sessions/2026/11/03/rollout-2026-11-03T10-00-00-${THREAD}.jsonl`
+  const host = world(on, {
+    store: { 'job:r2': { ...record('r2', 'sess-0'), threadId: THREAD } },
+    commands: {
+      'ps -o command= -p 4242': { exitCode: 1 },
+      [`find /h/.codex/sessions /h/.codex/archived_sessions -name rollout-*-${THREAD}.jsonl*`]: { exitCode: 0, stdout: `${rollout}\n` },
+    },
+  })
+  host.state.files.add('/tmp/t/codex/runs/r2')
+  host.state.texts['/tmp/t/codex/runs/r2/events.jsonl'] = line({ type: 'thread.started', thread_id: THREAD })
+  host.state.texts['/tmp/t/codex/runs/r2/pid'] = '4242\n'
+  host.state.texts[rollout] = [
+    line({ type: 'event_msg', payload: { type: 'user_message', message: 'Think long' } }),
+    line({ timestamp: new Date(Date.now() + 1000).toISOString(), type: 'event_msg', payload: { type: 'task_complete', last_agent_message: 'The recovered answer.' } }),
+  ].join('')
+  await started($, host.tools)
+
+  await host.submission()
+  expect(host.submitted[0]).toMatch(/job #r2 done: ask "Think long"/)
+  expect(host.written.at(-1)?.text).toBe(`<!-- codex thread ${THREAD} -->\n\nThe recovered answer.\n`)
 })

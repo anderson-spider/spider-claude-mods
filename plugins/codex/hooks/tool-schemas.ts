@@ -72,7 +72,7 @@ export const REVIEW_INPUT_SCHEMA = {
 } satisfies SchemaFor<McpToolInputs['mcp__codex__review']>
 
 export const JOBS_DESCRIPTION =
-  "Find this session's background Codex requests: status, thread id and saved files, newest first. Local only; runs nothing."
+  'Find the background Codex requests of every session, which outlive a plugin reload: status, thread id and saved files, newest first. Local only; runs nothing.'
 
 export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<McpToolInputs['mcp__codex__jobs']>
 
