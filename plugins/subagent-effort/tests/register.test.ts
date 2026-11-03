@@ -263,3 +263,16 @@ test('a call that comes back twice with another effort goes as it came, so a mod
   expect(h.ledger().filter(l => l.kind === 'decision').map(l => [l.source, l.received, l.effort])).toEqual([['jev', 'max', 'max']])
   expect(h.logs).toContain('subagent-effort: Explore came back 2 times without Jev\'s low; it goes as it came (max).')
 })
+
+test('parallel calls with the same task are each sent back for Jev’s effort: each waits apart, by its description', async ($, on) => {
+  const h = world(on), received = dispatched(on); h.env.JEV_API_KEY = 'test-key'
+  await started($)
+  const probes = [1, 2, 3, 4].map(n => call({ description: `probe ${n}`, tool_use_id: `probe-${n}` }))
+  // The host hands them to the hook one after the other: each comes before the others come back.
+  const first: { deny?: string }[] = []
+  for (const probe of probes) first.push((await settle($.tool.call(probe as never))) as { deny?: string })
+  expect(first.map(answer => answer.deny)).toEqual(probes.map(() => expect.stringMatching(/effort: "low"/)))
+  expect(received).toEqual([])
+  await Promise.all(probes.map(probe => settle($.tool.call({ ...probe, effort: 'low' } as never))))
+  expect(received.map(r => [r.description, r.effort])).toEqual(probes.map(probe => [probe.description, 'low']))
+})
