@@ -1,6 +1,6 @@
 # subagent-effort
 
-Sets the reasoning effort of every native subagent call from Jev's rating of its task. The model stays whatever the call or the agent definition says; only the effort changes, and the transcript shows it in the task's description. Local records let you compare what each effort costs in time and tokens.
+Sets the reasoning effort of every native subagent call from Jev's rating of its task. The model stays whatever the call or the agent definition says; only the effort is Jev's. The plugin never changes a call: one without Jev's effort is sent back, untouched, naming the effort to come again with, so auto mode reviews the call that runs. Local records let you compare what each effort costs in time and tokens.
 
 ```text
 /plugin install subagent-effort --marketplace anderson-spider/claude-mods
@@ -14,7 +14,7 @@ Set the `apiKey` plugin option (a sensitive field, kept in secure storage) from 
 
 A hook on the `Agent` tool runs before each dispatch:
 
-- **Any agent type** (built-in, yours or a plugin's): Jev rates how much reasoning the task needs, and the rating is the effort, held to the agent type's cap (below). Jev is the authority: its effort replaces one the call already carries. The effort shows beside the task's description in the transcript, with `capped` when a cap held it down and the one it replaced (`Find the router (medium, capped, was max)`).
+- **Any agent type** (built-in, yours or a plugin's): Jev rates how much reasoning the task needs, and the rating is the effort, held to the agent type's cap (below). Jev is the authority: a call without its effort, or with another, is refused before it runs with `Jev rated this task medium. Call Agent again with the same input and effort: "medium"`, and Claude calls again with it; Jev rates the task once. A call is not changed after auto mode reviewed it, since auto mode then refuses it ("a hook changed this call's input after auto mode reviewed it"). A call that comes back twice with another effort goes as it came, so nothing loops.
 - **Fork** (`subagent_type: "fork"`) or an empty task: passed untouched. The host ignores a fork's effort anyway.
 - **Jev off or failing**: the call goes as it came, its own effort included, or the agent's usual effort when it has none, exactly as without the plugin.
 
