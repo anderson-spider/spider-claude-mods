@@ -8,9 +8,9 @@
   },
   "plugins": [
     {
-      "name": "chatgpt",
-      "source": "./plugins/chatgpt",
-      "description": "Ask ChatGPT or generate requested images in a logged-in browser; save results locally."
+      "name": "codex",
+      "source": "./plugins/codex",
+      "description": "Ask Codex for a second opinion or generate requested images through the Codex CLI; save results locally."
     },
     {
       "name": "codex-computer-use",

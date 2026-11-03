@@ -120,21 +120,6 @@ function checkBootstrap(root, names, errors) {
   if (listed !== expected) errors.push(`scripts/bootstrap.sh: ALL lists "${listed}", but marketplace.json has "${expected}"`)
 }
 
-// The chatgpt README names the default model by hand, while the tool schema builds the same text from DEFAULT_CHOICE
-// (hooks/tool-schemas.ts): "<model> at <Effort> effort", the effort capitalized as the menu labels it.
-function checkChatgptDefault(root, errors) {
-  const source = join(root, 'plugins/chatgpt/hooks/conversation.ts')
-  if (!existsSync(source)) return
-  const choice = /DEFAULT_CHOICE = \{ model: '([^']+)', effort: '([^']+)' \}/.exec(readText(source))
-  if (!choice) return errors.push("plugins/chatgpt/hooks/conversation.ts: no DEFAULT_CHOICE = { model: '…', effort: '…' } literal to check the README against")
-  const [, model, effort] = choice
-  const text = `${model} at ${effort[0].toUpperCase()}${effort.slice(1)} effort`
-  const readme = join(root, 'plugins/chatgpt/README.md')
-  if (!(existsSync(readme) && readText(readme).includes(text))) {
-    errors.push(`plugins/chatgpt/README.md: does not say "${text}", the default that DEFAULT_CHOICE in hooks/conversation.ts picks`)
-  }
-}
-
 // AGENTS.md pins behavior by test name; a renamed or removed test must fail here, not drift.
 function checkCitedTests(dir, fail) {
   const agents = join(dir, 'AGENTS.md')
@@ -288,7 +273,6 @@ export function checkRepo(root = '.') {
 
   checkCliPin(root, errors)
   checkBootstrap(root, listed, errors)
-  checkChatgptDefault(root, errors)
   return { errors, count: marketplace.plugins.length, unlisted: unlisted.length }
 }
 

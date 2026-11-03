@@ -143,7 +143,7 @@ test("off macOS every plugin but codex-computer-use is installed, with no helper
     ]);
     assert.match(r.stdout, /codex-computer-use left out: it controls native Mac apps/);
     assert.match(r.stdout, /gitlab needs its tokens/);
-    const cu = w.run("--only", "chatgpt,codex-computer-use");
+    const cu = w.run("--only", "codex,codex-computer-use");
     assert.equal(cu.status, 1);
     assert.match(cu.stderr, /codex-computer-use controls native Mac apps: macOS only/);
   } finally {
