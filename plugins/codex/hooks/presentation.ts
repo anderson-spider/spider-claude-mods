@@ -26,7 +26,7 @@ export function jobsReport(jobs: Job[], now: number): string {
         .filter(Boolean)
         .join('; ')
       const head = `#${job.id} ${job.kind} ${job.status} (${took}): ${job.prompt.slice(0, 60)}${job.prompt.length > 60 ? '…' : ''}`
-      return where ? `${head}\n  ${where}` : head
+      return [head, ...(where ? [`  ${where}`] : []), ...(job.error ? [`  error: ${job.error}`] : [])].join('\n')
     })
     .join('\n')
 }

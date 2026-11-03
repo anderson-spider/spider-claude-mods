@@ -51,3 +51,15 @@ test('the last line is read even without its newline', () => {
   reader.push('stdout', JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'tail' } }))
   expect(reader.end({ code: 0, signal: null }).message).toBe('tail')
 })
+
+test('a child ended by a signal says so, before an older error event', () => {
+  const reader = eventReader()
+  reader.push('stdout', line({ type: 'error', message: 'Reconnecting... 1/5' }))
+  expect(reader.end({ code: null, signal: 'SIGKILL' }).error).toBe('Codex ended without an answer: stopped by SIGKILL')
+})
+
+test('a failed exit after an answer keeps the answer and names the exit', () => {
+  const reader = eventReader()
+  reader.push('stdout', line({ type: 'item.completed', item: { type: 'agent_message', text: 'partial' } }))
+  expect(reader.end({ code: 2, signal: null })).toEqual({ message: 'partial', error: 'Codex exited with code 2 after answering' })
+})
