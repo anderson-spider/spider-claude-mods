@@ -4,7 +4,7 @@
 # native Mac apps, is left out. Safe to run again.
 #
 #   bootstrap.sh                     everything below
-#   bootstrap.sh --only tailscale,chatgpt only those plugins
+#   bootstrap.sh --only tailscale,codex only those plugins
 #   bootstrap.sh --check             prints what it would do and checks the prerequisites; changes nothing
 #
 # BOOTSTRAP_SOURCE replaces the GitHub repository as the marketplace source (a local checkout, for a test install).
@@ -19,7 +19,7 @@ set -eu
 MARKET=spider-claude-mods
 REPO=${BOOTSTRAP_SOURCE:-anderson-spider/claude-mods}
 # Every plugin of the marketplace; check-consistency keeps this list equal to marketplace.json.
-ALL="chatgpt codex-computer-use comfyui-local coolify file-explorer gitlab image-preview session-hud sonarqube subagent-effort tailscale"
+ALL="codex codex-computer-use comfyui-local coolify file-explorer gitlab image-preview session-hud sonarqube subagent-effort tailscale"
 NODE=${BOOTSTRAP_NODE:-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node}
 ONLY=
 CHECK=

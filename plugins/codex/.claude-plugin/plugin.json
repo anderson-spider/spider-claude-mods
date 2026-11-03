@@ -1,0 +1,29 @@
+{
+  "name": "codex",
+  "version": "0.1.0",
+  "description": "Ask Codex for a second opinion or generate requested images through the Codex CLI; save results locally.",
+  "author": {
+    "name": "anderson-spider"
+  },
+  "license": "MIT",
+  "userConfig": {
+    "foregroundMinutes": {
+      "type": "number",
+      "title": "Foreground wait (minutes)",
+      "description": "How long a request waits for Codex before it keeps going as a background job.",
+      "default": 6
+    },
+    "backgroundMinutes": {
+      "type": "number",
+      "title": "Background job limit (minutes)",
+      "description": "How long a request may run in all before it is stopped.",
+      "default": 30
+    },
+    "codexPath": {
+      "type": "string",
+      "title": "Codex CLI path",
+      "description": "Absolute path of the codex executable; leave empty to look on PATH, then in ~/.local/bin, /opt/homebrew/bin and /usr/local/bin.",
+      "default": ""
+    }
+  }
+}
