@@ -117,3 +117,42 @@ test('an image run starts in the plugin folder and hands back only the images a 
   expect(outcome.ok).toBe(true)
   expect(out.ran.filter(argv => argv[0] === 'cp').map(argv => argv[1])).toEqual([`${dir}/new.png`])
 })
+
+test('within answers a value that settled even when no time is left', async () => {
+  const time = clock()
+  const done = Promise.resolve('late')
+  await done
+  expect(await within(done, 0, time.sleep, time.now)).toBe('late')
+})
+
+test('a background limit below the foreground wait bounds the whole run', async () => {
+  const gate = new Promise<void>(() => undefined)
+  const { d, spawned, submitted, submission } = deps([{ stdout: line({ type: 'thread.started', thread_id: THREAD }), gate }])
+  const runner = createRunner(() => ({ foregroundMs: 600_000, backgroundMs: 120_000 }))
+  const outcome = await runner.runNow(d, ask)
+  expect(outcome.text).toMatch(/^Codex is still working after 2 min/)
+  await submission()
+  expect(spawned.stopped()).toBe(1)
+  expect(d.now!()).toBeLessThanOrEqual(120_000)
+  expect(submitted[0]).toMatch(/Note: Codex did not finish within 2 min; the run was stopped\.$/)
+})
+
+test('a foreground wait that fails stops the child and answers the failure', async () => {
+  const gate = new Promise<void>(() => undefined)
+  const { d, spawned } = deps([{ stdout: line({ type: 'thread.started', thread_id: THREAD }), gate }], {
+    sleep: async () => {
+      throw new Error('sleep: not found')
+    },
+  })
+  const outcome = await createRunner(limits).runNow(d, ask)
+  expect(outcome).toMatchObject({ ok: false, error: 'The wait for Codex failed, so the run was stopped: sleep: not found', threadId: THREAD })
+  expect(spawned.stopped()).toBe(1)
+})
+
+test('the jobs list keeps why a job failed', async () => {
+  const { d, submission } = deps([{ stdout: line({ type: 'turn.failed', error: { message: 'Not logged in' } }), exit: { code: 1, signal: null } }])
+  const runner = createRunner(limits)
+  await runner.startJob(d, ask)
+  await submission()
+  expect(runner.report(0)).toMatch(/^#1 ask failed .*\n  error: Not logged in$/)
+})

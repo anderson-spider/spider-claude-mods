@@ -80,6 +80,8 @@ export type Job = {
   endedAt?: number
   threadId?: string
   paths?: string[]
+  /** Why a failed job failed, as its notice said. */
+  error?: string
 }
 
 export type Check = { name: string; ok: boolean; detail: string }

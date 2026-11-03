@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Ask Codex for a second opinion or generate requested images through the Codex CLI; save results locally.",
   "author": {
     "name": "anderson-spider"

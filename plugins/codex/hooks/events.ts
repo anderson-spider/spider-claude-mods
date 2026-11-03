@@ -57,15 +57,19 @@ export function eventReader() {
       for (const each of lines) if (each.trim()) line(each)
     },
     /**
-     * The result once the child ended. A failed turn is an error; so is a run that ended without an answer or with a
-     * failed exit, explained by its last error event, else the tail of its stderr.
+     * The result once the child ended. A failed turn is an error. So is a failed exit after an answer, which keeps the
+     * answer, and a run that ended without one: a signal says so first, since an older error event (a reconnect) did
+     * not end it; else its last error event, the tail of its stderr or its exit code explains it.
      */
     end(exit: Exit): RunResult {
       if (pending.trim()) line(pending)
       pending = ''
       if (failed) result.error = failed
-      else if (result.message === undefined || exit.code !== 0) {
-        const why = lastError ?? (stderr.trim() || (exit.signal ? `stopped by ${exit.signal}` : `exit code ${String(exit.code)}`))
+      else if (result.message !== undefined) {
+        if (exit.signal) result.error = `Codex was stopped by ${exit.signal} after answering`
+        else if (exit.code !== 0) result.error = `Codex exited with code ${String(exit.code)} after answering`
+      } else {
+        const why = exit.signal ? `stopped by ${exit.signal}` : (lastError ?? (stderr.trim() || `exit code ${String(exit.code)}`))
         result.error = `Codex ended without an answer: ${why}`
       }
       return result

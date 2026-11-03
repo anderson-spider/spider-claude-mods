@@ -32,13 +32,18 @@ export function launch(spawn: Spawn, argv: string[], cwd: string | undefined): R
 }
 
 /**
- * Waits up to `ms` for `done`; undefined when the time runs out first. The wait goes through `sleep`, a host process,
- * in steps of a minute at most: a hook's own clock stops while a host call is in flight, as it would not for a timer.
+ * Waits up to `ms` for `done`; undefined when the time runs out first, unless `done` has settled by then. The wait goes
+ * through `sleep`, a host process, in steps of a minute at most: a hook's own clock stops while a host call is in
+ * flight, as it would not for a timer. A failing `sleep` rejects.
  */
 export async function within<T>(done: Promise<T>, ms: number, sleep: (ms: number) => Promise<unknown>, now = Date.now): Promise<T | undefined> {
   const deadline = now() + ms
-  const settled = done.then(value => ({ value }))
+  let last: { value: T } | undefined
+  const settled = done.then(value => (last = { value }))
+  // Lets an already settled `done` record itself before the first deadline check.
+  await Promise.resolve()
   for (;;) {
+    if (last) return last.value
     const left = deadline - now()
     if (left <= 0) return undefined
     const first = await Promise.race([settled, sleep(Math.min(left, 60_000)).then(() => undefined)])
@@ -62,6 +67,8 @@ export type RunnerDeps = {
 export type Limits = { foregroundMs: number; backgroundMs: number }
 
 const minutesOf = (ms: number) => Math.round(ms / 60_000)
+
+const waitFailed = (error: unknown) => `The wait for Codex failed, so the run was stopped: ${errorText(error)}`
 
 /** The session's runs: each call brings the host access it runs with (a job keeps its own), the jobs list is shared. */
 export function createRunner(limits: () => Limits) {
@@ -95,7 +102,7 @@ export function createRunner(limits: () => Limits) {
       let result = await within(started.running.done, Math.max(0, started.startedAt + backgroundMs - now()), deps.sleep, now).catch(
         (error): RunResult => {
           started.running.stop()
-          return { threadId: started.running.threadId(), error: `The wait for Codex failed, so the run was stopped: ${errorText(error)}` }
+          return { threadId: started.running.threadId(), error: waitFailed(error) }
         },
       )
       if (!result) {
@@ -108,6 +115,7 @@ export function createRunner(limits: () => Limits) {
       job.endedAt = now()
       job.threadId = outcome.threadId ?? started.running.threadId()
       job.paths = outcome.paths
+      job.error = outcome.error
       deps.toast(`Codex job #${job.id} ${job.status}`)
       // A submitted prompt is a new turn that reaches the model like the person's words: send only the
       // automated notice, with paths and the thread, never the answer (unverified Codex output).
@@ -116,14 +124,24 @@ export function createRunner(limits: () => Limits) {
     return job
   }
 
-  /** Runs a request in the foreground; past the foreground wait it goes on as a background job. */
+  /**
+   * Runs a request in the foreground; past the foreground wait it goes on as a background job. The background limit
+   * bounds the whole run, so it also cuts the foreground wait short. A wait that fails stops the child.
+   */
   async function runNow(deps: RunnerDeps, request: Request): Promise<Outcome> {
     const started = await start(deps, request)
     if (!('running' in started)) return started
-    const { foregroundMs } = limits()
-    const result = await within(started.running.done, foregroundMs, deps.sleep, deps.now)
+    const { foregroundMs, backgroundMs } = limits()
+    const waitMs = Math.min(foregroundMs, backgroundMs)
+    let result: RunResult | undefined
+    try {
+      result = await within(started.running.done, waitMs, deps.sleep, deps.now)
+    } catch (error) {
+      started.running.stop()
+      result = { threadId: started.running.threadId(), error: waitFailed(error) }
+    }
     if (result) return started.finish(result)
-    return movedToBackground(adopt(deps, request, started), minutesOf(foregroundMs))
+    return movedToBackground(adopt(deps, request, started), minutesOf(waitMs))
   }
 
   /** Starts a request as a background job at once, or answers why it could not start. */
