@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import { call, LEDGER, settle, started, world } from './host'
 import { STATS_COMMAND, STATS_DESCRIPTION } from '../hooks/register'
 import { OFF_TEXT } from '../hooks/key'
+import { CALIBRATION } from '../hooks/effort'
 
 const MARKER = 'SECRET-MARKER-7f3a'
 function dispatched(on: Parameters<typeof world>[0], answer: unknown = { result: 'native answer' }) {
@@ -140,8 +141,8 @@ test('a decision line and a foreground outcome line are written, and the host re
   dispatched(on, answer); await started($)
   expect(await routed($, call({ tool_use_id: 'toolu_1' }))).toEqual(answer)
   expect(h.ledger()).toEqual([
-    { v: 1, kind: 'decision', calibration: 3, ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', briefChars: 12, source: 'jev', received: null, effort: 'low', cap: null, level: 0, fullLevel: null, top: 0.8, jevReason: null, jevMs: expect.any(Number), jevTokens: { input: 300, output: 20 }, jevCostUsd: 0.0000126 },
-    { v: 1, kind: 'outcome', ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', effort: 'low', mode: 'foreground', resolvedModel: 'claude-haiku-5-5', status: 'completed', durationMs: 42_000, tokens: 1650 },
+    { v: 1, kind: 'decision', calibration: CALIBRATION, ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', briefChars: 12, source: 'jev', received: null, effort: 'low', cap: null, level: 0, headLevel: 0, fullLevel: null, top: 0.8, jevReason: null, jevMs: expect.any(Number), jevTokens: { input: 300, output: 20 }, jevCostUsd: 0.0000126 },
+    { v: 1, kind: 'outcome', ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', effort: 'low', mode: 'foreground', resolvedModel: 'claude-haiku-5-5', status: 'completed', durationMs: 42_000, tokens: 1650, errorClass: null },
   ])
 })
 

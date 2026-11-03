@@ -1,6 +1,6 @@
 // Local routing records. Pure: line builders, the summary for /subagent-effort-stats and an append over injected file
-// access. A line holds ids, the agent type, the effort, Jev's confidence, latency, tokens and cost, counts and the brief's length in
-// characters; never the task, the prompt, an answer, a path or a key. Every field is projected one by one, so extra
+// access. A line holds ids, the agent type, the effort, Jev's confidence, latency, tokens and cost, counts, a fixed error
+// class and the brief's length in characters; never the task, the prompt, an answer, a path or a key. Every field is projected one by one, so extra
 // input cannot leak in.
 import { CALIBRATION, EFFORTS, jevCostOf } from './effort'
 import type { Choice, Effort } from './effort'
@@ -17,19 +17,37 @@ const ALL_EFFORTS: readonly Effort[] = [...EFFORTS, 'max']
 
 /**
  * `received` is the effort the call came with, `effort` the one the agent runs with; null is the agent's usual effort.
- * `cap` is the agent type's cap when it lowered Jev's pick (`level` stays Jev's own), else null. `fullLevel` is the level
- * Jev gave the task read up to FULL_CHARS, beside `level` from its head; null when no comparison was asked or it failed. The
- * Jev fields are the routing call's own: its latency, the tokens it reported and their estimated cost, apart from the
+ * `cap` is the agent type's cap when it lowered Jev's pick (`level` stays Jev's own), else null. `level` is the higher of
+ * `headLevel`, from the task's head, and `fullLevel`, from the task read up to FULL_CHARS (null when it was not asked or
+ * failed). The Jev fields are the routing call's own: its latency, the tokens it reported and their estimated cost, apart from the
  * subagent's duration and tokens on the outcome line.
  */
 export type DecisionLine = {
   v: 1; kind: 'decision'; calibration: number; ts: string; tool_use_id: string | null; agentType: string | null; briefChars: number | null
-  source: Source; received: Effort | null; effort: Effort | null; cap: Effort | null; level: number | null; fullLevel: number | null; top: number | null; jevReason: string | null; jevMs: number | null
+  source: Source; received: Effort | null; effort: Effort | null; cap: Effort | null; level: number | null; headLevel: number | null; fullLevel: number | null; top: number | null; jevReason: string | null; jevMs: number | null
   jevTokens: { input: number; output: number } | null; jevCostUsd: number | null
 }
+/**
+ * What kind of error the host returned for an `Agent` call, from fixed prefixes of its text, never the text itself: the
+ * person rejected or interrupted the call, the host cancelled it, the agent type does not exist, the input was invalid,
+ * or anything else. Only these words reach the ledger.
+ */
+export const ERROR_CLASSES = ['rejected', 'cancelled', 'unknown-type', 'invalid-input', 'other'] as const
+export type ErrorClass = (typeof ERROR_CLASSES)[number]
+// The host's own texts (Claude Code as pinned by this repository), matched anywhere since the host may wrap them in a tag.
+const ERROR_TEXTS: readonly [Exclude<ErrorClass, 'other'>, readonly string[]][] = [
+  ['rejected', ["doesn't want to proceed", '[Request interrupted by user']],
+  ['cancelled', ['Cancelled: ']],
+  ['unknown-type', [' not found. Available agents', "Agent type '"]],
+  ['invalid-input', ['InputValidationError']],
+]
+export const errorClassOf = (text: unknown): ErrorClass =>
+  typeof text === 'string' ? ERROR_TEXTS.find(([, marks]) => marks.some(mark => text.includes(mark)))?.[0] ?? 'other' : 'other'
+
+/** `errorClass` is set only on an error the `Agent` call returned (`errorClassOf`), else null. */
 export type OutcomeLine = {
   v: 1; kind: 'outcome'; ts: string; tool_use_id: string | null; agentType: string | null; effort: Effort | null; mode: 'foreground' | 'background'
-  resolvedModel: string | null; status: Status; durationMs: number | null; tokens: number | null
+  resolvedModel: string | null; status: Status; durationMs: number | null; tokens: number | null; errorClass: ErrorClass | null
 }
 export type Line = DecisionLine | OutcomeLine
 
@@ -51,7 +69,7 @@ export type DecisionInput = { ts: string; toolUseId: string | undefined; agentTy
 export function decisionLine({ ts, toolUseId, agentType, briefChars, source, received, effort, cap = null, choice }: DecisionInput): DecisionLine {
   return {
     v: 1, kind: 'decision', calibration: CALIBRATION, ts, tool_use_id: word(toolUseId, 80), agentType: word(agentType, 80), briefChars: maybeCount(briefChars),
-    source, received: effortOf(received), effort: effortOf(effort), cap: effortOf(cap), level: maybeCount(choice?.level), fullLevel: maybeCount(choice?.fullLevel), top: typeof choice?.top === 'number' && Number.isFinite(choice.top) ? round2(choice.top) : null,
+    source, received: effortOf(received), effort: effortOf(effort), cap: effortOf(cap), level: maybeCount(choice?.level), headLevel: maybeCount(choice?.headLevel), fullLevel: maybeCount(choice?.fullLevel), top: typeof choice?.top === 'number' && Number.isFinite(choice.top) ? round2(choice.top) : null,
     jevReason: word(choice?.jevReason, 40), jevMs: maybeCount(choice?.jevMs), ...jevSpend(choice?.jevTokens),
   }
 }
@@ -72,10 +90,11 @@ export function runsInBackground(call: { flag: unknown; surfaces: readonly strin
 /** What an outcome line needs from its decision; `background` is how the call runs (runsInBackground), `model` what it asked for (null: no model named). */
 export type Context = { toolUseId: string | undefined; agentType: string; effort: Effort | null; background: boolean; model: string | null }
 
-function outcome(ctx: Context, ts: string, mode: OutcomeLine['mode'], fields: { resolvedModel: unknown; status: Status; durationMs: unknown; usage: unknown }): OutcomeLine {
+function outcome(ctx: Context, ts: string, mode: OutcomeLine['mode'], fields: { resolvedModel: unknown; status: Status; durationMs: unknown; usage: unknown; errorClass?: ErrorClass }): OutcomeLine {
   return {
     v: 1, kind: 'outcome', ts, tool_use_id: word(ctx.toolUseId, 80), agentType: word(ctx.agentType, 80), effort: effortOf(ctx.effort), mode,
     resolvedModel: word(fields.resolvedModel, 80), status: fields.status, durationMs: maybeCount(fields.durationMs), tokens: tokensOf(fields.usage),
+    errorClass: fields.errorClass ?? null,
   }
 }
 /** Every token a run processed: input, cache written and read, and output. */
@@ -91,7 +110,7 @@ const PERMISSION_DENIED = 'Permission for this action was denied'
 export function afterAgentCall(ctx: Context, result: unknown, ts: string): OutcomeLine | { launched: string } | null {
   if (!record(result) || typeof result.deny === 'string') return null
   if (result.isError === true && typeof result.text === 'string' && result.text.startsWith(PERMISSION_DENIED)) return null
-  if (result.isError === true) return outcome(ctx, ts, ctx.background ? 'background' : 'foreground', { resolvedModel: ctx.model, status: 'error', durationMs: null, usage: null })
+  if (result.isError === true) return outcome(ctx, ts, ctx.background ? 'background' : 'foreground', { resolvedModel: ctx.model, status: 'error', durationMs: null, usage: null, errorClass: errorClassOf(result.text) })
   const r = result.result
   if (!record(r)) return null
   if (r.status === 'async_launched') return typeof r.agentId === 'string' && r.agentId ? { launched: r.agentId } : null
@@ -177,12 +196,13 @@ export type JevSpend = { asked: number; medianMs: number | null; inputTokens: nu
 /**
  * `overridden` counts Jev decisions that replaced a different effort the call came with, `capped` those an agent type's
  * cap lowered; `notRun` the calls that errored before running (no duration, no tokens: an agent type that does not
- * exist, for one); `olderRuns` the runs of a decision from an older calibration, left out of the groups.
+ * exist, for one), by error class in `notRunBy` (`unclassified` for lines written before the class was recorded);
+ * `olderRuns` the runs of a decision from an older calibration, left out of the groups.
  */
 export type Summary = {
   decisions: number; bySource: Record<Source, number>; overridden: number; capped: number; offReasons: Record<string, number>; olderCalibration: number
-  jev: JevSpend; groups: Group[]; byType: Group[]; notRun: number; olderRuns: number
-  /** This calibration's decisions with both levels: the head's level equal to, below or above the full brief's. */
+  jev: JevSpend; groups: Group[]; byType: Group[]; notRun: number; notRunBy: Record<string, number>; olderRuns: number
+  /** This calibration's decisions with both levels: the head's level equal to, below (the full brief raised the decision) or above the full brief's. */
   headVsFull: { same: number; lower: number; higher: number }
 }
 
@@ -203,7 +223,7 @@ function grouped(groups: Map<string, OutcomeLine[]>): Group[] {
  * their runs and calls that never ran are counted apart.
  */
 export function summarize(lines: Line[]): Summary {
-  const bySource = { jev: 0, off: 0 } as Record<Source, number>, offReasons: Record<string, number> = {}
+  const bySource = { jev: 0, off: 0 } as Record<Source, number>, offReasons: Record<string, number> = {}, notRunBy: Record<string, number> = {}
   let decisions = 0, olderCalibration = 0, overridden = 0, capped = 0, notRun = 0, olderRuns = 0
   const jevMs: number[] = [], jev: JevSpend = { asked: 0, medianMs: null, inputTokens: 0, outputTokens: 0, costUsd: 0 }
   const groups = new Map<string, OutcomeLine[]>(), byType = new Map<string, OutcomeLine[]>()
@@ -216,15 +236,20 @@ export function summarize(lines: Line[]): Summary {
       if (line.calibration !== CALIBRATION) olderCalibration++
       if (line.source === 'jev' && line.received && line.received !== line.effort) overridden++
       if (line.cap) capped++
-      if (line.calibration === CALIBRATION && typeof line.level === 'number' && typeof line.fullLevel === 'number') {
-        headVsFull[line.level === line.fullLevel ? 'same' : line.level < line.fullLevel ? 'lower' : 'higher']++
+      if (line.calibration === CALIBRATION && typeof line.headLevel === 'number' && typeof line.fullLevel === 'number') {
+        headVsFull[line.headLevel === line.fullLevel ? 'same' : line.headLevel < line.fullLevel ? 'lower' : 'higher']++
       }
       if (line.jevMs !== null) { jev.asked++; jevMs.push(line.jevMs) }
       if (line.jevTokens) { jev.inputTokens += line.jevTokens.input; jev.outputTokens += line.jevTokens.output; jev.costUsd += line.jevCostUsd ?? 0 }
       if (line.source === 'off') offReasons[line.jevReason ?? '?'] = (offReasons[line.jevReason ?? '?'] ?? 0) + 1
       continue
     }
-    if (neverRan(line)) { notRun++; continue }
+    if (neverRan(line)) {
+      notRun++
+      const kind = ERROR_CLASSES.includes(line.errorClass as ErrorClass) ? line.errorClass as ErrorClass : 'unclassified'
+      notRunBy[kind] = (notRunBy[kind] ?? 0) + 1
+      continue
+    }
     if (line.tool_use_id && older.has(line.tool_use_id)) { olderRuns++; continue }
     const key = `${familyOf(line.resolvedModel)}/${line.effort ?? 'usual'}`
     groups.set(key, [...groups.get(key) ?? [], line])
@@ -233,7 +258,7 @@ export function summarize(lines: Line[]): Summary {
   }
   return {
     decisions, bySource, overridden, capped, offReasons, olderCalibration, jev: { ...jev, medianMs: median(jevMs), costUsd: Math.round(jev.costUsd * 1e9) / 1e9 },
-    groups: grouped(groups), byType: grouped(byType), notRun, olderRuns, headVsFull,
+    groups: grouped(groups), byType: grouped(byType), notRun, notRunBy, olderRuns, headVsFull,
   }
 }
 
@@ -256,10 +281,11 @@ export function formatSummary(s: Summary): string {
   const asked = s.jev.asked ? [`Jev calls: ${s.jev.asked}, median ${s.jev.medianMs === null ? '?' : `${Math.round(s.jev.medianMs)}ms`}, ${tokens(s.jev.inputTokens)} input and ${tokens(s.jev.outputTokens)} output tokens, about ${usd(s.jev.costUsd)} (estimated).`] : []
   const row = (g: Group) => `${g.key}: ${g.runs} runs${g.failures ? `, ${g.failures} failed` : ''}, median ${seconds(g.medianMs)} and ${tokens(g.medianTokens)} tokens`
   const { same, lower, higher } = s.headVsFull
-  const compared = same + lower + higher ? [`Head vs full brief: ${same} same, ${lower} lower with the head, ${higher} higher.`] : []
+  const compared = same + lower + higher ? [`Head vs full brief: ${same} same, ${lower} raised by the full brief, ${higher} higher with the head.`] : []
   const types = s.byType.length ? ['By agent type:', ...s.byType.map(g => `  ${row(g)}`)] : []
+  const why = Object.entries(s.notRunBy).sort(([a], [b]) => a.localeCompare(b)).map(([kind, n]) => `${kind} ×${n}`).join(', ')
   const apart = [
-    ...(s.notRun ? [`${s.notRun} calls never ran (an error before the agent started), left out.`] : []),
+    ...(s.notRun ? [`${s.notRun} calls never ran (an error before the agent started${why ? `: ${why}` : ''}), left out.`] : []),
     ...(s.olderRuns ? [`${s.olderRuns} runs from an older calibration, left out.`] : []),
   ]
   return [head, ...asked, ...compared, ...s.groups.map(row), ...types, ...apart].join('\n')

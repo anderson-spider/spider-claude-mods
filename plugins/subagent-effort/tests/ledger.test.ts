@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { CALIBRATION } from '../hooks/effort'
-import { afterAgentCall, afterTurn, runsInBackground, appendLine, decisionLine, familyOf, formatSummary, parseLedger, readAll, ROTATE_AT, rotatedPath, summarize, usd } from '../hooks/ledger'
+import { afterAgentCall, afterTurn, runsInBackground, appendLine, decisionLine, errorClassOf, familyOf, formatSummary, parseLedger, readAll, ROTATE_AT, rotatedPath, summarize, usd } from '../hooks/ledger'
 import type { FileIo, Line } from '../hooks/ledger'
 
 const ctx = { toolUseId: 'toolu_1', agentType: 'Explore', effort: 'medium' as const, background: false, model: null }
@@ -8,7 +8,7 @@ const ts = '2026-10-17T00:00:00.000Z'
 
 test('a decision line projects each field and drops anything that is not a plain word or a count', () => {
   expect(decisionLine({ ts, toolUseId: 'bad id/with path', agentType: 'Explore', briefChars: 12.4, source: 'jev', received: 'max', effort: 'high', choice: { effort: 'high', level: 2, top: 0.876, jevReason: null, jevMs: 210, jevTokens: { input: 308.4, output: 19 } } }))
-    .toEqual({ v: 1, kind: 'decision', calibration: 3, ts, tool_use_id: null, agentType: 'Explore', briefChars: 12, source: 'jev', received: 'max', effort: 'high', cap: null, level: 2, fullLevel: null, top: 0.88, jevReason: null, jevMs: 210, jevTokens: { input: 308, output: 19 }, jevCostUsd: 0.000012936 })
+    .toEqual({ v: 1, kind: 'decision', calibration: CALIBRATION, ts, tool_use_id: null, agentType: 'Explore', briefChars: 12, source: 'jev', received: 'max', effort: 'high', cap: null, level: 2, headLevel: null, fullLevel: null, top: 0.88, jevReason: null, jevMs: 210, jevTokens: { input: 308, output: 19 }, jevCostUsd: 0.000012936 })
   expect(decisionLine({ ts, toolUseId: 'toolu_3', agentType: 'Explore', briefChars: 1, source: 'jev', received: null, effort: 'medium', cap: 'medium', choice: { effort: 'high', level: 2, top: 0.9, jevReason: null, jevMs: 1, jevTokens: null } }))
     .toMatchObject({ effort: 'medium', cap: 'medium', level: 2 })
   expect(decisionLine({ ts, toolUseId: 'toolu_2', agentType: 'plugin:agent', briefChars: 3, source: 'off', received: null, effort: null, choice: { effort: null, level: null, top: null, jevReason: 'no-key', jevMs: null, jevTokens: null } }))
@@ -18,8 +18,8 @@ test('a decision line projects each field and drops anything that is not a plain
 test('the Agent result becomes a foreground outcome, a background launch, or nothing for a refusal or an unknown shape', () => {
   const usage = { input_tokens: 1, output_tokens: 2, cache_creation_input_tokens: 3, cache_read_input_tokens: 4 }
   expect(afterAgentCall(ctx, { result: { status: 'completed', resolvedModel: 'claude-sonnet-5-5', totalDurationMs: 1500, usage } }, ts))
-    .toEqual({ v: 1, kind: 'outcome', ts, tool_use_id: 'toolu_1', agentType: 'Explore', effort: 'medium', mode: 'foreground', resolvedModel: 'claude-sonnet-5-5', status: 'completed', durationMs: 1500, tokens: 10 })
-  expect(afterAgentCall(ctx, { isError: true }, ts)).toMatchObject({ status: 'error', mode: 'foreground', resolvedModel: null, tokens: null, durationMs: null })
+    .toEqual({ v: 1, kind: 'outcome', ts, tool_use_id: 'toolu_1', agentType: 'Explore', effort: 'medium', mode: 'foreground', resolvedModel: 'claude-sonnet-5-5', status: 'completed', durationMs: 1500, tokens: 10, errorClass: null })
+  expect(afterAgentCall(ctx, { isError: true }, ts)).toMatchObject({ status: 'error', mode: 'foreground', resolvedModel: null, tokens: null, durationMs: null, errorClass: 'other' })
   // Without a resolved model the call's own model stands in; an error of a background call keeps its mode.
   const asked = { ...ctx, background: true, model: 'sonnet' }
   expect(afterAgentCall(asked, { isError: true }, ts)).toMatchObject({ status: 'error', mode: 'background', resolvedModel: 'sonnet' })
@@ -31,11 +31,35 @@ test('the Agent result becomes a foreground outcome, a background launch, or not
   for (const result of [{ deny: 'no' }, denied, null, 'text', { result: 'text' }, { result: { status: 'async_launched' } }, { result: { status: 'teammate_spawned' } }]) expect(afterAgentCall(ctx, result, ts)).toBeNull()
 })
 
+test('an error the Agent call returned is recorded by its class, never by its text, and counted per class when it never ran', () => {
+  const texts: [unknown, string][] = [
+    ["The user doesn't want to proceed with this tool use. The tool use was rejected", 'rejected'],
+    ['[Request interrupted by user for tool use]', 'rejected'],
+    ['<tool_use_error>Cancelled: Claude ended the conversation</tool_use_error>', 'cancelled'],
+    ["Agent type 'nope' not found. Available agents: Explore, Plan", 'unknown-type'],
+    ['<tool_use_error>InputValidationError: prompt is required</tool_use_error>', 'invalid-input'],
+    ['Error: /home/u/private/secret failed', 'other'], [undefined, 'other'], [42, 'other'],
+  ]
+  for (const [text, kind] of texts) {
+    expect(errorClassOf(text)).toBe(kind)
+    const line = afterAgentCall(ctx, { isError: true, text }, ts)
+    expect(line).toMatchObject({ status: 'error', errorClass: kind })
+    expect(JSON.stringify(line)).not.toContain('private')
+  }
+  // A line written before the class was recorded counts as unclassified.
+  const early = (text: string, id: string) => afterAgentCall({ ...ctx, toolUseId: id }, { isError: true, text }, ts) as Line
+  const legacy = { ...early('x', 'c'), errorClass: undefined } as unknown as Line
+  const decided = decisionLine({ ts, toolUseId: 'a', agentType: 'Explore', briefChars: 1, source: 'off', received: null, effort: null })
+  const summary = summarize(parseLedger([decided, early('Cancelled: x', 'a'), early('Cancelled: y', 'b'), legacy, early('boom', 'd')].map(l => JSON.stringify(l)).join('\n')))
+  expect(summary).toMatchObject({ notRun: 4, notRunBy: { cancelled: 2, unclassified: 1, other: 1 } })
+  expect(formatSummary(summary).split('\n').at(-1)).toBe('4 calls never ran (an error before the agent started: cancelled ×2, other ×1, unclassified ×1), left out.')
+})
+
 test('a background turn end is an outcome with its status from the reason', () => {
   const turn = { durationMs: 900, isAborted: false, reason: 'answer', usage: { model: 'claude-opus-5-5', input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } }
   expect(afterTurn(ctx, turn, ts)).toMatchObject({ mode: 'background', status: 'completed', durationMs: 900, tokens: 2, resolvedModel: 'claude-opus-5-5' })
   expect(afterTurn(ctx, { ...turn, isAborted: true }, ts).status).toBe('aborted')
-  expect(afterTurn(ctx, { ...turn, reason: 'error' }, ts).status).toBe('error')
+  expect(afterTurn(ctx, { ...turn, reason: 'error' }, ts)).toMatchObject({ status: 'error', errorClass: null })
   expect(afterTurn(ctx, { durationMs: 1, isAborted: false, reason: 'refusal' }, ts)).toMatchObject({ status: 'refusal', tokens: null, resolvedModel: null })
 })
 
@@ -88,16 +112,16 @@ test('calls that never ran and runs of an older calibration stay out of the grou
     'Jev calls: 3, median 1ms, 0 input and 0 output tokens, about $0 (estimated).',
     'haiku/medium: 1 runs, median 1s and 10 tokens',
     'By agent type:', '  Explore: 1 runs, median 1s and 10 tokens',
-    '1 calls never ran (an error before the agent started), left out.',
+    '1 calls never ran (an error before the agent started: other ×1), left out.',
     '1 runs from an older calibration, left out.',
   ])
 })
 
 test("this calibration's decisions compare the head's level with the full brief's; one without both levels is left out", () => {
-  const decide = (level: number, fullLevel: number | null, calibration = CALIBRATION) => ({ ...decisionLine({ ts, toolUseId: `t${level}${fullLevel}`, agentType: 'Explore', briefChars: 1, source: 'jev', received: null, effort: 'low', choice: { effort: 'low', level, top: 1, jevReason: null, jevMs: null, jevTokens: null, fullLevel } }), calibration })
+  const decide = (headLevel: number, fullLevel: number | null, calibration = CALIBRATION) => ({ ...decisionLine({ ts, toolUseId: `t${headLevel}${fullLevel}`, agentType: 'Explore', briefChars: 1, source: 'jev', received: null, effort: 'low', choice: { effort: 'low', level: Math.max(headLevel, fullLevel ?? 0), top: 1, jevReason: null, jevMs: null, jevTokens: null, headLevel, fullLevel } }), calibration })
   const summary = summarize([decide(1, 1), decide(1, 2), decide(0, 2), decide(2, 1), decide(1, null), decide(0, 3, 2)])
   expect(summary.headVsFull).toEqual({ same: 1, lower: 2, higher: 1 })
-  expect(formatSummary(summary).split('\n')[1]).toBe('Head vs full brief: 1 same, 2 lower with the head, 1 higher.')
+  expect(formatSummary(summary).split('\n')[1]).toBe('Head vs full brief: 1 same, 2 raised by the full brief, 1 higher with the head.')
 })
 
 test('a dollar amount keeps two significant digits however small, and at least two decimals', () => {
