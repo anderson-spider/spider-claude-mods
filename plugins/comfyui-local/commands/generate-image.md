@@ -4,11 +4,11 @@ description: Generate, edit, or modify an image on your ComfyUI
 
 Generate, edit, or modify an image on the user's ComfyUI server based on their description: $ARGUMENTS
 
-Follow these steps exactly:
+The usual path; adapt it to the request:
 
 1. Use `search_templates` to find a workflow template that matches the request (such as "text to image", "image to image", "style transfer", "inpainting"), filtering by `tag` or `model` when the user named one. If a good one exists, read it with `get_template` and use it as the reference instead of designing from scratch.
 
-2. Use `search_models` to see which checkpoints, diffusion models, text encoders, VAEs and LoRAs are on the server, and pick what fits the request (a realistic checkpoint for a photo, an anime one for anime, SDXL or a newer model for quality). Only files it lists exist; never assume a model name. Confirm with `search_nodes` that the loader nodes the chosen model needs are installed.
+2. Use `search_models` to see which checkpoints, diffusion models, text encoders, VAEs and LoRAs are on the server, and pick what fits the request. Only files it lists exist; never assume a model name. Confirm with `search_nodes` that the loader nodes the chosen model needs are installed.
 
 3. If the user provides an input image (img2img, style transfer, reference), use `upload_file` to upload it and put the returned name in a LoadImage node.
 

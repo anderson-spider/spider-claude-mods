@@ -119,7 +119,10 @@ export const register: Register = (on, options) => {
     })
     await $.tool.register({
       name: 'sonarqube_issues',
-      description: 'List SonarQube issues of a project, branch or pull request, paged: open ones (OPEN, CONFIRMED, REOPENED) unless statuses says otherwise.',
+      description:
+        'List SonarQube issues (bugs, vulnerabilities, code smells) of a project, branch or pull request, paged: open ones (OPEN, CONFIRMED, REOPENED) unless statuses says otherwise. ' +
+        'Each issue carries its key, rule, severity, type, status, component, line and message; read its rule with sonarqube_rule. ' +
+        'Security hotspots are not issues: list them with sonarqube_hotspots.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -4,7 +4,7 @@ description: Generate audio (music, speech or sound effects) on your ComfyUI
 
 Generate audio on the user's ComfyUI server based on their description: $ARGUMENTS
 
-Follow these steps exactly:
+The usual path; adapt it to the request:
 
 1. Use `search_templates` with queries like "audio", "text to audio", "music" or "speech", or `tag: "Audio"`. If a good template exists, read it with `get_template` and use it as the reference.
 

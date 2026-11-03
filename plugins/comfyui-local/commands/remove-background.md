@@ -4,7 +4,7 @@ description: Remove the background from an image on your ComfyUI
 
 Remove the background from an image on the user's ComfyUI server: $ARGUMENTS
 
-Follow these steps exactly:
+The usual path; adapt it to the request:
 
 1. Use `search_templates` with queries like "remove background" or "background". If a good template exists, read it with `get_template` and use it as the reference.
 
