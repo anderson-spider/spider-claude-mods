@@ -50,6 +50,17 @@ declare module 'claude-code' {
       wait?: boolean
       out?: string
     }
+    mcp__codex__review: {
+      base?: string
+      commit?: string
+      uncommitted?: boolean
+      instructions?: string
+      model?: string
+      effort?: string
+      wait?: boolean
+      out?: string
+      maxChars?: number
+    }
     mcp__codex__jobs: {}
     mcp__codex__computer_use: CodexCuInput
   }

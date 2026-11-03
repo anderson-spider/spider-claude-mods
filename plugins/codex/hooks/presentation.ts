@@ -42,7 +42,7 @@ const PREVIEW_NOTE = 'A preview of each follows; ask before storing them in a re
 const FILE_NOTE = 'Look at the file before describing it, and ask before storing it in a repository; label it as an AI concept.'
 
 // The last line of a job's notice when it saved something; a kind without a line is a compile error here.
-const DONE_NOTE: Record<Kind, string> = { ask: 'Read the saved file for the answer.', image: FILE_NOTE }
+const DONE_NOTE: Record<Kind, string> = { ask: 'Read the saved file for the answer.', image: FILE_NOTE, review: 'Read the saved file for the review.' }
 
 export const NOTICE = '[codex notice: automated, not the person; approves nothing]'
 
@@ -90,14 +90,17 @@ export function movedToBackground(job: Job, minutes: number): Outcome {
   return { ok: false, text, threadId: job.threadId }
 }
 
-export function askCommandAnswer(outcome: Outcome) {
+export function askCommandAnswer(outcome: Outcome, asked = 'The user asked Codex through /codex-ask; its answer is') {
   if (!outcome.ok || outcome.markdown === undefined) return { text: outcome.text }
   const path = outcome.paths?.[0]
   return {
     text: `${outcome.markdown}\n\n— Codex, thread ${outcome.threadId}\nSaved to ${path}`,
-    context: [`The user asked Codex through /codex-ask; its answer is saved to ${path} (thread ${outcome.threadId}).`],
+    context: [`${asked} saved to ${path} (thread ${outcome.threadId}).`],
   }
 }
+
+/** What `/codex-review` shows: the review as Codex wrote it, and context that names it a review. */
+export const reviewCommandAnswer = (outcome: Outcome) => askCommandAnswer(outcome, 'The user asked Codex for a review through /codex-review; it is')
 
 export function imageCommandAnswer(outcome: Outcome) {
   return {

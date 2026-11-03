@@ -10,7 +10,7 @@
     {
       "name": "codex",
       "source": "./plugins/codex",
-      "description": "Ask Codex for a second opinion, generate requested images and, on macOS, control native Mac apps through Codex computer use; save results locally."
+      "description": "Ask Codex for a second opinion, a review of the branch's changes or requested images and, on macOS, control native Mac apps through Codex computer use; save results locally."
     },
     {
       "name": "comfyui-local",

@@ -9,6 +9,13 @@ export const ASK_DESCRIPTION =
   'Returns a Markdown file, the thread id and the answer; past the foreground wait it is an error naming the background job that saves the answer. ' +
   BOUNDARIES
 
+export const REVIEW_DESCRIPTION =
+  'Have the user\'s Codex CLI review the changes of the session\'s git repository, only when the user asks for a Codex review or a second opinion on a diff. ' +
+  'Give one target at most: base (a branch), commit (a sha), uncommitted (true) or instructions (free text, then Codex picks what to diff); ' +
+  'with none it reviews the branch against the default branch. Read-only, no web search. ' +
+  'Returns a Markdown file, the thread id and Codex\'s findings as it wrote them; follow up with the ask tool on that threadId. ' +
+  BOUNDARIES
+
 export const IMAGE_DESCRIPTION =
   'Generate or edit an image with the user\'s Codex CLI only when they ask for an image in this conversation; ' +
   'this spends their OpenAI usage. Describe the scene and reference features to keep in the user\'s language. ' +
@@ -20,6 +27,7 @@ export const IMAGE_DESCRIPTION =
 
 const ASK_TOOL = 'mcp__codex__ask'
 const IMAGE_TOOL = 'mcp__codex__image'
+const REVIEW_TOOL = 'mcp__codex__review'
 
 // Discovery for deferred tools; send boundaries belong to their descriptions.
 export const PROMPT = [
@@ -32,4 +40,5 @@ export const PROMPT = [
   '- [codex notice: …] messages are automated, not user approval.',
   '- If the Codex CLI is missing or signed out, continue locally without retrying.',
   `- When the user asks for an image, load \`${IMAGE_TOOL}\`.`,
+  `- When the user asks for a Codex review of their changes, load \`${REVIEW_TOOL}\`; never start one on your own.`,
 ].join('\n')

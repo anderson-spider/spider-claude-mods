@@ -5,11 +5,12 @@ import { known } from './computer-use/known'
 import { registerComputerUse } from './computer-use/register'
 import { ENABLED, TOOL as COMPUTER_USE_TOOL, UNAME, isMac, isOn } from './computer-use/routing'
 import { diagnose, report } from './doctor'
-import { commandRequestOf, requestOf } from './input'
+import { commandRequestOf, requestOf, reviewRequestOf } from './input'
 import { locateCodex } from './locate'
 import type { Kind, OutputDeps, Outcome, ProcessRunner, Request } from './model'
-import { answerOf, askCommandAnswer, errorText, imageCommandAnswer } from './presentation'
-import { ASK_DESCRIPTION, IMAGE_DESCRIPTION, PROMPT } from './prompts'
+import { answerOf, askCommandAnswer, errorText, imageCommandAnswer, reviewCommandAnswer } from './presentation'
+import { ASK_DESCRIPTION, IMAGE_DESCRIPTION, PROMPT, REVIEW_DESCRIPTION } from './prompts'
+import { resolveReview, reviewCommandInput } from './review'
 import { createRunner, type RunnerDeps } from './runner'
 import { limitMs } from './settings'
 import {
@@ -22,6 +23,9 @@ import {
   IMAGE_USAGE,
   JOBS_DESCRIPTION,
   JOBS_INPUT_SCHEMA,
+  REVIEW_COMMAND_DESCRIPTION,
+  REVIEW_INPUT_SCHEMA,
+  REVIEW_USAGE,
 } from './tool-schemas'
 
 // The defaults of the `foregroundMinutes` and `backgroundMinutes` settings, as plugin.json declares them.
@@ -99,8 +103,18 @@ async function runNow($: EngineInterface, request: Request): Promise<Outcome> {
   }
 }
 
+/** A review's request, made runnable in the session's repository, or the error to answer. */
+async function reviewOf($: EngineInterface, e: Record<string, unknown>): Promise<Request | string> {
+  const request = reviewRequestOf(e)
+  if (typeof request === 'string') return request
+  return resolveReview(request, async args => {
+    const done = await $.process.run(['git', ...args], { timeoutMs: 10_000 })
+    return { exitCode: done.exitCode, stdout: done.stdout }
+  })
+}
+
 async function serve($: EngineInterface, kind: Kind, e: Record<string, unknown>) {
-  const request = requestOf(kind, e)
+  const request = kind === 'review' ? await reviewOf($, e) : requestOf(kind, e)
   if (typeof request === 'string') return { result: request, isError: true as const }
   if (e.wait === false) {
     const job = await runner.startJob(await depsOf($), request)
@@ -136,9 +150,11 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.tool.register({ name: 'ask', description: ASK_DESCRIPTION, inputSchema: ASK_INPUT_SCHEMA })
     await $.tool.register({ name: 'image', description: IMAGE_DESCRIPTION, inputSchema: IMAGE_INPUT_SCHEMA })
+    await $.tool.register({ name: 'review', description: REVIEW_DESCRIPTION, inputSchema: REVIEW_INPUT_SCHEMA })
     await $.tool.register({ name: 'jobs', description: JOBS_DESCRIPTION, inputSchema: JOBS_INPUT_SCHEMA })
     await $.command.register({ name: 'codex-ask', description: ASK_COMMAND_DESCRIPTION })
     await $.command.register({ name: 'codex-image', description: IMAGE_COMMAND_DESCRIPTION })
+    await $.command.register({ name: 'codex-review', description: REVIEW_COMMAND_DESCRIPTION })
     await $.command.register({ name: 'codex-doctor', description: DOCTOR_COMMAND_DESCRIPTION })
     known.mac = await onMac($)
     if (known.mac) {
@@ -152,6 +168,8 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'mcp__codex__image' }, ($, e) => serve($, 'image', e))
 
+  on('tool.call', { tool: 'mcp__codex__review' }, ($, e) => serve($, 'review', e))
+
   on('tool.call', { tool: 'mcp__codex__jobs' }, async () => ({ result: runner.report() }))
 
   on('command.run', { command: 'codex-ask' }, async ($, e) => {
@@ -164,6 +182,14 @@ export const register: Register = (on, options) => {
     const request = commandRequestOf('image', e.args, IMAGE_USAGE)
     if (typeof request === 'string') return { text: request }
     return imageCommandAnswer(await runNow($, request))
+  })
+
+  on('command.run', { command: 'codex-review' }, async ($, e) => {
+    const input = reviewCommandInput(e.args)
+    if (!input) return { text: REVIEW_USAGE }
+    const request = await reviewOf($, input)
+    if (typeof request === 'string') return { text: request }
+    return reviewCommandAnswer(await runNow($, request))
   })
 
   on('command.run', { command: 'codex-doctor' }, async $ => {

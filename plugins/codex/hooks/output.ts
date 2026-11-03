@@ -26,8 +26,9 @@ export async function saveAnswer(deps: OutputDeps, result: RunResult, request: R
     return failure(result.error ?? 'Codex ended without an answer.', { threadId, said: message, timedOut: result.timedOut, hint: !result.timedOut })
   }
   const path = outPath(deps, request, 'md')
-  await deps.write(path, `<!-- codex thread ${threadId} -->\n\n${message}\n`)
-  return askOutcome(threadId, message, path, request.maxChars)
+  const markdown = request.note ? `${request.note}\n\n${message}` : message
+  await deps.write(path, `<!-- codex thread ${threadId} -->\n\n${markdown}\n`)
+  return askOutcome(threadId, markdown, path, request.maxChars)
 }
 
 // A small JPEG of the saved image (sips, on macOS), so the model sees it at once.
