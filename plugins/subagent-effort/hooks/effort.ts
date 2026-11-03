@@ -9,20 +9,22 @@ import type { KeyIo, KeySources, Off } from './key'
 import { head, redact, REDACTED } from './redact'
 
 export type Effort = NonNullable<BuiltinToolInputs['Agent']['effort']>
-// Tags each decision line so the stats compare Jev only under one policy: bump it whenever QUESTION, EFFORTS or POLICY change.
-export const CALIBRATION = 3
+// Tags each decision line so the stats compare Jev only under one policy: bump it whenever QUESTION, EFFORTS, POLICY or
+// how the head's and the full brief's levels combine change.
+export const CALIBRATION = 4
 export const JEV_MODEL = 'jev-1.13.0'
 /**
- * How much of the task Jev reads: its head, where a brief states its goal. Ratings followed the brief's length even when
- * asked to ignore it (long briefs drew high), so the rest is never sent; the ledger keeps the whole length apart.
+ * The head of the task, where a brief states its goal: Jev rates it on its own because ratings followed the brief's
+ * length even when asked to ignore it (long briefs drew high).
  */
 export const TASK_CHARS = 800
 /**
- * How much of the task the comparison call reads: the length Jev read before the cut. Its level is only recorded, beside
- * the head's, so the records show whether the cut lowers ratings (a hard task whose difficulty sits past the head) or
- * changes nothing (length was noise).
+ * How much of a longer task the second call reads. The decision is the higher of the two levels, so a hard step stated
+ * past the head is not lost while the head alone still keeps a long brief from drawing high. Both levels are recorded.
  */
 export const FULL_CHARS = 4000
+/** How many levels the full brief may raise the head's: a long brief's own pull toward high cannot jump past it. */
+export const MAX_RAISE = 1
 /**
  * USD per million input tokens of a Jev call; output tokens are free. The published rate as of October 2026, from gateway
  * docs rather than a TypeSafe invoice, so the cost it gives is an estimate.
@@ -54,12 +56,13 @@ export const POLICY = { under: 1, over: 1.5 } as const
 
 export type JevReason = Off | JevFailureReason
 /**
- * What routing decided: the effort Jev's answer selects (null when Jev was off or failed), the highest probability of its
- * distribution (`top`, the model's confidence), why Jev was not used, how long it took when asked and the tokens it
- * reported for both calls (null when it reported none or failed). `fullLevel` is the level Jev gave the task read up to
- * `FULL_CHARS`, recorded only: null when the task fits the head, so no comparison was asked, or when that call failed.
+ * What routing decided: the effort of the decided `level` (null when Jev was off or failed), the highest probability of
+ * the distribution that decided it (`top`, the model's confidence), why Jev was not used, how long it took when asked and
+ * the tokens it reported for both calls (null when it reported none or failed). `headLevel` is the level of the head and
+ * `fullLevel` that of the task read up to `FULL_CHARS`: null when the task fits the head, so it was not asked, or when that
+ * call failed, which leaves the decision to the head. `level` is the higher of the two, at most `MAX_RAISE` above the head.
  */
-export type Choice = { effort: Effort | null; level: number | null; top: number | null; jevReason: JevReason | null; jevMs: number | null; jevTokens: JevUsage | null; fullLevel?: number | null }
+export type Choice = { effort: Effort | null; level: number | null; top: number | null; jevReason: JevReason | null; jevMs: number | null; jevTokens: JevUsage | null; headLevel?: number | null; fullLevel?: number | null }
 
 const round = (n: number) => Math.round(n * 1_000_000) / 1_000_000
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -101,7 +104,7 @@ const summed = (a: JevUsage | null, b: JevUsage | null): JevUsage | null => (a &
 
 export type EffortIo = KeyIo & { jev: JevIo; breaker: Breaker; gate: Gate; log: (text: string) => void }
 
-/** Jev rates the task and its level is the effort; any failure is no effort, with the reason. */
+/** Jev rates the task's head and, when longer, the task up to FULL_CHARS; the higher level is the effort. Any failure of the head's call is no effort, with the reason. */
 export async function assessEffort(io: EffortIo, call: { task: string; keys: KeySources; home: string; root: string }): Promise<Choice> {
   let startedAt: number | null = null
   const elapsed = () => { try { return startedAt !== null ? Math.max(0, io.jev.now() - startedAt) : null } catch { return null } }
@@ -115,13 +118,15 @@ export async function assessEffort(io: EffortIo, call: { task: string; keys: Key
     const state = clipped(call.task, access.key, call), full = clipped(call.task, access.key, call, FULL_CHARS)
     const jev = { ...io.jev, fetch: (url: string, init: Parameters<JevIo['fetch']>[1]) => { startedAt ??= io.jev.now(); return io.jev.fetch(url, init) } }
     const ask = createJev(jev, access.key, { model: JEV_MODEL, breaker: io.breaker, gate: io.gate, answerIds: Object.keys(QUESTION) })
-    // The head's call goes first, so it takes the slot and the breaker's probe; the comparison runs beside it, only when
-    // the task is longer than the head, and its failure never changes the decision.
-    const decided = ask(QUESTION, state)
-    const compared = full === state ? null : ask(QUESTION, full).then(reply => ({ level: levelOf(distribution(reply.answers)), usage: reply.usage })).catch(() => null)
-    const { answers, usage } = await decided
-    const dist = distribution(answers), level = levelOf(dist)
+    // The head's call goes first, so it takes the slot and the breaker's probe; the full brief's runs beside it, only when
+    // the task is longer than the head, and its failure leaves the decision to the head.
+    const rated = (reply: Awaited<ReturnType<typeof ask>>) => { const dist = distribution(reply.answers); return { level: levelOf(dist), top: Math.max(...Object.values(dist)), usage: reply.usage } }
+    const decided = ask(QUESTION, state).then(rated)
+    const compared = full === state ? null : ask(QUESTION, full).then(rated).catch(() => null)
+    const headed = await decided
     const other = compared ? await compared : null
-    return { effort: EFFORTS[level]!, level, top: Math.max(...Object.values(dist)), jevReason: null, jevMs: elapsed(), jevTokens: summed(usage, other?.usage ?? null), fullLevel: other?.level ?? null }
+    const won = other && other.level > headed.level ? other : headed
+    const level = Math.min(won.level, headed.level + MAX_RAISE)
+    return { effort: EFFORTS[level]!, level, top: won.top, jevReason: null, jevMs: elapsed(), jevTokens: summed(headed.usage, other?.usage ?? null), headLevel: headed.level, fullLevel: other?.level ?? null }
   } catch (error) { return off(classifyFailure(error).failure.reason) }
 }
