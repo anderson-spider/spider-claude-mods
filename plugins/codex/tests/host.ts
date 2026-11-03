@@ -21,6 +21,10 @@ export type HostState = {
   runs: Record<string, { exitCode: number; stdout?: string; stderr?: string }>
   /** What reading a text file gives, by path. */
   texts: Record<string, string>
+  /** What `git <args>` answers, by its arguments; one not listed fails as outside a repository does. */
+  git: Record<string, { exitCode: number; stdout?: string }>
+  /** `git` cannot run at all, as where it is not installed. */
+  gitFails?: boolean
   /** What `uname -s` prints; `undefined` makes it fail, as where there is no `uname`. */
   uname?: string
 }
@@ -33,6 +37,7 @@ export function world(on: On, init: Partial<HostState> = {}) {
     codex: [],
     runs: {},
     texts: {},
+    git: {},
     uname: 'Linux\n',
     ...init,
   }
@@ -63,6 +68,11 @@ export function world(on: On, init: Partial<HostState> = {}) {
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     processes.push(argv)
+    if (argv[0] === 'git') {
+      if (state.gitFails) return { deny: 'ENOENT: git' }
+      const known = state.git[argv.slice(1).join(' ')] ?? { exitCode: 128, stdout: '' }
+      return { value: { exitCode: known.exitCode, stdout: known.stdout ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     if (argv[0] === 'uname') {
       if (state.uname === undefined) return { deny: 'ENOENT: uname' }
       return { value: { exitCode: 0, stdout: state.uname, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }

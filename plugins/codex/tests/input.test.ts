@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { commandRequestOf, requestOf } from '../hooks/input'
+import { commandRequestOf, requestOf, reviewRequestOf } from '../hooks/input'
 
 const THREAD = '01a1a17a-b0ba-7770-b825-59aacf6e9f6d'
 
@@ -35,4 +35,24 @@ test('a bad input is answered before anything runs', () => {
 test('a command text is the whole prompt; a blank one answers the usage', () => {
   expect(commandRequestOf('ask', ' why? ', 'usage')).toEqual({ kind: 'ask', prompt: 'why?', images: [], files: [] })
   expect(commandRequestOf('image', '  ', 'usage')).toBe('usage')
+})
+
+test('a review input takes one target at most; none means the branch against its default base, resolved later', () => {
+  expect(reviewRequestOf({ effort: 'low' })).toEqual({ kind: 'review', prompt: '', images: [], files: [], effort: 'low' })
+  expect(reviewRequestOf({ base: ' release/2 ' })).toMatchObject({ review: { base: 'release/2' } })
+  expect(reviewRequestOf({ commit: 'ABC1234' })).toMatchObject({ review: { commit: 'ABC1234' } })
+  expect(reviewRequestOf({ uncommitted: true })).toMatchObject({ review: { uncommitted: true } })
+  expect(reviewRequestOf({ instructions: ' Look for races ' })).toMatchObject({ review: { instructions: 'Look for races' } })
+  expect(reviewRequestOf({ commit: 'HEAD~1' })).toMatchObject({ review: { commit: 'HEAD~1' } })
+  expect(reviewRequestOf({ commit: 'v1.2.0' })).toMatchObject({ review: { commit: 'v1.2.0' } })
+  expect(reviewRequestOf({ base: 'correção' })).toMatchObject({ review: { base: 'correção' } })
+})
+
+test('a review input with two targets, or a target Codex could misread, is answered before anything runs', () => {
+  expect(reviewRequestOf({ base: 'main', uncommitted: true })).toBe('Give one review target at most: base, commit, uncommitted or instructions (got base, uncommitted).')
+  expect(reviewRequestOf({ commit: '-p' })).toBe('-p is not a commit.')
+  expect(reviewRequestOf({ commit: 'abc def' })).toBe('abc def is not a commit.')
+  expect(reviewRequestOf({ base: '--help' })).toBe('--help is not a branch name.')
+  expect(reviewRequestOf({ instructions: '-' })).toBe('Give the review instructions as text; "-" would make Codex read them from stdin.')
+  expect(reviewRequestOf({ model: 'gpt "6"' })).toBe('gpt "6" is not a model name.')
 })

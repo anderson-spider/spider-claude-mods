@@ -1,6 +1,6 @@
 # codex
 
-Ask your [Codex CLI](https://developers.openai.com/codex/cli) for a second opinion, or have it generate an image, and save the result locally. On macOS it can also control native Mac apps through Codex computer use (see [Computer use](#computer-use-macos)).
+Ask your [Codex CLI](https://developers.openai.com/codex/cli) for a second opinion, have it review your branch's changes or generate an image, and save the result locally. On macOS it can also control native Mac apps through Codex computer use (see [Computer use](#computer-use-macos)).
 
 ```text
 /plugin install codex --marketplace anderson-spider/claude-mods
@@ -14,9 +14,12 @@ Install the Codex CLI and sign in once (`codex login`). The plugin finds `codex`
 | --- | --- |
 | `/codex-ask <question>` | Ask Codex and show the answer. Claude also reaches for `mcp__codex__ask` on its own for a second opinion on code or a plan, a hard question, or one that needs a web search. |
 | `/codex-image <prompt>` | Generate an image; it spends your OpenAI usage. The command takes only a prompt; the `image` tool also takes a `reference` to edit from. |
+| `/codex-review [--base <branch> \| --commit <sha> \| --uncommitted \| <instructions>]` | Have Codex review the repository's changes (`codex exec review`); Claude uses `mcp__codex__review` when you ask for a Codex review, never on its own. |
 | `/codex-doctor` | Check the Codex CLI, its login and its defaults. |
 
 Each request runs `codex exec --json`. An ask runs in the session's working directory, so Codex can read the repository and any listed `files`; it can also search the web. Every run is read-only and never asks for approval, whatever your Codex config says, so Codex reads but never writes or runs anything that changes files. An image runs in an empty folder of the plugin's (`$TMPDIR/codex/.work`), without web search.
+
+A review runs `codex exec review` in the session's working directory, which must be a git repository, without web search, on one target: the branch against a base (`base`), one commit (`commit`), the staged, unstaged and untracked changes (`uncommitted`), or free `instructions`, with which Codex picks what to diff. With no target it reviews the branch against the default branch (`origin/HEAD`, else `main` or `master`). A base review diffs against the merge base and so leaves out files git does not track yet: the saved review then starts with how many, and `uncommitted` includes them. The findings come as Codex wrote them (`[P1] title — path:lines`), in the language of your Codex config; ask a follow-up with `mcp__codex__ask` on the review's `threadId`.
 
 Without `model` or `effort`, a run uses your Codex defaults; the tool descriptions ask Claude to pass a low effort for a quick question. Each result carries a `threadId`: pass it back to follow up in the same Codex session (`codex exec resume`). Requests run side by side, each in its own process. A request waits six minutes in the foreground, then keeps going as a background job until thirty minutes from its start, when it is stopped; `wait: false` starts a job at once, a message arrives when a job ends, and `mcp__codex__jobs` lists them meanwhile. Change the limits with `claude plugin configure codex@spider-claude-mods`. Jobs disappear on reload.
 

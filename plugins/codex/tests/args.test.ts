@@ -39,3 +39,21 @@ test('an image run leaves web search out and is told to draw', () => {
 test('the files Codex should read are listed after the prompt', () => {
   expect(promptOf(ask({ files: ['/repo/a.ts', '/repo/b.md'] }))).toBe('Review it\n\nFiles to read (absolute paths):\n- /repo/a.ts\n- /repo/b.md')
 })
+
+const review = (target: Request['review'], more: Partial<Request> = {}): Request => ({ kind: 'review', prompt: 'Review', review: target, images: [], files: [], ...more })
+
+test('a review against a base runs read-only, without web search, records its source and names the base', () => {
+  expect(argsOf(review({ base: 'origin/main' }))).toEqual([
+    'exec', 'review', '--json',
+    '-c', 'sandbox_mode="read-only"', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"',
+    '--thread-source', THREAD_SOURCE, '--base', 'origin/main',
+  ])
+})
+
+test('each other review target becomes its own flag, and instructions the prompt', () => {
+  expect(argsOf(review({ commit: 'abc1234' }, { model: 'gpt-6', effort: 'low' })).slice(-6)).toEqual([
+    '-c', 'model_reasoning_effort="low"', '--thread-source', THREAD_SOURCE, '--commit', 'abc1234',
+  ])
+  expect(argsOf(review({ uncommitted: true })).slice(-1)).toEqual(['--uncommitted'])
+  expect(argsOf(review({ instructions: 'Look for races in runner.ts' })).slice(-2)).toEqual(['--', 'Look for races in runner.ts'])
+})

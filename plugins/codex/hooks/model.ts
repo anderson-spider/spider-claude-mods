@@ -1,5 +1,8 @@
-/** What a request asks for: an answer (`ask`) or an image (`image`). */
-export type Kind = 'ask' | 'image'
+/** What a request asks for: an answer (`ask`), an image (`image`) or a review of the repository's changes (`review`). */
+export type Kind = 'ask' | 'image' | 'review'
+
+/** The changes a review covers: the branch against a base, one commit, the uncommitted changes, or free instructions. */
+export type ReviewTarget = { base: string } | { commit: string } | { uncommitted: true } | { instructions: string }
 
 /**
  * What to run. `threadId` continues a Codex session (`codex exec resume`), else a new one starts; `model` and
@@ -16,6 +19,10 @@ export type Request = {
   files: string[]
   out?: string
   maxChars?: number
+  /** A review's target; absent on an ask or image. */
+  review?: ReviewTarget
+  /** A line the plugin puts before Codex's answer in the saved file, such as what a review left out. */
+  note?: string
 }
 
 /** What a Codex run came to, read from its `--json` events. */

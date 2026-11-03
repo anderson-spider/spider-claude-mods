@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import { THREAD, answered } from './fakes'
 import { id, started, world } from './host'
+import { REVIEW_USAGE } from '../hooks/tool-schemas'
 
 const call = ($: { tool: { call: (input: never) => Promise<unknown> } }, tool: string, input: Record<string, unknown> = {}) =>
   $.tool.call({ tool: id(tool), ...input } as never) as Promise<{ result?: unknown; isError?: boolean }>
@@ -8,11 +9,11 @@ const call = ($: { tool: { call: (input: never) => Promise<unknown> } }, tool: s
 const command = ($: { command: { run: (input: never) => Promise<unknown> } }, name: string, args = '') =>
   $.command.run({ command: name, args } as never) as Promise<{ text?: string; context?: string[] }>
 
-test('session start registers the ask, image and jobs tools and the three commands', async ($, on) => {
+test('session start registers the ask, image, review and jobs tools and the four commands', async ($, on) => {
   const { tools, commands } = world(on)
 
-  expect(await started($, tools)).toEqual(['ask', 'image', 'jobs'])
-  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-doctor'])
+  expect(await started($, tools)).toEqual(['ask', 'image', 'review', 'jobs'])
+  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-review', 'codex-doctor'])
   expect(Object.keys(tools[0]!.inputSchema.properties)).toEqual(['prompt', 'threadId', 'model', 'effort', 'files', 'wait', 'out', 'maxChars'])
   expect(Object.keys(tools[1]!.inputSchema.properties)).toEqual(['prompt', 'reference', 'threadId', 'model', 'effort', 'files', 'wait', 'out'])
 })
@@ -20,15 +21,15 @@ test('session start registers the ask, image and jobs tools and the three comman
 test('on macOS session start also registers the computer use tool and /codex-cu', async ($, on) => {
   const { tools, commands } = world(on, { uname: 'Darwin\n' })
 
-  expect(await started($, tools)).toEqual(['ask', 'image', 'jobs', 'computer_use'])
-  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-doctor', 'codex-cu'])
+  expect(await started($, tools)).toEqual(['ask', 'image', 'review', 'jobs', 'computer_use'])
+  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-review', 'codex-doctor', 'codex-cu'])
 })
 
 test('elsewhere, or when uname cannot run, computer use is not registered', async ($, on) => {
   const { tools, commands } = world(on, { uname: undefined })
 
-  expect(await started($, tools)).toEqual(['ask', 'image', 'jobs'])
-  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-doctor'])
+  expect(await started($, tools)).toEqual(['ask', 'image', 'review', 'jobs'])
+  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-review', 'codex-doctor'])
 })
 
 test('computer use starts off: no prompt section and Claude’s own desktop tools run until /codex-cu on', async ($, on) => {
@@ -155,4 +156,80 @@ test('/codex-doctor reports the executable, version, login and defaults from con
     '✓ login: Logged in using ChatGPT',
     "✓ defaults: model gpt-6.1, effort max (/h/.codex/config.toml); a call's model and effort override them",
   ].join('\n'))
+})
+
+const REPO = { 'rev-parse --is-inside-work-tree': { exitCode: 0, stdout: 'true\n' } }
+
+test('a review outside a git repository is refused before Codex runs', async ($, on) => {
+  const host = world(on, { codex: [{ stdout: answered('No issues.') }] })
+  await started($, host.tools)
+
+  const result = await call($, 'review')
+
+  expect(result.isError).toBe(true)
+  expect(String(result.result)).toBe('Not a git repository: a review needs the session to run inside one.')
+  expect(host.spawned).toHaveLength(0)
+
+  host.state.gitFails = true
+  const noGit = await call($, 'review')
+  expect(String(noGit.result)).toBe('git could not run (codex: $.process.run: ENOENT: git), so the review did not start.')
+  expect(host.spawned).toHaveLength(0)
+})
+
+test('a review without a target covers the branch against origin/HEAD and says which untracked files it left out', async ($, on) => {
+  const host = world(on, {
+    codex: [{ stdout: answered('[P1] Off by one — /proj/a.ts:3-4') }],
+    git: { ...REPO, 'symbolic-ref --quiet --short refs/remotes/origin/HEAD': { exitCode: 0, stdout: 'origin/main\n' }, 'ls-files --others --exclude-standard': { exitCode: 0, stdout: 'new.ts\nsrc/feature/a.ts\nsrc/feature/b.ts\n' } },
+  })
+  await started($, host.tools)
+
+  const result = await call($, 'review', { effort: 'low' })
+
+  expect(result.isError).toBe(undefined)
+  const { argv, cwd } = host.spawned[0]!
+  expect(cwd).toBe(undefined)
+  expect(argv.slice(1, 3)).toEqual(['exec', 'review'])
+  expect(argv).toEqual(expect.arrayContaining(['sandbox_mode="read-only"', 'web_search="disabled"', 'model_reasoning_effort="low"']))
+  expect(argv.slice(-2)).toEqual(['--base', 'origin/main'])
+  expect(host.written[0]?.path).toMatch(/^\/tmp\/t\/codex\/\d{8}-\d{6}-review-against-origin-main\.md$/)
+  expect(host.written[0]?.text).toBe(`<!-- codex thread ${THREAD} -->\n\n3 untracked files were not reviewed; use \`uncommitted\` to include them.\n\n[P1] Off by one — /proj/a.ts:3-4\n`)
+  expect(String(result.result)).toMatch(/Thread: .*\n\n3 untracked files were not reviewed; use `uncommitted` to include them\.\n\n\[P1\] Off by one/)
+})
+
+test('without origin/HEAD the review falls back to main, else master, else asks for a base', async ($, on) => {
+  const verify = (branch: string) => `rev-parse --verify --quiet refs/heads/${branch}`
+  const host = world(on, { codex: [{ stdout: answered('Fine.') }, { stdout: answered('Fine.') }], git: { ...REPO, [verify('main')]: { exitCode: 0 }, 'ls-files --others --exclude-standard': { exitCode: 0, stdout: '' } } })
+  await started($, host.tools)
+
+  await call($, 'review')
+  expect(host.spawned[0]!.argv.slice(-2)).toEqual(['--base', 'main'])
+  expect(host.written[0]?.text).not.toMatch(/untracked/)
+
+  delete host.state.git[verify('main')]
+  host.state.git[verify('master')] = { exitCode: 0 }
+  await call($, 'review')
+  expect(host.spawned[1]!.argv.slice(-2)).toEqual(['--base', 'master'])
+
+  delete host.state.git[verify('master')]
+  const none = await call($, 'review')
+  expect(String(none.result)).toBe('No default branch found (origin/HEAD, main or master): pass the base to review against.')
+  expect(host.spawned).toHaveLength(2)
+})
+
+test('/codex-review takes one target of its own, says it was a review, and refuses a target it cannot read', async ($, on) => {
+  const host = world(on, { codex: [{ stdout: answered('Fine.') }, { stdout: answered('Fine.') }], git: REPO })
+  await started($, host.tools)
+
+  const shown = await command($, 'codex-review', '--commit abc1234')
+  expect(host.spawned[0]!.argv.slice(-2)).toEqual(['--commit', 'abc1234'])
+  expect(shown.text).toMatch(/Fine\./)
+  expect(shown.context?.[0]).toMatch(/^The user asked Codex for a review through \/codex-review; it is saved to /)
+
+  await command($, 'codex-review', '--base=develop')
+  expect(host.spawned[1]!.argv.slice(-2)).toEqual(['--base', 'develop'])
+
+  for (const args of ['--base', '--base main focus on tests', '--uncommitted only the runner', '--bogus']) {
+    expect((await command($, 'codex-review', args)).text).toBe(REVIEW_USAGE)
+  }
+  expect(host.spawned).toHaveLength(2)
 })
