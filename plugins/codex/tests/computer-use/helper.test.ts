@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { LABEL, POLL, post, postStarting } from '../hooks/helper'
-import type { Probe } from '../hooks/helper'
+import { LABEL, POLL, post, postStarting } from '../../hooks/computer-use/helper'
+import type { Probe } from '../../hooks/computer-use/helper'
 
 import { ran } from './helpers'
 

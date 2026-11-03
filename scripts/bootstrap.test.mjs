@@ -80,7 +80,7 @@ test("--check prints the steps and changes nothing", () => {
   }
 });
 
-test("a fresh machine: marketplace added, every plugin installed, the helper of codex-computer-use installed", () => {
+test("a fresh machine: marketplace added, every plugin installed, the helper of codex's computer use installed", () => {
   const w = world();
   try {
     const r = w.run();
@@ -88,14 +88,14 @@ test("a fresh machine: marketplace added, every plugin installed, the helper of 
     assert.deepEqual(mutating(r.calls), [
       "claude plugin marketplace add anderson-spider/claude-mods",
       ...ALL.map(p => `claude plugin install ${p}@${MARKET} --scope user`),
-      "codex-computer-use-helper",
+      "codex-helper",
     ]);
   } finally {
     rmSync(w.root, { recursive: true, force: true });
   }
 });
 
-test("a second run updates what is installed and runs the codex-computer-use helper", () => {
+test("a second run updates what is installed and runs the codex helper", () => {
   const w = world({ installed: ALL, marketplace: true });
   try {
     const r = w.run();
@@ -103,7 +103,7 @@ test("a second run updates what is installed and runs the codex-computer-use hel
     assert.deepEqual(mutating(r.calls), [
       `claude plugin marketplace update ${MARKET}`,
       ...ALL.map(p => `claude plugin update ${p}@${MARKET} --scope user`),
-      "codex-computer-use-helper",
+      "codex-helper",
     ]);
   } finally {
     rmSync(w.root, { recursive: true, force: true });
@@ -118,8 +118,9 @@ test("--only limits the plugins, and an unknown name or flag is refused before a
     assert.deepEqual(mutating(only.calls), [`claude plugin marketplace update ${MARKET}`, `claude plugin install tailscale@${MARKET} --scope user`]);
     assert.match(only.stdout, /tailscale needs its apiKey/);
     assert.doesNotMatch(only.stdout, /codex-cu status/);
-    const cu = w.run("--only", "codex-computer-use");
+    const cu = w.run("--only", "codex");
     assert.equal(cu.status, 0, cu.stderr);
+    assert.deepEqual(mutating(cu.calls).slice(-2), [`claude plugin install codex@${MARKET} --scope user`, "codex-helper"]);
     assert.match(cu.stdout, /`\/codex-cu status` should report the helper running/);
     assert.doesNotMatch(cu.stdout, /tailscale/);
     const unknown = w.run("--only", "nope");
@@ -132,20 +133,50 @@ test("--only limits the plugins, and an unknown name or flag is refused before a
   }
 });
 
-test("off macOS every plugin but codex-computer-use is installed, with no helper, and asking for it is refused", () => {
+test("off macOS every plugin is installed, codex without the computer use helper or its next step", () => {
   const w = world({ os: "Linux" });
   try {
     const r = w.run();
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(mutating(r.calls), [
       "claude plugin marketplace add anderson-spider/claude-mods",
-      ...ALL.filter(p => p !== "codex-computer-use").map(p => `claude plugin install ${p}@${MARKET} --scope user`),
+      ...ALL.map(p => `claude plugin install ${p}@${MARKET} --scope user`),
     ]);
-    assert.match(r.stdout, /codex-computer-use left out: it controls native Mac apps/);
+    assert.doesNotMatch(r.stdout, /left out|codex-cu/);
     assert.match(r.stdout, /gitlab needs its tokens/);
-    const cu = w.run("--only", "codex,codex-computer-use");
-    assert.equal(cu.status, 1);
-    assert.match(cu.stderr, /codex-computer-use controls native Mac apps: macOS only/);
+    const codex = w.run("--only", "codex");
+    assert.equal(codex.status, 0, codex.stderr);
+    assert.doesNotMatch(codex.stdout, /codex-cu/);
+  } finally {
+    rmSync(w.root, { recursive: true, force: true });
+  }
+});
+
+test("the former codex-computer-use plugin is uninstalled, since codex took it over", () => {
+  const w = world({ installed: ["codex", "codex-computer-use"], marketplace: true });
+  try {
+    const r = w.run("--only", "codex");
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(mutating(r.calls), [
+      `claude plugin marketplace update ${MARKET}`,
+      `claude plugin uninstall codex-computer-use@${MARKET} --scope user`,
+      `claude plugin update codex@${MARKET} --scope user`,
+      "codex-helper",
+    ]);
+  } finally {
+    rmSync(w.root, { recursive: true, force: true });
+  }
+});
+
+test("a helper that cannot install is a warning: the run still ends with its next steps", () => {
+  const w = world({ installed: ["codex"], marketplace: true });
+  try {
+    const dir = join(w.root, "cache", MARKET, "codex", "1.0.0", "helper");
+    writeFileSync(join(dir, "install.sh"), "#!/bin/sh\necho 'codex-cu: the Codex computer-use configuration failed its check' >&2\nexit 1\n");
+    const r = w.run("--only", "codex");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /warn: codex helper not installed: computer use stays unavailable/);
+    assert.match(r.stdout, /done\. Next:/);
   } finally {
     rmSync(w.root, { recursive: true, force: true });
   }

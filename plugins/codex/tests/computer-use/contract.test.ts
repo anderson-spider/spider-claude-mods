@@ -1,13 +1,13 @@
 import { expect, test } from 'claude-code/testing'
 
-import { LABEL, callerOf, socketOf } from '../hooks/helper'
-import { CHOICES, ROUTES } from '../hooks/model'
-import type { ApproveReply, CallReply, ForgetReply, Held, ReleaseReply, ResetReply, SettingsReply, StatusReply } from '../hooks/model'
-import { serve } from '../hooks/bridge'
-import type { BridgeDeps } from '../hooks/bridge'
-import { toAnswer } from '../hooks/presentation'
-import { APPROVAL_MS, BRIDGE, LEASE_MINUTES, TOOL } from '../hooks/routing'
-import { contract } from '../helper/test/contract.mjs'
+import { LABEL, callerOf, socketOf } from '../../hooks/computer-use/helper'
+import { CHOICES, ROUTES } from '../../hooks/computer-use/model'
+import type { ApproveReply, CallReply, ForgetReply, Held, ReleaseReply, ResetReply, SettingsReply, StatusReply } from '../../hooks/computer-use/model'
+import { serve } from '../../hooks/computer-use/bridge'
+import type { BridgeDeps } from '../../hooks/computer-use/bridge'
+import { toAnswer } from '../../hooks/computer-use/presentation'
+import { APPROVAL_MS, BRIDGE, LEASE_MINUTES, TOOL } from '../../hooks/computer-use/routing'
+import { contract } from '../../helper/test/contract.mjs'
 
 import { TOOL as HOST_TOOL } from './helpers'
 
@@ -63,7 +63,7 @@ test('the label hooks kickstart is the label the install scripts declare', () =>
 })
 
 test('TOOL is the bridge as the engine names it, and the host tests use the same name the literal matcher spells', () => {
-  expect(TOOL).toBe(`mcp__codex-computer-use__${BRIDGE}`)
+  expect(TOOL).toBe(`mcp__codex__${BRIDGE}`)
   expect(HOST_TOOL).toBe(TOOL)
 })
 

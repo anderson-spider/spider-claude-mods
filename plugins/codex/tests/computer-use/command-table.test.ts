@@ -2,8 +2,8 @@ import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { HELP, parseCommand } from '../hooks/commands'
-import { INSTALL_HELPER } from '../hooks/presentation'
+import { HELP, parseCommand } from '../../hooks/computer-use/commands'
+import { INSTALL_HELPER } from '../../hooks/computer-use/presentation'
 import { ran } from './helpers'
 
 // Characterization of `/codex-cu`: how every input parses, the exact HELP text,
@@ -11,8 +11,8 @@ import { ran } from './helpers'
 // not running yet (kickstart, then up to twenty polls).
 
 const HELP_TEXT = [
-  '/codex-cu on            use Codex for native apps (default)',
-  '/codex-cu off           restore Claude\'s desktop tools',
+  '/codex-cu on            use Codex for native apps',
+  '/codex-cu off           restore Claude\'s desktop tools (default)',
   '/codex-cu status        show route, helper and app owners',
   '/codex-cu auto-approve on|off   skip (on) or ask (off) for new apps',
   '/codex-cu forget        clear this session\'s app answers',
@@ -109,12 +109,13 @@ test('session start registers /codex-cu with the one-line command synopsis', asy
   const commands: { name: string; description: string }[] = []
 
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
-  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codex-computer-use__${e.name}` } }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: 'Darwin\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codex__${e.name}` } }))
   on('command.register', (_$, e) => (commands.push(e as never), { value: { command: e.name } }))
 
   await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true } as never)
 
-  expect(commands).toEqual([{ name: 'codex-cu', description: DESCRIPTION_TEXT }])
+  expect(commands.filter(command => command.name === 'codex-cu')).toEqual([{ name: 'codex-cu', description: DESCRIPTION_TEXT }])
 })
 
 // The helper's socket is not there yet: `post` answers unreachable, `launchctl`
@@ -139,7 +140,7 @@ test('an answer that is not JSON is an error, not an absent helper: no start is 
 test('a kickstart that fails returns the first reply without polling', async ($, on) => {
   const { fetches, runs } = commandWorld(on, { reachableAt: -1, kickstartExit: 1 })
 
-  expect((await run($, 'status')).text).toBe(`Route: Codex computer use (on)\nHelper: not reachable (codex-computer-use: $.http.fetch: attempt 1)\nInstall or restart it: ${INSTALL_HELPER}`)
+  expect((await run($, 'status')).text).toBe(`Route: Codex computer use (on)\nHelper: not reachable (codex: $.http.fetch: attempt 1)\nInstall or restart it: ${INSTALL_HELPER}`)
   expect(fetches()).toBe(1)
   expect(runs).toEqual([['/usr/bin/id', '-u'], ['/bin/launchctl', 'kickstart', 'gui/501/com.anderson-spider.codex-cu']])
 })
@@ -158,7 +159,7 @@ for (const n of [1, 2, 7, 20]) {
 test('a helper that never starts gives the first reply after twenty polls', async ($, on) => {
   const { fetches, runs } = commandWorld(on, { reachableAt: -1 })
 
-  expect((await run($, 'status')).text).toBe(`Route: Codex computer use (on)\nHelper: not reachable (codex-computer-use: $.http.fetch: attempt 1)\nInstall or restart it: ${INSTALL_HELPER}`)
+  expect((await run($, 'status')).text).toBe(`Route: Codex computer use (on)\nHelper: not reachable (codex: $.http.fetch: attempt 1)\nInstall or restart it: ${INSTALL_HELPER}`)
   expect(fetches()).toBe(21)
   expect(runs.filter(argv => argv[0] === 'sleep')).toEqual(Array.from({ length: 20 }, () => ['sleep', '0.25']))
   expect(runs).toHaveLength(22)
@@ -190,7 +191,7 @@ function commandWorld(
   const reachableAt = options.reachableAt ?? 0
   let attempts = 0
 
-  on('store.get', () => ({ value: undefined }))
+  on('store.get', () => ({ value: true }))
   on('store.set', () => ({ value: undefined }))
   on('env.get', () => ({ value: '/home/me' }))
   on('session.id', () => ({ value: 'sess-1' }))

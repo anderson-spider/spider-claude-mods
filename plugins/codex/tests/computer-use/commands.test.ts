@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { HELP } from '../hooks/commands'
-import { statusReport } from '../hooks/presentation'
+import { HELP } from '../../hooks/computer-use/commands'
+import { statusReport } from '../../hooks/computer-use/presentation'
 import { ran, world } from './helpers'
 
 // Characterization of what /codex-cu answers for each command kind and which
@@ -30,7 +30,7 @@ test('/codex-cu auto-approve posts the setting and says which way it went', asyn
 })
 
 test('/codex-cu auto-approve says the helper could not be reached when its answer is not JSON', async ($, on) => {
-  on('store.get', () => ({ value: undefined }))
+  on('store.get', () => ({ value: true }))
   on('env.get', () => ({ value: '/home/me' }))
   on('process.run', () => ({ value: ran('', 1) }))
   on('http.fetch', () => ({ value: { status: 502, ok: false, headers: {}, text: 'bad gateway' } }))

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The persistent codex-cu helper: an MCP client of the "codex-cu" connection
-// (launch.mjs), one Codex session per caller, served to the codex-computer-use
+// (launch.mjs), one Codex session per caller, served to the codex plugin's computer use
 // mod over a Unix socket in a directory only this user can enter.
 import { connect } from 'node:net'
 import { chmodSync, existsSync, mkdirSync, realpathSync, unlinkSync } from 'node:fs'

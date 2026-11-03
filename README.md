@@ -6,8 +6,7 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 
 | Plugin | What it does |
 | --- | --- |
-| [codex](plugins/codex/README.md) | Lets Claude ask your Codex CLI for a second opinion (it reads the repository read-only and can search the web), or have it generate an image, and saves the result locally. |
-| [codex-computer-use](plugins/codex-computer-use/README.md) | Routes native Mac app control through Codex computer use from the ChatGPT app instead of Claude's own computer use, asking before each new app. |
+| [codex](plugins/codex/README.md) | Lets Claude ask your Codex CLI for a second opinion (it reads the repository read-only and can search the web), or have it generate an image, and saves the result locally. On macOS it can also route native Mac app control through Codex computer use from the ChatGPT app instead of Claude's own computer use, asking before each new app. |
 | [comfyui-local](plugins/comfyui-local/README.md) | Lets Claude generate images, video, audio and 3D on your self-hosted ComfyUI, search its nodes, models and templates, keep workflows in your library, and manage node packs through ComfyUI-Manager and restart the server to load them, with the server in the `url` option. Unofficial; its slash commands are ported from Comfy-Org/comfy-skills. |
 | [coolify](plugins/coolify/README.md) | Lets Claude read your Coolify instance and create, deploy or delete projects and resources through its API, with the instance in the `url` option and the token in the sensitive `apiKey` option. |
 | [file-explorer](plugins/file-explorer/README.md) | A file tree pane beside the conversation: git status per file and folder, a mark on each file Claude reads, edits, creates, removes, finds or commits, search across unopened folders, preview, and `@path` into the prompt. |
@@ -27,7 +26,6 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.303 
 ```
 /plugin marketplace add anderson-spider/claude-mods
 /plugin install codex@spider-claude-mods
-/plugin install codex-computer-use@spider-claude-mods
 /plugin install comfyui-local@spider-claude-mods
 /plugin install coolify@spider-claude-mods
 /plugin install file-explorer@spider-claude-mods
@@ -41,11 +39,11 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.303 
 
 From a local copy: `/plugin marketplace add /path/to/claude-mods`.
 
-codex-computer-use also needs a local helper on the Mac: follow [its install steps](plugins/codex-computer-use/README.md#install), or use the one-step setup below.
+Computer use in codex also needs a local helper on the Mac: follow [its install steps](plugins/codex/README.md#install-the-helper), or use the one-step setup below. It replaces the former codex-computer-use plugin: uninstall that one with `/plugin uninstall codex-computer-use@spider-claude-mods`.
 
 ### One step
 
-`scripts/bootstrap.sh` adds the marketplace and installs or updates every plugin. On macOS it also installs the codex-computer-use helper (a LaunchAgent); on Linux it leaves codex-computer-use out, since that plugin controls native Mac apps:
+`scripts/bootstrap.sh` adds the marketplace and installs or updates every plugin. On macOS it also installs the helper of codex's computer use (a LaunchAgent); on Linux codex is installed without it, since computer use controls native Mac apps:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/anderson-spider/claude-mods/main/scripts/bootstrap.sh | sh
@@ -83,11 +81,11 @@ Load a plugin from its folder so edits reload automatically, with `claude --plug
 | `npm run check [-- <name>]` | The required CI checks in one run: the version bump of committed, uncommitted and untracked changes against `origin/main` as last fetched, then `plugins:validate`, `plugins:test` and `typecheck` (skipped for a plugin that ships only skills), for every plugin or one. Every step runs, and a summary names the failed ones. |
 | `npm run plugins:validate [-- <name>]` | `validate --strict` the marketplace and every plugin, or one plugin, then `check-consistency`. |
 | `npm run typecheck [-- <name>]` | Run the pinned `tsc` on one plugin, or every plugin with TypeScript; a plugin without typings gets them copied from the main checkout, else generated (`plugins:types`). |
-| `npm run plugins:test [-- <name>]` | Script tests, every plugin's tests (a plugin that ships only skills has none), and, with the ChatGPT app installed, the codex-computer-use helper tests; with a name, only that plugin's tests and its helper's. |
+| `npm run plugins:test [-- <name>]` | Script tests, every plugin's tests (a plugin that ships only skills has none), and, with the ChatGPT app installed, the codex computer use helper tests; with a name, only that plugin's tests and its helper's. |
 | `npm run plugins:scan` | Save each plugin's `validate --strict` output under `.scan/` to diff before and after a refactor. |
 | `npm run plugins:sync` | Refresh the marketplace, then update every installed plugin it lists and uninstall those it no longer lists, each in its own scope. |
 | `npm run update:all` | Pull `main`, run `npm ci` and `plugins:sync` (main checkout only). |
-| `npm run install:test` | Install the marketplace from the checkout on a clean Linux image (Docker) as a new user would, and check that every plugin but codex-computer-use is installed at its source version, passes its tests from the installed copy and loads in a session without login, and that a second bootstrap run updates cleanly. |
+| `npm run install:test` | Install the marketplace from the checkout on a clean Linux image (Docker) as a new user would, and check that every plugin is installed at its source version, passes its tests from the installed copy and loads in a session without login (codex without its macOS-only computer use tool), and that a second bootstrap run updates cleanly. |
 
 `/reload-plugins` and `claude plugin details` report `0 hooks` for every plugin here, because they count only `hooks.json` command hooks and these plugins ship hooks modules. `claude plugin validate plugins/<name>` lists a module's events and `$` calls; a module that fails to load leaves a line in `claude --debug`.
 
@@ -97,7 +95,7 @@ Unit tests run against host fakes: a Claude Code update can break a plugin witho
 
 These projects inspired or are the base of plugins in this marketplace:
 
-- [claude-mods-computer-use-threads](https://github.com/promptadvisers/claude-mods-computer-use-threads) by Prompt Advisers: the Codex computer-use bridge behind [codex-computer-use](plugins/codex-computer-use/README.md).
+- [claude-mods-computer-use-threads](https://github.com/promptadvisers/claude-mods-computer-use-threads) by Prompt Advisers: the Codex computer-use bridge behind codex's [computer use](plugins/codex/README.md#computer-use-macos).
 - [claude-image-view](https://github.com/jarrodwatts/claude-image-view) by Jarrod Watts (MIT): [image-preview](plugins/image-preview/README.md) is a copy of it with fixes.
 
 ## License

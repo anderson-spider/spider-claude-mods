@@ -421,6 +421,15 @@ test("a helper/test file counts as a test file reference, alone or in braces", (
   assert.deepEqual(citedTests("`other/test/x.test.mjs` and `src/host.ts` are not test files.").referenced.size, 0);
 });
 
+test("a test file in a subfolder of tests/ is a reference, alone or in braces", () => {
+  const { cites, referenced } = citedTests("See `tests/computer-use/bridge.test.ts` (`one`) and `tests/computer-use/{a,b}.test.ts`: `two`.");
+  assert.deepEqual(cites, [
+    { files: ["tests/computer-use/bridge.test.ts"], name: "one" },
+    { files: ["tests/computer-use/a.test.ts", "tests/computer-use/b.test.ts"], name: "two" },
+  ]);
+  assert.deepEqual([...referenced].sort(), ["tests/computer-use/a.test.ts", "tests/computer-use/b.test.ts", "tests/computer-use/bridge.test.ts"]);
+});
+
 test("a support file under tests/ or helper/test/ is referenced but never an anchor or a name", () => {
   const { cites, referenced } = citedTests(
     "Fake in `tests/host.ts`, contract in `helper/test/contract.mjs`, `tests/sub/x.mts` and `tests/a.test.ts` (`one`, `tests/host.ts` and `two`); `tests/a.test.ts`: `tests/host.ts`; `tests/host.ts`: `not a name`; `tests/../x.ts`.",

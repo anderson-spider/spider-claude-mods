@@ -4,10 +4,10 @@ declare const setTimeout: (fn: () => void, ms: number) => unknown
 export const pause = (ms: number) => new Promise<void>(done => setTimeout(() => done(), ms))
 export const ran = (stdout: string, exitCode = 0) => ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
-export const TOOL = 'mcp__codex-computer-use__codex_cu'
+export const TOOL = 'mcp__codex__computer_use'
 export const OWN = 'mcp__computer-use__left_click'
 export const BAND = {
-  plugin: 'codex-computer-use',
+  plugin: 'codex',
   component: 'AbovePrompt',
   props: { hasSurvey: false, isWorking: true, maxRows: 12, bodyColumns: 120, scroll: { offset: 0, bodyRows: 12 }, view: {} },
 } as const
@@ -25,7 +25,8 @@ export const world = (on: On, now: () => number = Date.now) => {
   const posted: Posted[] = []
   const allowed = new Map<string, string>()
   const vars = new Map<string, string>()
-  const store = new Map<string, unknown>()
+  // The switch starts on here: these tests are about what the mod does once the person turned it on.
+  const store = new Map<string, unknown>([['computer-use:enabled', true]])
 
   on('store.get', (_$, e) => ({ value: store.get(e.key) }))
   on('store.set', (_$, e) => (store.set(e.key, e.value), { value: undefined }))
@@ -34,6 +35,10 @@ export const world = (on: On, now: () => number = Date.now) => {
   on('process.run', async (_$, e) => {
     if (e.argv[0] === 'sleep') {
       await pause(5)
+    }
+
+    if (e.argv[0] === 'uname') {
+      return { value: ran('Darwin\n') }
     }
 
     return { value: ran('') }

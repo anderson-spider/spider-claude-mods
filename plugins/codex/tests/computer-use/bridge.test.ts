@@ -1,9 +1,9 @@
 import { expect, test } from 'claude-code/testing'
 
-import { MAX_APPROVALS, serve } from '../hooks/bridge'
-import type { BridgeDeps } from '../hooks/bridge'
-import type { CallResult, Route } from '../hooks/model'
-import { APPROVAL_MS } from '../hooks/routing'
+import { MAX_APPROVALS, serve } from '../../hooks/computer-use/bridge'
+import type { BridgeDeps } from '../../hooks/computer-use/bridge'
+import type { CallResult, Route } from '../../hooks/computer-use/model'
+import { APPROVAL_MS } from '../../hooks/computer-use/routing'
 
 const signal = { aborted: false } as AbortSignal
 const bridgeInput = { tool_use_id: 'tool-1', code: 'let app = await cua.getApp("TextEdit");', title: 'Open editor', timeout_ms: 1000 }
@@ -29,7 +29,7 @@ test('serve refuses disabled calls before reading the session or reaching the he
     sessionId: async () => { throw new Error('unexpected session read') },
   }), bridgeInput, signal)
   expect(answer).toEqual({
-    result: 'codex-computer-use is off (/codex-cu off): use the default desktop route, or ask the person to type /codex-cu on.',
+    result: 'Codex computer use is off (/codex-cu off): use the default desktop route, or ask the person to type /codex-cu on.',
     isError: true,
   })
 })

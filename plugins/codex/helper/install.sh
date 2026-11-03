@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs the codex-cu helper into ~/.claude/mcp/codex-cu (the socket path the
-# codex-computer-use plugin expects) as a per-user LaunchAgent: started at login,
+# codex plugin's computer use expects) as a per-user LaunchAgent: started at login,
 # restarted if it crashes. Safe to run again; `state/` (approvals, log) is kept.
 #
 #   install.sh          helper only (plugin installed from the marketplace)

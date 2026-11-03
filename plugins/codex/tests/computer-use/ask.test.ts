@@ -17,7 +17,7 @@ const askWorld = (on: On, now: () => number = Date.now, routes: string[] = []) =
   on('clock.now', () => ({ value: now() }))
   const polls: Poll[] = []
   const approved = new Set<string>()
-  const store = new Map<string, unknown>()
+  const store = new Map<string, unknown>([['computer-use:enabled', true]])
 
   on('store.get', (_$, e) => ({ value: store.get(e.key) }))
   on('store.set', (_$, e) => (store.set(e.key, e.value), { value: undefined }))

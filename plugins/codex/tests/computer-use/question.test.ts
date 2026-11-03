@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
-import { holdQuestion } from '../hooks/question'
-import type { QuestionHost, Waiting } from '../hooks/question'
-import type { CodexAsking } from '../types'
+import { holdQuestion } from '../../hooks/computer-use/question'
+import type { QuestionHost, Waiting } from '../../hooks/computer-use/question'
+import type { CodexAsking } from '../../types'
 
 const question: CodexAsking = { id: 'q1', bundleId: 'com.apple.TextEdit', displayName: 'TextEdit', canAlways: true, who: 'main session' }
 const LIMIT = 1000

@@ -2,7 +2,7 @@
 .git
 node_modules
 plugins/*/.claude-plugin/types
-plugins/codex-computer-use/helper/state
-plugins/codex-computer-use/helper/run
+plugins/codex/helper/state
+plugins/codex/helper/run
 .scan*
 .reports

@@ -10,12 +10,7 @@
     {
       "name": "codex",
       "source": "./plugins/codex",
-      "description": "Ask Codex for a second opinion or generate requested images through the Codex CLI; save results locally."
-    },
-    {
-      "name": "codex-computer-use",
-      "source": "./plugins/codex-computer-use",
-      "description": "Control native Mac apps through Codex, with per-app approval and /codex-cu on|off."
+      "description": "Ask Codex for a second opinion, generate requested images and, on macOS, control native Mac apps through Codex computer use; save results locally."
     },
     {
       "name": "comfyui-local",

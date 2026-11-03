@@ -15,7 +15,7 @@ test('while on, Claude’s own desktop tools are refused; /codex-cu off restores
   world(on)
 
   const refused = await $.tool.call({ tool: OWN } as never)
-  expect(refused.deny).toMatch(/codex-computer-use is on/)
+  expect(refused.deny).toMatch(/Codex computer use is on/)
 
   await $.command.run({ command: 'codex-cu', args: 'off' } as never)
   const allowed = await $.tool.call({ tool: OWN } as never)
@@ -25,7 +25,7 @@ test('while on, Claude’s own desktop tools are refused; /codex-cu off restores
   expect(textOf(bridge)).toMatch(/is off/)
 
   await $.command.run({ command: 'codex-cu', args: 'on' } as never)
-  expect((await $.tool.call({ tool: OWN } as never)).deny).toMatch(/codex-computer-use is on/)
+  expect((await $.tool.call({ tool: OWN } as never)).deny).toMatch(/Codex computer use is on/)
 })
 
 test('the bridge keeps state per caller and gives each subagent its own session', async ($, on) => {
@@ -63,7 +63,7 @@ test('the system prompt explains the bridge only while the mod is on', async ($,
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'base', scope: 'shared' as const }] }))
 
   const composed = await $.prompt.compose(COMPOSE)
-  expect(composed.sections.map(section => section.id)).toEqual(['intro', 'codex-computer-use:route'])
+  expect(composed.sections.map(section => section.id)).toEqual(['intro', 'codex:ask', 'codex:computer-use'])
   const route = composed.sections.at(-1)?.text ?? ''
   expect(route).toMatch(/performSecondaryAction\(<window index>, "Raise"\)/)
   expect(route).toMatch(/emit: false/)
@@ -71,7 +71,7 @@ test('the system prompt explains the bridge only while the mod is on', async ($,
 
   await $.command.run({ command: 'codex-cu', args: 'off' } as never)
   const plain = await $.prompt.compose(COMPOSE)
-  expect(plain.sections.map(section => section.id)).toEqual(['intro'])
+  expect(plain.sections.map(section => section.id)).toEqual(['intro', 'codex:ask'])
 })
 
 test('/codex-cu forget <app> asks the helper to drop it from both always-allow lists and says what happened', async ($, on) => {
@@ -94,4 +94,15 @@ test('the bridge timeout describes the fixed five-minute approval wait', async (
   const answer = await $.tool.call({ tool: TOOL, code: 'let app = await cua.getApp("TextEdit");' } as never)
   expect(answer.isError).toBe(true)
   expect(textOf(answer)).toBe('The person did not answer whether Codex may use TextEdit within 5 minutes; nothing was done with it.')
+})
+
+test('a question left in the state by a reload, with no call waiting on it, is not drawn', async ($, on) => {
+  world(on)
+  // What the module before the reload put on the band stays in the session's state.
+  on('state.get', () => ({ value: { value: { id: 'old', bundleId: 'com.apple.TextEdit', displayName: 'TextEdit', canAlways: true, who: 'main session' }, version: 1 } }))
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: 'idle' })).toBeDefined()
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
+  await ui.unmount()
 })
