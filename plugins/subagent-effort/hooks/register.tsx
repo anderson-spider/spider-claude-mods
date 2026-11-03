@@ -76,7 +76,9 @@ export const ASK_AGAIN = 2
 // What the model is told when its call is sent back: the effort to come again with, the input otherwise the same.
 export const askText = (effort: Effort, cappedFor?: string) =>
   `subagent-effort: Jev rated this task ${effort}${cappedFor ? ` (the most ${cappedFor} takes)` : ''}. Call Agent again with the same input and effort: "${effort}". The input is not changed after review, so auto mode checks what runs.`
-const askedKey = (agentType: string, prompt: string) => `${agentType}\u0000${prompt}`
+// A call sent back is known again by its agent type, description and task: parallel calls with the same task differ
+// by their description, and the one that comes back keeps its own.
+const askedKey = (agentType: string, description: unknown, prompt: string) => `${agentType}\u0000${typeof description === 'string' ? description : ''}\u0000${prompt}`
 type Asked = { choice: Awaited<ReturnType<typeof assessEffort>>; effort: Effort; cap: Effort | null; received: Effort | null; refusals: number }
 // Jev's picks waiting for the call to come back, newest last; a bounded few, dropped on reload like the pending runs.
 function createAsked(limit: number) {
@@ -111,7 +113,7 @@ export const register: Register = (on, options) => {
     const agentType = call.subagent_type || DEFAULT_TYPE
     if (agentType === 'fork' || typeof call.prompt !== 'string' || !call.prompt.trim()) return next(e)
     const effortOfCall: Effort | null = call.effort ?? null
-    const key = askedKey(agentType, call.prompt)
+    const key = askedKey(agentType, call.description, call.prompt)
     const waiting = asked.take(key)
     // The effort the call first came with, null for none: what Jev decided over, kept across the calls sent back.
     const firstEffort: Effort | null = waiting ? waiting.received : effortOfCall
