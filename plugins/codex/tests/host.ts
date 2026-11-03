@@ -21,6 +21,8 @@ export type HostState = {
   runs: Record<string, { exitCode: number; stdout?: string; stderr?: string }>
   /** What reading a text file gives, by path. */
   texts: Record<string, string>
+  /** What `uname -s` prints; `undefined` makes it fail, as where there is no `uname`. */
+  uname?: string
 }
 
 export function world(on: On, init: Partial<HostState> = {}) {
@@ -31,6 +33,7 @@ export function world(on: On, init: Partial<HostState> = {}) {
     codex: [],
     runs: {},
     texts: {},
+    uname: 'Linux\n',
     ...init,
   }
   const tools: Tool[] = []
@@ -47,6 +50,9 @@ export function world(on: On, init: Partial<HostState> = {}) {
   on('command.register', (_$, e) => (commands.push(e.name), { value: { command: e.name } }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('env.get', (_$, e) => ({ value: state.env[e.name] }))
+  const store = new Map<string, unknown>()
+  on('store.get', (_$, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_$, e) => (store.set(e.key, e.value), { value: undefined }))
   on('fs.exists', (_$, e) => ({ value: state.files.has(e.path) }))
   on('fs.list', (_$, e) => {
     const entries = state.dirs[e.path ?? '']
@@ -57,6 +63,10 @@ export function world(on: On, init: Partial<HostState> = {}) {
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     processes.push(argv)
+    if (argv[0] === 'uname') {
+      if (state.uname === undefined) return { deny: 'ENOENT: uname' }
+      return { value: { exitCode: 0, stdout: state.uname, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     const known = state.runs[argv.slice(1).join(' ')]
     const done = argv[0]?.endsWith('/codex') && known ? known : { exitCode: argv[0] === 'sips' ? 1 : 0 }
     return { value: { exitCode: done.exitCode, stdout: 'stdout' in done ? (done.stdout ?? '') : '', stderr: 'stderr' in done ? (done.stderr ?? '') : '', isStdoutTruncated: false, isStderrTruncated: false } }

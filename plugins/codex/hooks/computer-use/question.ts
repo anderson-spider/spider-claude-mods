@@ -1,4 +1,4 @@
-import type { CodexAsking } from '../types'
+import type { CodexAsking } from '../../types'
 import type { Choice } from './model'
 
 // One approval question at a time, held until the person answers. Pure: the

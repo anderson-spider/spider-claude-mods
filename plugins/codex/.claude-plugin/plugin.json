@@ -1,7 +1,7 @@
 {
   "name": "codex",
-  "version": "0.1.1",
-  "description": "Ask Codex for a second opinion or generate requested images through the Codex CLI; save results locally.",
+  "version": "0.2.0",
+  "description": "Ask Codex for a second opinion, generate requested images and, on macOS, control native Mac apps through Codex computer use; save results locally.",
   "author": {
     "name": "anderson-spider"
   },

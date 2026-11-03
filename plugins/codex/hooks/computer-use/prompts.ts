@@ -1,8 +1,8 @@
-import type { CodexCuInput } from '../types'
+import type { CodexCuInput } from '../../types'
 import { LEASE_MINUTES } from './routing'
 
 export const denyOwn = (bridge: string) =>
-  `codex-computer-use is on: use ${bridge} for native apps. Report bridge failures; do not switch desktop-control routes. ` +
+  `Codex computer use is on: use ${bridge} for native apps. Report bridge failures; do not switch desktop-control routes. ` +
   'The person can type /codex-cu off to restore this tool.'
 
 export const PROMPT = (bridge: string) =>
@@ -39,7 +39,9 @@ export const INPUT_SCHEMA = {
   additionalProperties: false,
 } as const
 
-// Compile-time: the schema's property names are exactly the tool input's keys (types/index.d.ts), so renaming one without the other fails tsc.
+// Compile-time: the schema's property names are exactly the tool input's keys (types/index.d.ts), so renaming one without
+// the other fails tsc. SchemaFor (../schema.ts, shared with the template) has no `maxLength` or `minimum`, which this
+// schema uses, so only the keys are compared here.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
 type Assert<T extends true> = T
 export type SchemaMatchesInput = Assert<Same<keyof typeof INPUT_SCHEMA.properties, keyof CodexCuInput>>

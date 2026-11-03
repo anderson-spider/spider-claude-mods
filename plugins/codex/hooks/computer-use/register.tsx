@@ -1,27 +1,27 @@
 import { atom, read } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderElement } from 'claude-code'
 
-import type { CodexAsking } from '../types'
+import type { CodexAsking } from '../../types'
 import { serve } from './bridge'
-import { COMMAND_DESCRIPTION, HELP, parseCommand } from './commands'
+import { HELP, parseCommand } from './commands'
 import type { Command } from './commands'
 import { POLL, callerOf, post, postStarting, socketOf } from './helper'
 import type { Probe } from './helper'
 import { ROUTES } from './model'
 import type { Choice, Route, RouteReplies } from './model'
 import { ASK_HINT, ASK_LABELS, UNCHECKED_OWN, askBody, askTitle, autoApproveText, bridgeFailedText, forgetText, refusal, releaseText, routeText, statusReport } from './presentation'
-import { DESCRIPTION, INPUT_SCHEMA, PROMPT, denyOwn } from './prompts'
+import { denyOwn } from './prompts'
+import { known, offMac } from './known'
 import { holdQuestion } from './question'
 import type { QuestionHost, Waiting } from './question'
-import { APPROVAL_MS, BRIDGE, TOOL, isOwnDesktopTool } from './routing'
+import { APPROVAL_MS, ENABLED, TOOL, isOn, isOwnDesktopTool } from './routing'
 
 type Kit = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>
 type Handlers = { [K in Command['kind']]: (command: Extract<Command, { kind: K }>) => Promise<{ text: string }> }
 
-const PLUGIN = 'codex-computer-use'
 const COMMAND = 'codex-cu'
 
-const ref = { plugin: 'codex-computer-use', key: 'asking' } as const
+const ref = { plugin: 'codex', key: 'asking' } as const
 const asking = atom(ref, null)
 
 // Reads of `$.state` in a dispatch see a single moment, so the answer the hook
@@ -33,7 +33,11 @@ const probe = ($: EngineInterface): Probe => ({
   run: (argv, init) => $.process.run(argv, init),
 })
 
-const isEnabled = async ($: EngineInterface) => (await $.store.get('enabled')) !== false
+const isEnabled = async ($: EngineInterface) => {
+  known.enabled = isOn(await $.store.get(ENABLED))
+
+  return known.enabled
+}
 
 const choose = (choice: Choice) => {
   if (waiting.current?.choice === null) {
@@ -85,8 +89,9 @@ const statusText = async ($: EngineInterface) => {
 }
 
 // prompt.compose runs at every render, so the next request already sees the switch.
-const turn = async ($: EngineInterface, isOn: boolean, text: string) => {
-  await $.store.set('enabled', isOn)
+const turn = async ($: EngineInterface, enabled: boolean, text: string) => {
+  await $.store.set(ENABLED, enabled)
+  known.enabled = enabled
 
   return { text }
 }
@@ -120,34 +125,29 @@ const runCommand = <K extends Command['kind']>(handlers: Handlers, kind: K, comm
 
 /**
  * The guard's `.catch`: a hook that fails is skipped and Claude's own desktop tool would run while the mod is on.
- * It has no matcher, so it sees every tool and re-checks. On a re-entry the hook never ran and its `$` calls reject,
- * so it cannot tell whether the mod is on: the refusal then says so. Named at top level so tests reach it.
+ * It has no matcher, so it sees every tool and re-checks, from what the module last learned (`known`): off macOS, or
+ * with the switch last seen off, the tool runs. On a re-entry the hook never ran and its `$` calls reject, so when
+ * the switch was never seen it cannot tell whether the mod is on: the refusal then says so. Named at top level so
+ * tests reach it.
  */
 export function holdOwnDesktop<E extends { tool: string }, R>(
   _$: EngineInterface,
   e: E,
   next: ((e: E) => Promise<R>) & { called: boolean; error: { kind: string } },
 ) {
-  if (next.called || !isOwnDesktopTool(e.tool)) {
+  if (next.called || !isOwnDesktopTool(e.tool) || offMac() || known.enabled === false) {
     return next(e)
   }
 
-  return { deny: next.error.kind === 're-entry' ? UNCHECKED_OWN : denyOwn(TOOL) }
+  return { deny: next.error.kind === 're-entry' || known.enabled === undefined ? UNCHECKED_OWN : denyOwn(TOOL) }
 }
 
-export const register: Register = on => {
-  // A reload in the middle of a question would leave the band stuck.
-  on('session.start', async ($, e, next) => {
-    waiting.current = undefined
-    await $.state.set(ref, null)
-    const started = await next(e)
-    await $.tool.register({ name: BRIDGE, description: DESCRIPTION, inputSchema: INPUT_SCHEMA })
-    await $.command.register({ name: COMMAND, description: COMMAND_DESCRIPTION })
-
-    return started
-  })
-
+export const registerComputerUse: Register = on => {
   on('session.end', async ($, e, next) => {
+    if (offMac()) {
+      return next(e)
+    }
+
     // One post, no kickstart or retry: session.end shares a 1.5 s budget, and a helper that is not running holds no session to release.
     await releaseOnce($, callerOf(e.sessionId))
 
@@ -160,20 +160,9 @@ export const register: Register = on => {
     return runCommand(commandsOf($), command.kind, command)
   })
 
-  // The bridge is explained only while it is the route.
-  on('prompt.compose', async ($, e, next) => {
-    const composed = await next(e)
-
-    if (!(await isEnabled($))) {
-      return composed
-    }
-
-    return { sections: [...composed.sections, { id: `${PLUGIN}:route`, text: PROMPT(TOOL), scope: 'session' as const }] }
-  })
-
   // Claude's own desktop control is refused while the mod is on, so a failing bridge cannot fall back silently.
   on('tool.call', async ($, e, next) => {
-    if (e.tool === TOOL || !isOwnDesktopTool(e.tool)) {
+    if (e.tool === TOOL || !isOwnDesktopTool(e.tool) || offMac()) {
       return next(e)
     }
 
@@ -182,7 +171,7 @@ export const register: Register = on => {
   }).catch(holdOwnDesktop)
 
   // The matcher stays a literal for the host's source analysis; tests/contract.test.ts pins it to TOOL.
-  on('tool.call', { tool: 'mcp__codex-computer-use__codex_cu' }, ($, e, next) =>
+  on('tool.call', { tool: 'mcp__codex__computer_use' }, ($, e, next) =>
     serve({
       enabled: () => isEnabled($),
       sessionId: () => $.session.id(),
@@ -193,9 +182,14 @@ export const register: Register = on => {
   )
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (offMac()) {
+      return next(e)
+    }
+
     const now = await read($, asking)
 
-    if (now === null || e.props.hasSurvey) {
+    // After a reload the question's slot is gone with the old module, so a question left in the state is not drawn.
+    if (now === null || waiting.current?.id !== now.id || e.props.hasSurvey) {
       return next(e)
     }
 

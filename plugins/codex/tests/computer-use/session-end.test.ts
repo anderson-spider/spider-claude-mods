@@ -1,9 +1,10 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { holdOwnDesktop } from '../hooks/register'
-import { UNCHECKED_OWN } from '../hooks/presentation'
-import { denyOwn } from '../hooks/prompts'
+import { holdOwnDesktop } from '../../hooks/computer-use/register'
+import { known } from '../../hooks/computer-use/known'
+import { UNCHECKED_OWN } from '../../hooks/computer-use/presentation'
+import { denyOwn } from '../../hooks/computer-use/prompts'
 import { OWN, TOOL, ran } from './helpers'
 
 // Session end shares a 1.5 s budget with every hook: one post to the helper,
@@ -73,10 +74,10 @@ test('session end swallows a failure of the home read and still reaches core', a
   expect(runs).toEqual([])
 })
 
-test('a guard whose switch read fails still refuses the own desktop tool and passes the others', async ($, on) => {
+test('a guard whose switch read fails still refuses the own desktop tool, saying it could not check, and passes the others', async ($, on) => {
   world(on, { storeFails: true })
 
-  expect((await $.tool.call({ tool: OWN } as never)).deny).toMatch(/codex-computer-use is on/)
+  expect((await $.tool.call({ tool: OWN } as never)).deny).toBe(UNCHECKED_OWN)
   expect(await $.tool.call({ tool: 'mcp__other__x' } as never)).toMatchObject({ result: 'other' })
 })
 
@@ -87,6 +88,7 @@ test('the guard catch denies an own desktop tool and passes the bridge, other to
   const next = caught(false, 'throw')
   const answered = caught(true, 'throw')
   const $ = undefined as never
+  Object.assign(known, { mac: true, enabled: true })
 
   expect(holdOwnDesktop($, { tool: OWN }, next)).toEqual({ deny: denyOwn(TOOL) })
   expect(holdOwnDesktop($, { tool: 'enable__mcp__remote-devices__computer' }, next)).toEqual({ deny: denyOwn(TOOL) })
@@ -98,12 +100,26 @@ test('the guard catch denies an own desktop tool and passes the bridge, other to
 
 test('the guard catch on a re-entry refuses an own desktop tool with neutral text, and still passes the others', async () => {
   const $ = undefined as never
+  Object.assign(known, { mac: true, enabled: true })
   const reentry = caught(false, 're-entry')
   const denied = holdOwnDesktop($, { tool: OWN }, reentry)
 
   expect(denied).toEqual({ deny: UNCHECKED_OWN })
-  expect(UNCHECKED_OWN).not.toMatch(/codex-computer-use is on/)
+  expect(UNCHECKED_OWN).not.toMatch(/Codex computer use is on/)
   expect(UNCHECKED_OWN).toMatch(/own desktop tool/)
   await expect(holdOwnDesktop($, { tool: 'mcp__other__x' }, reentry)).resolves.toEqual({ passed: 'mcp__other__x' })
   await expect(holdOwnDesktop($, { tool: TOOL }, reentry)).resolves.toEqual({ passed: TOOL })
+})
+
+test('the guard catch lets the own desktop tool run off macOS or with the switch last seen off, and cannot vouch for a switch never read', async () => {
+  const $ = undefined as never
+  const next = caught(false, 'throw')
+
+  Object.assign(known, { mac: false, enabled: true })
+  await expect(holdOwnDesktop($, { tool: OWN }, next)).resolves.toEqual({ passed: OWN })
+  Object.assign(known, { mac: true, enabled: false })
+  await expect(holdOwnDesktop($, { tool: OWN }, next)).resolves.toEqual({ passed: OWN })
+  Object.assign(known, { mac: true, enabled: undefined })
+  expect(holdOwnDesktop($, { tool: OWN }, next)).toEqual({ deny: UNCHECKED_OWN })
+  Object.assign(known, { mac: undefined, enabled: undefined })
 })

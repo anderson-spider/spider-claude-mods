@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs inside the install-test image as a new user would: bootstrap.sh adds the marketplace from /src and installs
 # every plugin, then each one must be listed at its source version, pass its tests from the installed copy, and load in
-# a session started without a login. A second bootstrap run must update cleanly.
+# a session started without a login, codex without its macOS-only computer use tool. A second bootstrap run must
+# update cleanly.
 set -eu
 
 SRC=${SRC:-/src}
@@ -14,8 +15,7 @@ fail() { printf 'install test failed: %s\n' "$*" >&2; exit 1; }
 say "bootstrap (first run)"
 BOOTSTRAP_SOURCE=$SRC sh "$SRC/scripts/bootstrap.sh"
 
-# Linux leaves out codex-computer-use, which controls native Mac apps.
-EXPECTED=$(node -p "require('$SRC/.claude-plugin/marketplace.json').plugins.map(p => p.name).filter(n => n !== 'codex-computer-use').join(' ')")
+EXPECTED=$(node -p "require('$SRC/.claude-plugin/marketplace.json').plugins.map(p => p.name).join(' ')")
 LISTED=$(claude plugin list --json)
 field() { printf '%s' "$LISTED" | node -e "const r = JSON.parse(require('fs').readFileSync(0, 'utf8')).find(p => p.id === '$1@$MARKET'); console.log(r ? r['$2'] : '')"; }
 
@@ -53,6 +53,11 @@ for p in $EXPECTED; do
   fi
   say "loaded $p"
 done
+
+# Computer use drives native Mac apps: on Linux codex registers its other tools and never the computer use one.
+grep -q '$.tool.register (codex): mcp__codex__jobs' "$log" || fail "codex did not register its jobs tool"
+if grep -q '$.tool.register (codex): mcp__codex__computer_use' "$log"; then fail "codex registered its computer use tool on Linux"; fi
+say "codex without computer use"
 
 cd "$HOME"
 say "bootstrap (second run)"

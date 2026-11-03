@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import type { SettingsReply, StatusReply } from '../hooks/model'
+import type { SettingsReply, StatusReply } from '../../hooks/computer-use/model'
 import {
   ASK_HINT,
   ASK_LABELS,
@@ -21,8 +21,8 @@ import {
   statusReport,
   toAnswer,
   unansweredText,
-} from '../hooks/presentation'
-import { APPROVAL_MS } from '../hooks/routing'
+} from '../../hooks/computer-use/presentation'
+import { APPROVAL_MS } from '../../hooks/computer-use/routing'
 
 test('toAnswer words busy, denied and ok replies', () => {
   expect(toAnswer({ status: 'busy', app: { bundleId: 'b', displayName: 'Calculator' }, owner: 'sess-2' }).result).toMatch(/in use by another/)
@@ -122,7 +122,7 @@ test('command texts: route switch, auto-approve (with the helper unreachable or 
 
 test('bridge texts: off, reset, unanswered, too many rounds and a thrown bridge are refusals', () => {
   expect(refusal('x')).toEqual({ result: 'x', isError: true })
-  expect(BRIDGE_OFF).toBe('codex-computer-use is off (/codex-cu off): use the default desktop route, or ask the person to type /codex-cu on.')
+  expect(BRIDGE_OFF).toBe('Codex computer use is off (/codex-cu off): use the default desktop route, or ask the person to type /codex-cu on.')
   expect(resetText({ status: 'ok', message: 'session reset' })).toBe('session reset')
   expect(resetText({ status: 'ok' } as never)).toBe('reset')
   expect(unansweredText('TextEdit', 'timeout', APPROVAL_MS)).toBe('The person did not answer whether Codex may use TextEdit within 5 minutes; nothing was done with it.')

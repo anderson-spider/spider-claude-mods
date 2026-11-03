@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { COMMANDS, COMMAND_DESCRIPTION, HELP, parseCommand } from '../hooks/commands'
-import { COMMAND_TEXT } from '../hooks/presentation'
+import { COMMANDS, COMMAND_DESCRIPTION, HELP, parseCommand } from '../../hooks/computer-use/commands'
+import { COMMAND_TEXT } from '../../hooks/computer-use/presentation'
 
 // The table is the one place a `/codex-cu` command is listed: what it parses,
 // what HELP says and what the registered description says come from its rows.

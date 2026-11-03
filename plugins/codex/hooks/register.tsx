@@ -1,4 +1,9 @@
 import type { EngineInterface, Register } from 'claude-code'
+import { COMMAND_DESCRIPTION as COMPUTER_USE_COMMAND_DESCRIPTION } from './computer-use/commands'
+import { DESCRIPTION as COMPUTER_USE_DESCRIPTION, INPUT_SCHEMA as COMPUTER_USE_INPUT_SCHEMA, PROMPT as COMPUTER_USE_PROMPT } from './computer-use/prompts'
+import { known } from './computer-use/known'
+import { registerComputerUse } from './computer-use/register'
+import { ENABLED, TOOL as COMPUTER_USE_TOOL, UNAME, isMac, isOn } from './computer-use/routing'
 import { diagnose, report } from './doctor'
 import { commandRequestOf, requestOf } from './input'
 import { locateCodex } from './locate'
@@ -71,6 +76,15 @@ async function depsOf($: EngineInterface): Promise<RunnerDeps> {
   }
 }
 
+/** Whether this machine runs macOS; a `uname` that cannot run answers no. */
+async function onMac($: EngineInterface) {
+  try {
+    return isMac((await $.process.run(UNAME, { timeoutMs: 3000 })).stdout)
+  } catch {
+    return false
+  }
+}
+
 async function runNow($: EngineInterface, request: Request): Promise<Outcome> {
   active++
   $.ui.status('Codex is working')
@@ -101,9 +115,21 @@ export const register: Register = (on, options) => {
   backgroundMs = limitMs(options?.backgroundMinutes, BACKGROUND_MINUTES)
   codexPath = typeof options?.codexPath === 'string' && options.codexPath.trim() ? options.codexPath.trim() : undefined
 
+  // Computer use owns its other hooks in its own folder; session.start and prompt.compose below add its tool, command
+  // and prompt section, since a plugin holds each of those events once.
+  registerComputerUse(on, options)
+
+  // The computer use section is added only while /codex-cu is on, so the next request already sees the switch.
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
-    return { sections: [...composed.sections, { id: 'codex:ask', text: PROMPT, scope: 'session' as const }] }
+    const sections = [...composed.sections, { id: 'codex:ask', text: PROMPT, scope: 'session' as const }]
+    // A failed read of the switch leaves computer use out and keeps the ask section.
+    const stored = await $.store.get(ENABLED).then(isOn, () => undefined)
+    if (stored !== undefined) known.enabled = stored
+    if (stored) {
+      sections.push({ id: 'codex:computer-use', text: COMPUTER_USE_PROMPT(COMPUTER_USE_TOOL), scope: 'session' as const })
+    }
+    return { sections }
   })
 
   // The names stay literal in each call: the engine's scan reads them to classify the command hooks below.
@@ -114,6 +140,11 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'codex-ask', description: ASK_COMMAND_DESCRIPTION })
     await $.command.register({ name: 'codex-image', description: IMAGE_COMMAND_DESCRIPTION })
     await $.command.register({ name: 'codex-doctor', description: DOCTOR_COMMAND_DESCRIPTION })
+    known.mac = await onMac($)
+    if (known.mac) {
+      await $.tool.register({ name: 'computer_use', description: COMPUTER_USE_DESCRIPTION, inputSchema: COMPUTER_USE_INPUT_SCHEMA })
+      await $.command.register({ name: 'codex-cu', description: COMPUTER_USE_COMMAND_DESCRIPTION })
+    }
     return next(e)
   })
 

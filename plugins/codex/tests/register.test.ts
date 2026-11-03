@@ -17,6 +17,44 @@ test('session start registers the ask, image and jobs tools and the three comman
   expect(Object.keys(tools[1]!.inputSchema.properties)).toEqual(['prompt', 'reference', 'threadId', 'model', 'effort', 'files', 'wait', 'out'])
 })
 
+test('on macOS session start also registers the computer use tool and /codex-cu', async ($, on) => {
+  const { tools, commands } = world(on, { uname: 'Darwin\n' })
+
+  expect(await started($, tools)).toEqual(['ask', 'image', 'jobs', 'computer_use'])
+  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-doctor', 'codex-cu'])
+})
+
+test('elsewhere, or when uname cannot run, computer use is not registered', async ($, on) => {
+  const { tools, commands } = world(on, { uname: undefined })
+
+  expect(await started($, tools)).toEqual(['ask', 'image', 'jobs'])
+  expect(commands).toEqual(['codex-ask', 'codex-image', 'codex-doctor'])
+})
+
+test('computer use starts off: no prompt section and Claude’s own desktop tools run until /codex-cu on', async ($, on) => {
+  world(on, { uname: 'Darwin\n' })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'base', scope: 'shared' as const }] }))
+  on('tool.call', { tool: 'mcp__computer-use__left_click' as never }, () => ({ result: 'clicked' }))
+  const compose = () => $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as never)
+  const own = () => $.tool.call({ tool: 'mcp__computer-use__left_click' } as never) as Promise<{ deny?: string }>
+
+  expect((await compose()).sections.map(section => section.id)).toEqual(['intro', 'codex:ask'])
+  expect((await own()).deny).toBeUndefined()
+
+  await command($, 'codex-cu', 'on')
+  expect((await compose()).sections.map(section => section.id)).toEqual(['intro', 'codex:ask', 'codex:computer-use'])
+  expect((await own()).deny).toMatch(/Codex computer use is on/)
+})
+
+test('off macOS the computer use hooks stand aside: Claude’s own desktop tools run even with the switch stored on', async ($, on) => {
+  const { tools } = world(on)
+  on('tool.call', { tool: 'mcp__computer-use__left_click' as never }, () => ({ result: 'clicked' }))
+
+  await started($, tools)
+  await command($, 'codex-cu', 'on')
+  expect(((await $.tool.call({ tool: 'mcp__computer-use__left_click' } as never)) as { deny?: string }).deny).toBeUndefined()
+})
+
 test('the system prompt tells Claude to reach for ask on its own and for image when asked', async ($, on) => {
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'base', scope: 'shared' as const }] }))
 

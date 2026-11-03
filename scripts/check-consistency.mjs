@@ -54,7 +54,7 @@ export function declaredTests(source) {
 /**
  * The test names an AGENTS.md cites. Only backticked spans count, and only in two positions after a test file
  * reference (`tests/<file>.test.ts`, `helper/test/<file>.test.mjs`, or `tests/{a,b}.test.ts`, whose files are then
- * alternatives):
+ * alternatives; each may sit in a subfolder, as `tests/<folder>/<file>.test.ts`):
  *   - a parenthesised list right after the reference: (`name`, `name` and `name`)
  *   - a single span after a colon: `tests/<file>.test.ts`: `name`
  * Every other backticked span is code, not a citation. A name belongs to the nearest reference before it.
@@ -65,9 +65,9 @@ export function citedTests(markdown) {
   const spans = [...markdown.matchAll(/`([^`\n]*)`/g)].map(m => ({ text: m[1], start: m.index, end: m.index + m[0].length }))
   const gapAfter = i => markdown.slice(spans[i].end, spans[i + 1]?.start ?? markdown.length)
   const fileRef = text => {
-    const single = /^((?:tests|helper\/test)\/)([\w.-]+\.test\.(?:ts|tsx|mjs))$/.exec(text)
+    const single = /^((?:tests|helper\/test)\/(?:[\w-]+\/)*)([\w.-]+\.test\.(?:ts|tsx|mjs))$/.exec(text)
     if (single) return [`${single[1]}${single[2]}`]
-    const group = /^((?:tests|helper\/test)\/)\{([\w.,-]+)\}(\.test\.(?:ts|tsx|mjs))$/.exec(text)
+    const group = /^((?:tests|helper\/test)\/(?:[\w-]+\/)*)\{([\w.,-]+)\}(\.test\.(?:ts|tsx|mjs))$/.exec(text)
     return group ? group[2].split(',').map(name => `${group[1]}${name}${group[3]}`) : undefined
   }
   // A helper beside the tests: no `.test.` in the name, and no `..` to climb out of the plugin.
