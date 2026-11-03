@@ -4,7 +4,7 @@ description: Generate, edit, or extend a video on your ComfyUI
 
 Generate, edit, or extend a video on the user's ComfyUI server based on their description: $ARGUMENTS
 
-Follow these steps exactly:
+The usual path; adapt it to the request:
 
 1. Use `search_templates` with queries like "text to video", "image to video" or "video", or `tag: "Video"`, and with `model` when the user named a family (Wan, LTX, Hunyuan, Mochi, CogVideoX...). If a good template exists, read it with `get_template` and use it as the reference.
 
