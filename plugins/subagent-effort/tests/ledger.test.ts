@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { CALIBRATION } from '../hooks/effort'
-import { afterAgentCall, afterTurn, runsInBackground, appendLine, decisionLine, errorClassOf, familyOf, formatSummary, parseLedger, readAll, ROTATE_AT, rotatedPath, summarize, usd } from '../hooks/ledger'
+import { afterAgentCall, afterTurn, runsInBackground, appendLine, decisionLine, errorClassOf, familyOf, formatSummary, MIN_RUNS, parseLedger, readAll, ROTATE_AT, rotatedPath, summarize, usd } from '../hooks/ledger'
 import type { FileIo, Line } from '../hooks/ledger'
 
 const ctx = { toolUseId: 'toolu_1', agentType: 'Explore', effort: 'medium' as const, background: false, model: null }
@@ -8,7 +8,7 @@ const ts = '2026-10-17T00:00:00.000Z'
 
 test('a decision line projects each field and drops anything that is not a plain word or a count', () => {
   expect(decisionLine({ ts, toolUseId: 'bad id/with path', agentType: 'Explore', briefChars: 12.4, source: 'jev', received: 'max', effort: 'high', choice: { effort: 'high', level: 2, top: 0.876, jevReason: null, jevMs: 210, jevTokens: { input: 308.4, output: 19 } } }))
-    .toEqual({ v: 1, kind: 'decision', calibration: CALIBRATION, ts, tool_use_id: null, agentType: 'Explore', briefChars: 12, source: 'jev', received: 'max', effort: 'high', cap: null, level: 2, headLevel: null, fullLevel: null, top: 0.88, jevReason: null, jevMs: 210, jevTokens: { input: 308, output: 19 }, jevCostUsd: 0.000012936 })
+    .toEqual({ v: 1, kind: 'decision', calibration: CALIBRATION, ts, tool_use_id: null, agentType: 'Explore', briefChars: 12, source: 'jev', received: 'max', effort: 'high', cap: null, level: 2, headLevel: null, fullLevel: null, top: 0.88, jevReason: null, jevMs: 210, jevTokens: { input: 308, output: 19 }, jevCostUsd: 0.000012936, sentBack: null, sentBackMs: null })
   expect(decisionLine({ ts, toolUseId: 'toolu_3', agentType: 'Explore', briefChars: 1, source: 'jev', received: null, effort: 'medium', cap: 'medium', choice: { effort: 'high', level: 2, top: 0.9, jevReason: null, jevMs: 1, jevTokens: null } }))
     .toMatchObject({ effort: 'medium', cap: 'medium', level: 2 })
   expect(decisionLine({ ts, toolUseId: 'toolu_2', agentType: 'plugin:agent', briefChars: 3, source: 'off', received: null, effort: null, choice: { effort: null, level: null, top: null, jevReason: 'no-key', jevMs: null, jevTokens: null } }))
@@ -95,7 +95,7 @@ test('the summary groups outcomes by model family and effort, and counts decisio
     { key: 'opus/usual', runs: 1, failures: 0, medianMs: 60_000, medianTokens: 1_500_000 },
   ])
   expect(summary.byType).toEqual([{ key: 'Explore', runs: 3, failures: 1, medianMs: 30_000, medianTokens: 4000 }])
-  expect(formatSummary(summary)).toBe('4 decisions: Jev 3 (1 replacing the call\'s effort), Jev off 1 (no-key ×1); 1 from an older calibration.\nJev calls: 3, median 200ms, 3M input and 60 output tokens, about $0.13 (estimated).\nhaiku/low: 2 runs, 1 failed, median 20s and 3k tokens\nopus/usual: 1 runs, median 60s and 1.5M tokens\nBy agent type:\n  Explore: 3 runs, 1 failed, median 30s and 4k tokens')
+  expect(formatSummary(summary)).toBe('4 decisions: Jev 3 (1 replacing the call\'s effort), Jev off 1 (no-key ×1); 1 from an older calibration.\nJev calls: 3, median 200ms, 3M input and 60 output tokens, about $0.13 (estimated).\nBy agent type:\n  Explore: 3 runs, 1 failed, median 30s and 4k tokens\n2 groups with fewer than 3 runs left out.')
   expect(formatSummary(summarize([]))).toBe('no routing records yet.')
   expect([familyOf('claude-fable-5-1'), familyOf(null), familyOf('gpt')]).toEqual(['fable', '?', '?'])
 })
@@ -110,8 +110,7 @@ test('calls that never ran and runs of an older calibration stay out of the grou
   expect(formatSummary(summary).split('\n')).toEqual([
     '3 decisions: Jev 3 (1 lowered by a cap), Jev off 0; 1 from an older calibration.',
     'Jev calls: 3, median 1ms, 0 input and 0 output tokens, about $0 (estimated).',
-    'haiku/medium: 1 runs, median 1s and 10 tokens',
-    'By agent type:', '  Explore: 1 runs, median 1s and 10 tokens',
+    '2 groups with fewer than 3 runs left out.',
     '1 calls never ran (an error before the agent started: other ×1), left out.',
     '1 runs from an older calibration, left out.',
   ])
@@ -120,8 +119,30 @@ test('calls that never ran and runs of an older calibration stay out of the grou
 test("this calibration's decisions compare the head's level with the full brief's; one without both levels is left out", () => {
   const decide = (headLevel: number, fullLevel: number | null, calibration = CALIBRATION) => ({ ...decisionLine({ ts, toolUseId: `t${headLevel}${fullLevel}`, agentType: 'Explore', briefChars: 1, source: 'jev', received: null, effort: 'low', choice: { effort: 'low', level: Math.max(headLevel, fullLevel ?? 0), top: 1, jevReason: null, jevMs: null, jevTokens: null, headLevel, fullLevel } }), calibration })
   const summary = summarize([decide(1, 1), decide(1, 2), decide(0, 2), decide(2, 1), decide(1, null), decide(0, 3, 2)])
-  expect(summary.headVsFull).toEqual({ same: 1, lower: 2, higher: 1 })
-  expect(formatSummary(summary).split('\n')[1]).toBe('Head vs full brief: 1 same, 2 raised by the full brief, 1 higher with the head.')
+  // Only the head 0, full 2 decision passed the one-level limit; the older calibration's 0 and 3 is left out.
+  expect(summary.headVsFull).toEqual({ same: 1, lower: 2, higher: 1, cappedRaise: 1 })
+  expect(formatSummary(summary).split('\n')[1]).toBe('Head vs full brief: 1 same, 2 raised by the full brief (1 held to 1 above the head), 1 higher with the head.')
+})
+
+test('a group with fewer than three runs is left out of the text and counted, while the summary keeps it', () => {
+  expect(MIN_RUNS).toBe(3)
+  const run = (id: string, model: string) => afterAgentCall({ ...ctx, toolUseId: id }, { result: { status: 'completed', resolvedModel: model, totalDurationMs: 2000, usage: { input_tokens: 5 } } }, ts) as Line
+  const summary = summarize([run('a', 'claude-haiku-5-5'), run('b', 'claude-haiku-5-5'), run('c', 'claude-haiku-5-5'), run('d', 'claude-opus-5-5')])
+  expect(summary.groups.map(g => [g.key, g.runs])).toEqual([['haiku/medium', 3], ['opus/medium', 1]])
+  expect(formatSummary(summary).split('\n').slice(-4)).toEqual([
+    'haiku/medium: 3 runs, median 2s and 5 tokens', 'By agent type:', '  Explore: 4 runs, median 2s and 5 tokens', '1 groups with fewer than 3 runs left out.',
+  ])
+})
+
+test("a call sent back is counted with its wait until it went; lines that do not record it are left out", () => {
+  const decide = (id: string, sentBack?: { count: number; ms: number | null }, calibration = CALIBRATION) => ({ ...decisionLine({ ts, toolUseId: id, agentType: 'Explore', briefChars: 1, source: 'jev', received: null, effort: 'low', sentBack }), calibration })
+  // Each field is projected as a count: anything else is null.
+  expect(decide('x', { count: 2.4, ms: 1500.6 })).toMatchObject({ sentBack: 2, sentBackMs: 1501 })
+  expect(decide('y', { count: -1, ms: 'soon' as never })).toMatchObject({ sentBack: null, sentBackMs: null })
+  const summary = summarize([decide('a', { count: 1, ms: 4000 }), decide('b', { count: 1, ms: 8000 }), decide('c', { count: 0, ms: null }), decide('d'), decide('e', { count: 1, ms: 1 }, 2)])
+  expect(summary.sentBack).toEqual({ measured: 3, calls: 2, medianMs: 6000 })
+  expect(formatSummary(summary).split('\n')).toContain('Sent back: 2 of 3 calls, median 6s to come back.')
+  expect(formatSummary(summarize([decide('d')]))).not.toContain('Sent back')
 })
 
 test('a dollar amount keeps two significant digits however small, and at least two decimals', () => {

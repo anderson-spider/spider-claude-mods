@@ -2,7 +2,7 @@
 // access. A line holds ids, the agent type, the effort, Jev's confidence, latency, tokens and cost, counts, a fixed error
 // class and the brief's length in characters; never the task, the prompt, an answer, a path or a key. Every field is projected one by one, so extra
 // input cannot leak in.
-import { CALIBRATION, EFFORTS, jevCostOf } from './effort'
+import { CALIBRATION, EFFORTS, jevCostOf, MAX_RAISE } from './effort'
 import type { Choice, Effort } from './effort'
 
 export const LEDGER_FILE = '.claude/subagent-effort/routes.jsonl'
@@ -20,12 +20,14 @@ const ALL_EFFORTS: readonly Effort[] = [...EFFORTS, 'max']
  * `cap` is the agent type's cap when it lowered Jev's pick (`level` stays Jev's own), else null. `level` is the higher of
  * `headLevel`, from the task's head, and `fullLevel`, from the task read up to FULL_CHARS (null when it was not asked or
  * failed). The Jev fields are the routing call's own: its latency, the tokens it reported and their estimated cost, apart from the
- * subagent's duration and tokens on the outcome line.
+ * subagent's duration and tokens on the outcome line. `sentBack` is how many times the call was sent back for Jev's effort
+ * before it went (0: it went at once) and `sentBackMs` the time from the first refusal until it went (null: not sent back,
+ * or the host's clock could not be read); both are null on lines written before they were recorded.
  */
 export type DecisionLine = {
   v: 1; kind: 'decision'; calibration: number; ts: string; tool_use_id: string | null; agentType: string | null; briefChars: number | null
   source: Source; received: Effort | null; effort: Effort | null; cap: Effort | null; level: number | null; headLevel: number | null; fullLevel: number | null; top: number | null; jevReason: string | null; jevMs: number | null
-  jevTokens: { input: number; output: number } | null; jevCostUsd: number | null
+  jevTokens: { input: number; output: number } | null; jevCostUsd: number | null; sentBack: number | null; sentBackMs: number | null
 }
 /**
  * What kind of error the host returned for an `Agent` call, from fixed prefixes of its text, never the text itself: the
@@ -65,12 +67,13 @@ function jevSpend(usage: unknown): Pick<DecisionLine, 'jevTokens' | 'jevCostUsd'
   return { jevTokens: { input, output }, jevCostUsd: jevCostOf({ input, output }) }
 }
 
-export type DecisionInput = { ts: string; toolUseId: string | undefined; agentType: string; briefChars: number; source: Source; received: Effort | null; effort: Effort | null; cap?: Effort | null; choice?: Choice }
-export function decisionLine({ ts, toolUseId, agentType, briefChars, source, received, effort, cap = null, choice }: DecisionInput): DecisionLine {
+export type DecisionInput = { ts: string; toolUseId: string | undefined; agentType: string; briefChars: number; source: Source; received: Effort | null; effort: Effort | null; cap?: Effort | null; choice?: Choice; sentBack?: { count: number; ms: number | null } }
+export function decisionLine({ ts, toolUseId, agentType, briefChars, source, received, effort, cap = null, choice, sentBack }: DecisionInput): DecisionLine {
   return {
     v: 1, kind: 'decision', calibration: CALIBRATION, ts, tool_use_id: word(toolUseId, 80), agentType: word(agentType, 80), briefChars: maybeCount(briefChars),
     source, received: effortOf(received), effort: effortOf(effort), cap: effortOf(cap), level: maybeCount(choice?.level), headLevel: maybeCount(choice?.headLevel), fullLevel: maybeCount(choice?.fullLevel), top: typeof choice?.top === 'number' && Number.isFinite(choice.top) ? round2(choice.top) : null,
     jevReason: word(choice?.jevReason, 40), jevMs: maybeCount(choice?.jevMs), ...jevSpend(choice?.jevTokens),
+    sentBack: maybeCount(sentBack?.count), sentBackMs: maybeCount(sentBack?.ms),
   }
 }
 
@@ -202,8 +205,13 @@ export type JevSpend = { asked: number; medianMs: number | null; inputTokens: nu
 export type Summary = {
   decisions: number; bySource: Record<Source, number>; overridden: number; capped: number; offReasons: Record<string, number>; olderCalibration: number
   jev: JevSpend; groups: Group[]; byType: Group[]; notRun: number; notRunBy: Record<string, number>; olderRuns: number
-  /** This calibration's decisions with both levels: the head's level equal to, below (the full brief raised the decision) or above the full brief's. */
-  headVsFull: { same: number; lower: number; higher: number }
+  /**
+   * This calibration's decisions with both levels: the head's level equal to, below (the full brief raised the decision) or
+   * above the full brief's; `cappedRaise` the ones where the full brief was more than MAX_RAISE above the head, so the limit held.
+   */
+  headVsFull: { same: number; lower: number; higher: number; cappedRaise: number }
+  /** This calibration's decisions that record it: how many were sent back at least once, and the median wait until they went. */
+  sentBack: { measured: number; calls: number; medianMs: number | null }
 }
 
 /** An error with no duration and no tokens: the call failed before its agent ran. */
@@ -227,7 +235,7 @@ export function summarize(lines: Line[]): Summary {
   let decisions = 0, olderCalibration = 0, overridden = 0, capped = 0, notRun = 0, olderRuns = 0
   const jevMs: number[] = [], jev: JevSpend = { asked: 0, medianMs: null, inputTokens: 0, outputTokens: 0, costUsd: 0 }
   const groups = new Map<string, OutcomeLine[]>(), byType = new Map<string, OutcomeLine[]>()
-  const headVsFull = { same: 0, lower: 0, higher: 0 }
+  const headVsFull = { same: 0, lower: 0, higher: 0, cappedRaise: 0 }, sentBack = { measured: 0, calls: 0 }, sentBackMs: number[] = []
   const older = new Set(lines.flatMap(line => (line.kind === 'decision' && line.calibration !== CALIBRATION && line.tool_use_id ? [line.tool_use_id] : [])))
   for (const line of lines) {
     if (line.kind === 'decision') {
@@ -238,6 +246,12 @@ export function summarize(lines: Line[]): Summary {
       if (line.cap) capped++
       if (line.calibration === CALIBRATION && typeof line.headLevel === 'number' && typeof line.fullLevel === 'number') {
         headVsFull[line.headLevel === line.fullLevel ? 'same' : line.headLevel < line.fullLevel ? 'lower' : 'higher']++
+        if (line.fullLevel > line.headLevel + MAX_RAISE) headVsFull.cappedRaise++
+      }
+      if (line.calibration === CALIBRATION && typeof line.sentBack === 'number') {
+        sentBack.measured++
+        if (line.sentBack > 0) sentBack.calls++
+        if (typeof line.sentBackMs === 'number') sentBackMs.push(line.sentBackMs)
       }
       if (line.jevMs !== null) { jev.asked++; jevMs.push(line.jevMs) }
       if (line.jevTokens) { jev.inputTokens += line.jevTokens.input; jev.outputTokens += line.jevTokens.output; jev.costUsd += line.jevCostUsd ?? 0 }
@@ -258,11 +272,13 @@ export function summarize(lines: Line[]): Summary {
   }
   return {
     decisions, bySource, overridden, capped, offReasons, olderCalibration, jev: { ...jev, medianMs: median(jevMs), costUsd: Math.round(jev.costUsd * 1e9) / 1e9 },
-    groups: grouped(groups), byType: grouped(byType), notRun, notRunBy, olderRuns, headVsFull,
+    groups: grouped(groups), byType: grouped(byType), notRun, notRunBy, olderRuns, headVsFull, sentBack: { ...sentBack, medianMs: median(sentBackMs) },
   }
 }
 
 const seconds = (ms: number | null) => ms === null ? '?' : `${Math.round(ms / 1000)}s`
+/** A group with fewer runs than this is left out of the text: its median says little. */
+export const MIN_RUNS = 3
 /**
  * US dollars with two significant digits after the leading zeros, and never fewer than two decimals: a Jev call costs
  * a few millionths of a dollar, which a fixed number of decimals would show as zero.
@@ -280,13 +296,17 @@ export function formatSummary(s: Summary): string {
   const head = `${s.decisions} decisions: Jev ${s.bySource.jev}${notes.length ? ` (${notes.join(', ')})` : ''}, Jev off ${s.bySource.off}${off ? ` (${off})` : ''}${s.olderCalibration ? `; ${s.olderCalibration} from an older calibration` : ''}.`
   const asked = s.jev.asked ? [`Jev calls: ${s.jev.asked}, median ${s.jev.medianMs === null ? '?' : `${Math.round(s.jev.medianMs)}ms`}, ${tokens(s.jev.inputTokens)} input and ${tokens(s.jev.outputTokens)} output tokens, about ${usd(s.jev.costUsd)} (estimated).`] : []
   const row = (g: Group) => `${g.key}: ${g.runs} runs${g.failures ? `, ${g.failures} failed` : ''}, median ${seconds(g.medianMs)} and ${tokens(g.medianTokens)} tokens`
-  const { same, lower, higher } = s.headVsFull
-  const compared = same + lower + higher ? [`Head vs full brief: ${same} same, ${lower} raised by the full brief, ${higher} higher with the head.`] : []
-  const types = s.byType.length ? ['By agent type:', ...s.byType.map(g => `  ${row(g)}`)] : []
+  const { same, lower, higher, cappedRaise } = s.headVsFull
+  const compared = same + lower + higher ? [`Head vs full brief: ${same} same, ${lower} raised by the full brief (${cappedRaise} held to ${MAX_RAISE} above the head), ${higher} higher with the head.`] : []
+  const back = s.sentBack.measured ? [`Sent back: ${s.sentBack.calls} of ${s.sentBack.measured} calls, median ${seconds(s.sentBack.medianMs)} to come back.`] : []
+  const shown = (groups: Group[]) => groups.filter(g => g.runs >= MIN_RUNS)
+  const few = [...s.groups, ...s.byType].filter(g => g.runs < MIN_RUNS)
+  const types = shown(s.byType).length ? ['By agent type:', ...shown(s.byType).map(g => `  ${row(g)}`)] : []
   const why = Object.entries(s.notRunBy).sort(([a], [b]) => a.localeCompare(b)).map(([kind, n]) => `${kind} ×${n}`).join(', ')
   const apart = [
+    ...(few.length ? [`${few.length} groups with fewer than ${MIN_RUNS} runs left out.`] : []),
     ...(s.notRun ? [`${s.notRun} calls never ran (an error before the agent started${why ? `: ${why}` : ''}), left out.`] : []),
     ...(s.olderRuns ? [`${s.olderRuns} runs from an older calibration, left out.`] : []),
   ]
-  return [head, ...asked, ...compared, ...s.groups.map(row), ...types, ...apart].join('\n')
+  return [head, ...asked, ...compared, ...back, ...shown(s.groups).map(row), ...types, ...apart].join('\n')
 }
