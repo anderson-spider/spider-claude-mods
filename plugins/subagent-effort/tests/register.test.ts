@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import { call, LEDGER, settle, started, world } from './host'
-import { STATS_COMMAND, STATS_DESCRIPTION } from '../hooks/register'
+import { EVAL_COMMAND, EVAL_DESCRIPTION, STATS_COMMAND, STATS_DESCRIPTION } from '../hooks/register'
+import { EVAL_BRIEFS } from '../hooks/eval-briefs'
 import { OFF_TEXT } from '../hooks/key'
 import { CALIBRATION } from '../hooks/effort'
 
@@ -26,7 +27,7 @@ const finished = (patch = {}) => ({
 
 test('session start registers the stats command and no agent or tool', async ($, on) => {
   const h = world(on); await started($)
-  expect(h.commands).toEqual([{ name: STATS_COMMAND, description: STATS_DESCRIPTION }])
+  expect(h.commands).toEqual([{ name: STATS_COMMAND, description: STATS_DESCRIPTION }, { name: EVAL_COMMAND, description: EVAL_DESCRIPTION }])
   expect(STATS_COMMAND).toBe('subagent-effort-stats')
 })
 
@@ -229,6 +230,35 @@ test('the stats command checks Jev access the way routing does, summarizes the r
   expect(text).not.toContain('test-key')
   h.fsFaults.read = true
   expect((await $.command.run({ command: STATS_COMMAND } as never) as { text: string }).text).toBe('Jev access in this session: ok (key from JEV_API_KEY).\nthe routing records could not be read.')
+})
+
+test('the eval command rates every fixed brief once per round over the routing transport, records nothing and never prints the key', async ($, on) => {
+  const h = world(on); h.env.JEV_API_KEY = 'test-key'
+  await started($)
+  const run = async (args: string) => ((await $.command.run({ command: EVAL_COMMAND, args } as never)) as { text: string }).text
+  const text = await run('1 holdout')
+  const holdout = EVAL_BRIEFS.filter(b => b.split === 'holdout'), long = holdout.filter(b => b.task.length > 800).length
+  // One call per brief, and one more for each brief longer than the head.
+  expect(h.requests).toHaveLength(holdout.length + long)
+  expect(h.requests.every(r => r.headers.Authorization === 'Bearer test-key')).toBe(true)
+  expect(text.split('\n')[0]).toBe(`${holdout.length} briefs × 1 rounds; levels 0-3 are low, medium, high, xhigh; each round shows decided(head/full).`)
+  expect(text).toContain('h-lookup [holdout] expected 0: 0(0/-)')
+  expect(text).not.toContain('test-key')
+  expect(h.files.has(LEDGER)).toBe(false)
+  expect(await run('9')).toBe('usage: /subagent-effort-eval [1-5] [dev|holdout]')
+})
+
+test("a failing evaluation never pauses routing: it has a breaker of its own", async ($, on) => {
+  const h = world(on), received = dispatched(on); h.env.JEV_API_KEY = 'test-key'
+  await started($)
+  // A 401 counts against a breaker and is not retried: enough failures in a row would pause a shared one.
+  h.faults.http = 401
+  const text = ((await $.command.run({ command: EVAL_COMMAND, args: '1 dev' } as never)) as { text: string }).text
+  expect(text).toMatch(/failed:(http|breaker)/)
+  h.faults.http = 200
+  await routed($, call())
+  expect(received[0]).toHaveProperty('effort', 'low')
+  expect(h.ledger().filter(l => l.kind === 'decision').map(l => [l.source, l.jevReason])).toEqual([['jev', null]])
 })
 
 const OPTION_KEY = ['option-', 'test', '-key'].join('')

@@ -1,6 +1,9 @@
 import type { BuiltinToolInputs, Hook, Register } from 'claude-code'
 import { capped, capsOf } from './caps'
 import { assessEffort } from './effort'
+import { EVAL_BRIEFS } from './eval-briefs'
+import { evalArgs, formatEval, rated } from './evaluate'
+import type { Rated } from './evaluate'
 import type { Effort, EffortIo } from './effort'
 import { createBreaker, createGate } from './jev'
 import { ENV_NAME, isOff, OFF_TEXT, resolveAccess } from './key'
@@ -10,6 +13,8 @@ import type { Context, FileIo, Line, TurnEnd } from './ledger'
 type Dollar = Parameters<Hook<'session.start'>>[0]
 export const STATS_COMMAND = 'subagent-effort-stats'
 export const STATS_DESCRIPTION = 'Summarize the local subagent-effort records: decisions per source, and runs, failures, median duration and tokens per model and effort, and whether Jev is reachable in this session.'
+export const EVAL_COMMAND = 'subagent-effort-eval'
+export const EVAL_DESCRIPTION = 'Rate the fixed evaluation briefs with Jev and compare each level with the expected one: [rounds 1-5] [dev|holdout].'
 /** The type the host runs when a call names none. */
 export const DEFAULT_TYPE = 'general-purpose'
 // One breaker and gate for this load: a failing Jev pauses routing for every call, not per call.
@@ -63,6 +68,21 @@ function warnOff($: Dollar, reason: unknown, warned: Set<string>) {
   warned.add(reason)
   try { $.ui.toast(`Jev off (${reason}): ${OFF_TEXT[reason]} Subagent calls go as they came.`, { timeoutMs: 10_000 }) } catch { /* A toast cannot change the dispatch. */ }
 }
+// The fixed briefs through Jev, one at a time and round after round, with the routing transport and key but a breaker
+// and gate of their own, so a failing evaluation never pauses routing. Nothing is recorded; caps do not apply.
+async function evaluate($: Dollar, args: string, option: unknown): Promise<string> {
+  const parsed = evalArgs(args)
+  if ('error' in parsed) return parsed.error
+  const own: EffortIo = { ...io($), breaker: createBreaker(() => Date.now()), gate: createGate() }
+  const call = { keys: { option, env: await $.env.get('JEV_API_KEY') }, home: await $.env.get('HOME') ?? '', root: await $.session.root() }
+  const briefs = EVAL_BRIEFS.filter(brief => !parsed.split || brief.split === parsed.split), rounds: Rated[][] = []
+  for (let n = 0; n < parsed.rounds; n++) {
+    const round: Rated[] = []
+    for (const brief of briefs) round.push(rated(brief, await assessEffort(own, { ...call, task: brief.task })))
+    rounds.push(round)
+  }
+  return formatEval(briefs, rounds)
+}
 // The outcome is written after the result has gone back; a background launch waits for its turn.complete.
 async function dispatched($: Dollar, ctx: Context, result: unknown, background: ReturnType<typeof createPending>) {
   await observe($, 'outcome', async () => {
@@ -100,6 +120,7 @@ export const register: Register = (on, options) => {
   const { caps, invalid } = capsOf(options.caps)
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: STATS_COMMAND, description: STATS_DESCRIPTION })
+    await $.command.register({ name: EVAL_COMMAND, description: EVAL_DESCRIPTION })
     if (invalid.length) try { $.ui.log(`subagent-effort: caps entries ignored: ${invalid.join(', ')}`, { to: 'debug' }) } catch { /* Logging cannot block the start. */ }
     return next(e)
   })
@@ -160,6 +181,9 @@ export const register: Register = (on, options) => {
     return result
   })
   // The host prefixes command output with the plugin name, so the texts below do not repeat it.
+  on('command.run', { command: EVAL_COMMAND }, async ($, e) => {
+    try { return { text: await evaluate($, e.args, options.apiKey) } } catch { return { text: 'the evaluation could not run.' } }
+  })
   on('command.run', { command: STATS_COMMAND }, async $ => {
     try {
       const access = await accessLine($, options.apiKey)
