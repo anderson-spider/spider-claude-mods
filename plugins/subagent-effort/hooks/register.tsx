@@ -48,6 +48,8 @@ async function record($: Dollar, what: string, line: Line) {
   })
 }
 const stamp = () => new Date().toISOString()
+// The host's time, or null: measuring the wait for a call sent back never blocks routing.
+const now = async ($: Dollar): Promise<number | null> => { try { return await $.clock.now() } catch { return null } }
 // Whether this process can reach Jev now, checked the way routing checks it; the ledger only tells what past calls saw.
 async function accessLine($: Dollar, option: unknown): Promise<string> {
   try {
@@ -79,7 +81,8 @@ export const askText = (effort: Effort, cappedFor?: string) =>
 // A call sent back is known again by its agent type, description and task: parallel calls with the same task differ
 // by their description, and the one that comes back keeps its own.
 const askedKey = (agentType: string, description: unknown, prompt: string) => `${agentType}\u0000${typeof description === 'string' ? description : ''}\u0000${prompt}`
-type Asked = { choice: Awaited<ReturnType<typeof assessEffort>>; effort: Effort; cap: Effort | null; received: Effort | null; refusals: number }
+// `sentAt` is when the call was first sent back (null when the clock could not be read), kept across the calls sent back.
+type Asked = { choice: Awaited<ReturnType<typeof assessEffort>>; effort: Effort; cap: Effort | null; received: Effort | null; refusals: number; sentAt: number | null }
 // Jev's picks waiting for the call to come back, newest last; a bounded few, dropped on reload like the pending runs.
 function createAsked(limit: number) {
   const entries = new Map<string, Asked>()
@@ -126,7 +129,7 @@ export const register: Register = (on, options) => {
     if (routed && routed !== effortOfCall) {
       const refusals = (waiting?.refusals ?? 0) + 1
       if (refusals <= ASK_AGAIN) {
-        asked.put(key, { choice, effort: routed, cap: held?.cap ?? null, received: firstEffort, refusals })
+        asked.put(key, { choice, effort: routed, cap: held?.cap ?? null, received: firstEffort, refusals, sentAt: waiting ? waiting.sentAt : await now($) })
         $.ui.log(`subagent-effort: ${agentType} → ${routed}${held?.cap ? ` (capped from ${choice.effort})` : ''}; sent back to come with it`, { to: 'debug' })
         return { deny: askText(routed, held?.cap ? agentType : undefined) }
       }
@@ -135,7 +138,10 @@ export const register: Register = (on, options) => {
       $.ui.log(`subagent-effort: ${agentType} → ${routed ? `${routed}${held?.cap ? ` (capped from ${choice.effort})` : ''}` : `as it came (${choice.jevReason})`}`, { to: 'debug' })
     }
     const effort: Effort | null = effortOfCall
-    await record($, 'decision', decisionLine({ ts: stamp(), toolUseId: call.tool_use_id, agentType, briefChars: call.prompt.length, source: routed ? 'jev' : 'off', received: firstEffort, effort, cap: routed === effortOfCall ? held?.cap ?? null : null, choice }))
+    // How many times this call was sent back before it went, and the time from the first refusal until it went.
+    const back = await now($)
+    const sentBack = { count: waiting?.refusals ?? 0, ms: waiting && waiting.sentAt !== null && back !== null ? back - waiting.sentAt : null }
+    await record($, 'decision', decisionLine({ ts: stamp(), toolUseId: call.tool_use_id, agentType, briefChars: call.prompt.length, source: routed ? 'jev' : 'off', received: firstEffort, effort, cap: routed === effortOfCall ? held?.cap ?? null : null, choice, sentBack }))
     const result = await next(e)
     // `run_in_background` is not in this host's Agent typing, and a call may send it as the string "true".
     const mode = { flag: (e as { run_in_background?: unknown }).run_in_background, surfaces: await $.session.surfaces().catch(() => []), fromSubagent: (e as { agentId?: string }).agentId !== undefined }

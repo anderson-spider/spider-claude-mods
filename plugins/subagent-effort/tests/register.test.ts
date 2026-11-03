@@ -141,7 +141,7 @@ test('a decision line and a foreground outcome line are written, and the host re
   dispatched(on, answer); await started($)
   expect(await routed($, call({ tool_use_id: 'toolu_1' }))).toEqual(answer)
   expect(h.ledger()).toEqual([
-    { v: 1, kind: 'decision', calibration: CALIBRATION, ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', briefChars: 12, source: 'jev', received: null, effort: 'low', cap: null, level: 0, headLevel: 0, fullLevel: null, top: 0.8, jevReason: null, jevMs: expect.any(Number), jevTokens: { input: 300, output: 20 }, jevCostUsd: 0.0000126 },
+    { v: 1, kind: 'decision', calibration: CALIBRATION, ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', briefChars: 12, source: 'jev', received: null, effort: 'low', cap: null, level: 0, headLevel: 0, fullLevel: null, top: 0.8, jevReason: null, jevMs: expect.any(Number), jevTokens: { input: 300, output: 20 }, jevCostUsd: 0.0000126, sentBack: 1, sentBackMs: 0 },
     { v: 1, kind: 'outcome', ts: expect.any(String), tool_use_id: 'toolu_1', agentType: 'Explore', effort: 'low', mode: 'foreground', resolvedModel: 'claude-haiku-5-5', status: 'completed', durationMs: 42_000, tokens: 1650, errorClass: null },
   ])
 })
@@ -225,7 +225,7 @@ test('the stats command checks Jev access the way routing does, summarizes the r
   h.env.JEV_API_KEY = 'test-key'
   await routed($, call())
   const text = (await $.command.run({ command: STATS_COMMAND } as never) as { text: string }).text
-  expect(text).toMatch(/^Jev access in this session: ok \(key from JEV_API_KEY\)\.\n1 decisions: Jev 1, Jev off 0\.\nJev calls: 1, median \d+ms, 300 input and 20 output tokens, about \$0\.000013 \(estimated\)\.\nhaiku\/low: 1 runs, median 42s and 2k tokens\nBy agent type:\n {2}Explore: 1 runs, median 42s and 2k tokens$/)
+  expect(text).toMatch(/^Jev access in this session: ok \(key from JEV_API_KEY\)\.\n1 decisions: Jev 1, Jev off 0\.\nJev calls: 1, median \d+ms, 300 input and 20 output tokens, about \$0\.000013 \(estimated\)\.\nSent back: 1 of 1 calls, median 0s to come back\.\n2 groups with fewer than 3 runs left out\.$/)
   expect(text).not.toContain('test-key')
   h.fsFaults.read = true
   expect((await $.command.run({ command: STATS_COMMAND } as never) as { text: string }).text).toBe('Jev access in this session: ok (key from JEV_API_KEY).\nthe routing records could not be read.')
@@ -263,6 +263,23 @@ test('a call that comes back twice with another effort goes as it came, so a mod
   expect(h.requests).toHaveLength(1)
   expect(h.ledger().filter(l => l.kind === 'decision').map(l => [l.source, l.received, l.effort])).toEqual([['jev', 'max', 'max']])
   expect(h.logs).toContain('subagent-effort: Explore came back 2 times without Jev\'s low; it goes as it came (max).')
+})
+
+test('a decision records how many times its call was sent back and the time from the first refusal until it went', async ($, on) => {
+  const h = world(on); dispatched(on); h.env.JEV_API_KEY = 'test-key'
+  await started($)
+  // Sent back once, back after 5 s.
+  expect(((await settle($.tool.call(call({ tool_use_id: 'once' }) as never))) as { deny?: string }).deny).toMatch(/effort: "low"/)
+  await h.clock.advance(5000)
+  await settle($.tool.call(call({ tool_use_id: 'once', effort: 'low' }) as never))
+  // Sent back twice, then it goes as it came: the wait counts from the first refusal.
+  const stubborn = call({ effort: 'max', description: 'stubborn', tool_use_id: 'twice' })
+  await settle($.tool.call(stubborn as never)); await h.clock.advance(1000)
+  await settle($.tool.call(stubborn as never)); await h.clock.advance(2000)
+  await settle($.tool.call(stubborn as never))
+  // A call that already has Jev's effort goes at once.
+  await settle($.tool.call(call({ effort: 'low', description: 'direct', tool_use_id: 'direct' }) as never))
+  expect(h.ledger().filter(l => l.kind === 'decision').map(l => [l.tool_use_id, l.sentBack, l.sentBackMs])).toEqual([['once', 1, 5000], ['twice', 2, 3000], ['direct', 0, null]])
 })
 
 test('parallel calls with the same task are each sent back for Jev’s effort: each waits apart, by its description', async ($, on) => {

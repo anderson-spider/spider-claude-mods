@@ -26,7 +26,7 @@ export function world(on: On) {
   const p = ports(), commands: CommandSpec[] = [], env: Record<string, string> = { HOME: '/home/u' }
   // The local file system: every file the plugin writes, whole, by path.
   const files = new Map<string, string>(), fsFaults = { read: false, write: false }, written: string[] = []
-  mock.clock(on)
+  const clock = mock.clock(on)
   on('command.register', (_$, e) => { commands.push(e); return { value: { command: e.name } } })
   on('fs.exists', (_$, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_$, e) => { if (fsFaults.read || !files.has(e.path)) throw new Error('read failed'); return { value: files.get(e.path)! } })
@@ -45,7 +45,7 @@ export function world(on: On) {
   on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
   /** The ledger's lines in the order written: `files` holds the current text, `ledger()` parses it. */
   const ledger = () => (files.get(LEDGER) ?? '').split('\n').filter(Boolean).map(line => JSON.parse(line) as Record<string, any>)
-  return { ...p, commands, env, files, fsFaults, written, ledger, toasts, surfaces }
+  return { ...p, commands, env, files, fsFaults, written, ledger, toasts, surfaces, clock }
 }
 export const LEDGER = '/home/u/.claude/subagent-effort/routes.jsonl'
 export async function started($: { session: { start: (e: never) => Promise<unknown> } }) {
