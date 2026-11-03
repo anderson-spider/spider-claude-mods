@@ -15,9 +15,13 @@ export const IMAGE_PREFIX =
   'Generate the image described below with your image generation tool. Do not run shell commands or edit files. ' +
   'Once it is generated, reply with one short line describing it.\n\nRequest:\n'
 
-/** The options every run shares: the read-only lock, the kind's web search, and the model and effort when given. */
-function tuningArgs(request: Request): string[] {
+/**
+ * The options every run shares: the read-only lock, the kind's web search, the model and effort when given, and the
+ * file Codex writes its last message to (`-o`), which a detached run's answer is read from.
+ */
+function tuningArgs(request: Request, answer?: string): string[] {
   return [
+    ...(answer ? ['-o', answer] : []),
     ...LOCKED,
     '-c',
     `web_search="${WEB_SEARCH[request.kind]}"`,
@@ -38,12 +42,12 @@ export function promptOf(request: Request): string {
  * child's own folder), `exec resume` for a follow-up (which takes no `-C`: the child is started in `cwd` instead).
  * `--` ends the options, since `--image` takes several values.
  */
-export function argsOf(request: Request, cwd?: string): string[] {
-  if (request.kind === 'review') return reviewArgsOf(request)
+export function argsOf(request: Request, cwd?: string, answer?: string): string[] {
+  if (request.kind === 'review') return reviewArgsOf(request, answer)
   const options = [
     '--json',
     '--skip-git-repo-check',
-    ...tuningArgs(request),
+    ...tuningArgs(request, answer),
     ...request.images.flatMap(path => ['--image', path]),
   ]
   const prompt = promptOf(request)
@@ -63,8 +67,8 @@ const targetArgs = (target: ReviewTarget): string[] => {
  * `codex exec review` in the child's folder (the session's, a repository register.tsx has checked): it takes no `-C`.
  * Read-only and without web search like an image run; a follow-up question goes through an ask on its thread.
  */
-function reviewArgsOf(request: Request): string[] {
+function reviewArgsOf(request: Request, answer?: string): string[] {
   // resolveReview (review.ts) gives every review its target; without one this would be no review at all.
   if (!request.review) throw new Error('A review needs its target resolved before it runs.')
-  return ['exec', 'review', '--json', ...tuningArgs(request), '--thread-source', THREAD_SOURCE, ...targetArgs(request.review)]
+  return ['exec', 'review', '--json', ...tuningArgs(request, answer), '--thread-source', THREAD_SOURCE, ...targetArgs(request.review)]
 }

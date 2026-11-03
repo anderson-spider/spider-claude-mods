@@ -16,7 +16,7 @@ export function summary(path: string, threadId: string, markdown: string, maxCha
 
 /** What `jobs` answers: one line per job, newest first. */
 export function jobsReport(jobs: Job[], now: number): string {
-  if (!jobs.length) return 'No Codex jobs in this session.'
+  if (!jobs.length) return 'No Codex jobs.'
   const minutes = (ms: number) => `${Math.max(0, Math.round(ms / 60_000))} min`
   return [...jobs]
     .reverse()

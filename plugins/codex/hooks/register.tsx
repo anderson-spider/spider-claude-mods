@@ -4,6 +4,7 @@ import { DESCRIPTION as COMPUTER_USE_DESCRIPTION, INPUT_SCHEMA as COMPUTER_USE_I
 import { known } from './computer-use/known'
 import { registerComputerUse } from './computer-use/register'
 import { ENABLED, TOOL as COMPUTER_USE_TOOL, UNAME, isMac, isOn } from './computer-use/routing'
+import { detachedRuns } from './detached'
 import { diagnose, report } from './doctor'
 import { commandRequestOf, requestOf, reviewRequestOf } from './input'
 import { locateCodex } from './locate'
@@ -42,6 +43,9 @@ const runner = createRunner(() => ({ foregroundMs, backgroundMs }))
 // Requests running in the foreground, for the status line.
 let active = 0
 
+// The session's folder, from session.start (again on a reload): jobs are listed and taken over within one project.
+let project = ''
+
 function processOf($: EngineInterface): ProcessRunner {
   return (argv, init) => $.process.run(argv, init)
 }
@@ -69,7 +73,21 @@ async function depsOf($: EngineInterface): Promise<RunnerDeps> {
     codexHome,
   }
   return {
-    spawn: (argv, cwd) => $.process.spawn({ argv, cwd }),
+    files: detachedRuns({
+      run,
+      read: path => $.fs.read(path).catch(() => undefined),
+      exists: path => $.fs.exists(path),
+      codexHome,
+    }),
+    store: {
+      get: key => $.store.get(key),
+      set: (key, value) => $.store.set(key, value),
+      delete: key => $.store.delete(key),
+      keys: () => $.store.keys(),
+    },
+    sessionId: () => $.session.id(),
+    project: async () => project,
+    runsDir: `${outDir}/runs`,
     // Waits go through a host process, which does not use up the hook's clock budget as a timer would.
     sleep: ms => $.process.run(['sleep', String(Math.ceil(ms / 1000))], { timeoutMs: ms + 10_000 }),
     output,
@@ -119,7 +137,7 @@ async function serve($: EngineInterface, kind: Kind, e: Record<string, unknown>)
   if (e.wait === false) {
     const job = await runner.startJob(await depsOf($), request)
     if ('ok' in job) return answerOf(job)
-    return { result: `Started job #${job.id}. A message arrives when it ends; the jobs tool lists it meanwhile.` }
+    return { result: `Started job #${job.id}. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile.` }
   }
   return answerOf(await runNow($, request))
 }
@@ -148,6 +166,7 @@ export const register: Register = (on, options) => {
 
   // The names stay literal in each call: the engine's scan reads them to classify the command hooks below.
   on('session.start', async ($, e, next) => {
+    project = e.cwd
     await $.tool.register({ name: 'ask', description: ASK_DESCRIPTION, inputSchema: ASK_INPUT_SCHEMA })
     await $.tool.register({ name: 'image', description: IMAGE_DESCRIPTION, inputSchema: IMAGE_INPUT_SCHEMA })
     await $.tool.register({ name: 'review', description: REVIEW_DESCRIPTION, inputSchema: REVIEW_INPUT_SCHEMA })
@@ -161,6 +180,11 @@ export const register: Register = (on, options) => {
       await $.tool.register({ name: 'computer_use', description: COMPUTER_USE_DESCRIPTION, inputSchema: COMPUTER_USE_INPUT_SCHEMA })
       await $.command.register({ name: 'codex-cu', description: COMPUTER_USE_COMMAND_DESCRIPTION })
     }
+    // Jobs outlive a reload and the session: watch this session's again and finish what others left, without holding
+    // the start up.
+    void depsOf($)
+      .then(deps => runner.resume(deps))
+      .catch(() => undefined)
     return next(e)
   })
 
@@ -170,7 +194,7 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'mcp__codex__review' }, ($, e) => serve($, 'review', e))
 
-  on('tool.call', { tool: 'mcp__codex__jobs' }, async () => ({ result: runner.report() }))
+  on('tool.call', { tool: 'mcp__codex__jobs' }, async $ => ({ result: await runner.report(await depsOf($)) }))
 
   on('command.run', { command: 'codex-ask' }, async ($, e) => {
     const request = commandRequestOf('ask', e.args, ASK_USAGE)
