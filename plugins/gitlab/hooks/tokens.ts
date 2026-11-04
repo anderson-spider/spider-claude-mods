@@ -38,7 +38,7 @@ export function offText(off: Off, host?: string): string {
     case 'repo-env':
       return `The repository settings set ${ENV_NAME}, so it is not used. Set it in your user plugin options or your shell's environment instead.`
     case 'repo-default-host':
-      return `The repository settings set ${DEFAULT_HOST_ENV}, so it is not used. Set defaultHost in your user plugin options, or the variable in your shell's environment, instead.`
+      return `The repository settings set the gitlab defaultHost option (or ${DEFAULT_HOST_ENV}), so it is not used. Set it in your user plugin options or your shell's environment instead.`
   }
 }
 
@@ -106,21 +106,22 @@ export async function resolveToken(
 }
 
 /**
- * The defaultHost option, else `DEFAULT_HOST_ENV` (undefined when neither is set). The variable is refused when the
- * repository's settings (project or local) set it in `env`, or cannot be read, as the tokens variable is: a repository
- * would otherwise pick which of the user's GitLabs its calls reach.
+ * The defaultHost option, else `DEFAULT_HOST_ENV` (undefined when neither is set). Whichever is used is refused when the
+ * repository's settings (project or local) declare it, as the option or in `env`, or cannot be read, as the tokens are:
+ * a repository would otherwise pick which of the user's GitLabs its calls reach.
  */
 export async function resolveDefaultHost(
   io: Pick<TokenIo, 'settings'>,
   option: unknown,
   env: () => Promise<string | undefined>,
 ): Promise<{ value: unknown; off?: undefined } | { value?: undefined; off: 'repo-default-host' | 'unreadable' }> {
-  if (isSet(option)) return { value: option }
-  const value = await env()
+  const fromOption = isSet(option)
+  const value = fromOption ? option : await env()
   if (!isSet(value)) return { value: undefined }
   try {
     for (const source of ['project', 'local'] as const) {
-      if (declaresEnv((await io.settings(source))?.env, DEFAULT_HOST_ENV)) return { off: 'repo-default-host' }
+      const settings = await io.settings(source)
+      if (fromOption ? declaresOption(settings?.pluginConfigs, 'gitlab', 'defaultHost') : declaresEnv(settings?.env, DEFAULT_HOST_ENV)) return { off: 'repo-default-host' }
     }
   } catch {
     return { off: 'unreadable' }

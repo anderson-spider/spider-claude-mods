@@ -270,11 +270,18 @@ test('defaultHost, from the option or SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST, 
   ])
 })
 
-test('a repository env setting of SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST refuses the variable, and nothing is sent', ON, async ($, on) => {
+test('a repository env setting of the defaultHost variable refuses it, and nothing is sent', ON, async ($, on) => {
   const { sent, host } = world(on, { remote: GITHUB })
   host.env = { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' }
   host.project = { env: { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' } }
-  expect(text(await $.tool.call({ tool: MR, action: 'list', project: 47 } as never))).toMatch(/^The repository settings set SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST, so it is not used\./)
+  expect(text(await $.tool.call({ tool: MR, action: 'list', project: 47 } as never))).toMatch(/^The repository settings set the gitlab defaultHost option \(or SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST\), so it is not used\./)
+  expect(sent).toEqual([])
+})
+
+test('a repository setting of the defaultHost option refuses it, and nothing is sent', { options: { tokens: `gitlab.example.com=${WORK}`, defaultHost: 'gitlab.example.com' } }, async ($, on) => {
+  const { sent, host } = world(on, { remote: GITHUB })
+  host.project = { pluginConfigs: { gitlab: { options: { defaultHost: 'gitlab.example.com' } } } }
+  expect(text(await $.tool.call({ tool: MR, action: 'list', project: 47 } as never))).toMatch(/^The repository settings set the gitlab defaultHost option/)
   expect(sent).toEqual([])
 })
 
