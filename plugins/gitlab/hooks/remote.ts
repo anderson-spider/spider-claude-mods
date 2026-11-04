@@ -60,11 +60,11 @@ export function projectPath(value: unknown): string | undefined {
   return PROJECT.test(project) && !project.split('/').some((s) => /^\.+$/.test(s)) ? project : undefined
 }
 
-/** A host name a tool input or the defaultHost option gives (`gitlab.example.com`, with an optional port), lower-cased; never a URL. */
+/** A host name a tool input or the defaultHost option gives (`gitlab.example.com` or `localhost:8080`, with an optional port), lower-cased; never a URL. */
 export function hostName(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const host = value.trim().toLowerCase()
-  return HOST.test(host) && host.includes('.') ? host : undefined
+  return HOST.test(host) ? host : undefined
 }
 
 /** Runs `ssh <args>`; only `ssh -G <host>`, which prints the resolved configuration and connects nowhere. */

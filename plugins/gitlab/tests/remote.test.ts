@@ -56,10 +56,12 @@ test('projectPath takes a group/project path or a numeric id and refuses URLs, h
   }
 })
 
-test('hostName takes a lower-cased host name with an optional port and refuses URLs and bare words', () => {
+test('hostName takes a lower-cased host name with an optional port, dotted or not, and refuses URLs', () => {
   expect(hostName(' GitLab.Example.com ')).toBe('gitlab.example.com')
   expect(hostName('gitlab.example.com:8443')).toBe('gitlab.example.com:8443')
-  for (const bad of ['https://gitlab.example.com', 'gitlab.example.com/api', 'user@gitlab.example.com', 'work', '', 7]) {
+  expect(hostName('localhost:8080')).toBe('localhost:8080')
+  expect(hostName('Work')).toBe('work')
+  for (const bad of ['https://gitlab.example.com', 'gitlab.example.com/api', 'user@gitlab.example.com', '-oProxyCommand=x', 'a b', '', 7]) {
     expect(hostName(bad), String(bad)).toBeUndefined()
   }
 })
