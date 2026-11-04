@@ -36,13 +36,14 @@ function reply(text: string, isError = false): { result: string } | { result: st
   return isError ? { result: text, isError: true as const } : { result: text }
 }
 
-/** The repository's settings, which decide whether the tokens option may be used. */
+/** The repository's settings, which decide whether the tokens may be used, and the environment variable that is their second source. */
 function tokenIo($: EngineInterface): TokenIo {
   return {
     settings: async (source) => {
       const settings = await $.settings.read({ source })
-      return { pluginConfigs: settings?.pluginConfigs }
+      return { pluginConfigs: settings?.pluginConfigs, env: settings?.env }
     },
+    env: () => $.env.get('SPIDER_PLUGIN_OPTION_GITLAB_TOKENS'),
   }
 }
 

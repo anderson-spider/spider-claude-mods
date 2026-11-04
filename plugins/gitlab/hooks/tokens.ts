@@ -1,15 +1,21 @@
 // Which token goes to which GitLab. Pure: the settings read is injected.
-// The `tokens` option is the only source: `host=token` pairs, so one plugin serves gitlab.com and any self-managed
-// instance. A token goes only to the host it is paired with, the one the repository's remote names. Tokens that the
-// repository's own settings (project or local) declare are not used, and settings that cannot be read refuse the call.
-// A token is never put in a message.
+// The `tokens` option comes first, else the SPIDER_PLUGIN_OPTION_GITLAB_TOKENS environment variable: `host=token`
+// pairs either way, so one plugin serves gitlab.com and any self-managed instance. The option is a source as a whole:
+// when it is set the variable is ignored, and pairs of the two are never mixed. A token goes only to the host it is
+// paired with, the one the repository's remote names. Tokens that the repository's own settings (project or local)
+// declare in the source in use, as the option or in `env`, are not used, and settings that cannot be read refuse the
+// call. A token is never put in a message. The variable's name avoids GITLAB_TOKEN and the other names GitLab tools read.
 
 export type TokenIo = {
   /** One settings source's `pluginConfigs`; rejects when it cannot be read. */
-  settings: (source: 'project' | 'local') => Promise<{ pluginConfigs?: unknown } | undefined>
+  settings: (source: 'project' | 'local') => Promise<{ pluginConfigs?: unknown; env?: unknown } | undefined>
+  /** The process environment's value of `ENV_NAME`. */
+  env: () => Promise<string | undefined>
 }
 
-export type Off = 'no-tokens' | 'bad-tokens' | 'no-host' | 'unreadable' | 'repo-tokens'
+export const ENV_NAME = 'SPIDER_PLUGIN_OPTION_GITLAB_TOKENS'
+
+export type Off = 'no-tokens' | 'bad-tokens' | 'no-host' | 'unreadable' | 'repo-tokens' | 'repo-env'
 
 const CONFIGURE = 'the plugin options (/plugin, gitlab, configure)'
 
@@ -17,15 +23,17 @@ const CONFIGURE = 'the plugin options (/plugin, gitlab, configure)'
 export function offText(off: Off, host?: string): string {
   switch (off) {
     case 'no-tokens':
-      return `The gitlab tokens option is not set. Set it in ${CONFIGURE} as host=token pairs.`
+      return `The gitlab tokens option is not set. Set it in ${CONFIGURE} as host=token pairs, or export ${ENV_NAME} with the same pairs before starting Claude.`
     case 'bad-tokens':
-      return `The gitlab tokens option is not a list of host=token pairs. Set it again in ${CONFIGURE}.`
+      return `The gitlab tokens option (or ${ENV_NAME}, when the option is not set) is not a list of host=token pairs. Set it again in ${CONFIGURE}.`
     case 'no-host':
-      return `The gitlab tokens option has no token for ${host ?? 'this host'}. Add ${host ?? '<host>'}=<token> in ${CONFIGURE}.`
+      return `The gitlab tokens option has no token for ${host ?? 'this host'}. Add ${host ?? '<host>'}=<token> in ${CONFIGURE}, or in ${ENV_NAME} when the option is not set.`
     case 'unreadable':
-      return 'The project or local settings could not be read, so the gitlab tokens option is not used.'
+      return `The project or local settings could not be read, so the gitlab tokens option (or ${ENV_NAME}) is not used.`
     case 'repo-tokens':
       return 'The repository settings declare the gitlab tokens option, so it is not used. Set it in your user plugin options instead.'
+    case 'repo-env':
+      return `The repository settings set ${ENV_NAME}, so it is not used. Set it in your user plugin options or your shell's environment instead.`
   }
 }
 
@@ -61,13 +69,22 @@ export function declaresOption(configs: unknown, plugin: string, option: string)
   return false
 }
 
+/** Whether a settings source's `env` sets `ENV_NAME`. */
+export function declaresEnv(env: unknown): boolean {
+  return !!env && typeof env === 'object' && Object.hasOwn(env, ENV_NAME)
+}
+
+/** Present: a string with something but spaces. */
+const isSet = (value: unknown): boolean => value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())
+
 /** The token for `host`, or why there is none. Settings are read only once a token was found. */
 export async function resolveToken(
   io: TokenIo,
   option: unknown,
   host: string,
 ): Promise<{ token: string; off?: undefined } | { token?: undefined; off: Off }> {
-  const parsed = parseTokens(option)
+  const fromOption = isSet(option)
+  const parsed = parseTokens(fromOption ? option : await io.env())
   if (parsed.tokens === undefined) return { off: parsed.off }
   const token = parsed.tokens.get(host)
   if (token === undefined) return { off: 'no-host' }
@@ -75,10 +92,10 @@ export async function resolveToken(
   try {
     for (const source of ['project', 'local'] as const) {
       const settings = await io.settings(source)
-      if (declaresOption(settings?.pluginConfigs, 'gitlab', 'tokens')) declared = true
+      if (fromOption ? declaresOption(settings?.pluginConfigs, 'gitlab', 'tokens') : declaresEnv(settings?.env)) declared = true
     }
   } catch {
     return { off: 'unreadable' }
   }
-  return declared ? { off: 'repo-tokens' } : { token }
+  return declared ? { off: fromOption ? 'repo-tokens' : 'repo-env' } : { token }
 }

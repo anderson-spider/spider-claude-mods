@@ -16,7 +16,7 @@ type Answer = { status?: number; text: string }
  * network answers `api[url]` (`{ status, text }`, or a list answered in turn with the last one repeated; 404
  * otherwise). Everything is mutable through `host` between calls; `runs` records every process the plugin runs.
  */
-export function world(on: On, opts: { remote?: string; branch?: string; project?: Settings; local?: Settings; api?: Record<string, Answer | Answer[]> } = {}) {
+export function world(on: On, opts: { remote?: string; branch?: string; project?: Settings; local?: Settings; env?: Record<string, string>; api?: Record<string, Answer | Answer[]> } = {}) {
   const tools: Tool[] = []
   const sent: Sent[] = []
   const runs: string[] = []
@@ -24,6 +24,7 @@ export function world(on: On, opts: { remote?: string; branch?: string; project?
     remote: 'git@gitlab.example.com:team/app.git',
     branch: 'feature/x',
     api: {},
+    env: {} as Record<string, string>,
     ...opts,
     settingsFail: false,
     fetchError: undefined as string | undefined,
@@ -32,6 +33,7 @@ export function world(on: On, opts: { remote?: string; branch?: string; project?
   }
 
   on('tool.register', (_$, e) => (tools.push(e as unknown as Tool), { value: { tool: id(e.name) } }))
+  on('env.get', (_$, e) => ({ value: host.env[e.name] }) as never)
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('settings.read', (_$, e) => {
     if (host.settingsFail) throw new Error('settings unreadable')
