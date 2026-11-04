@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { InputError } from '../hooks/input'
-import { measures, qualityGate } from '../hooks/quality'
+import { fileMeasures, measures, qualityGate } from '../hooks/quality'
 import { fakeCtx, parsed } from './fake-api'
 
 const GATE = {
@@ -86,5 +86,50 @@ test('measures need one to 20 metric keys', async () => {
   await expect(measures(ctx, { projectKey: 'app' })).rejects.toThrow('metricKeys is required')
   await expect(measures(ctx, { projectKey: 'app', metricKeys: [] })).rejects.toThrow('non-empty list')
   await expect(measures(ctx, { projectKey: 'app', metricKeys: Array.from({ length: 21 }, (_, i) => `m${i}`) })).rejects.toThrow('at most 20')
+  expect(calls).toEqual([])
+})
+
+test('file measures list each file of a pull request with its new-code values, sorted by one metric', async () => {
+  const { ctx, calls } = fakeCtx({
+    measuresTree: {
+      paging: { pageIndex: 1, pageSize: 20, total: 2 },
+      components: [
+        { path: 'src/A.kt', measures: [{ metric: 'new_uncovered_lines', periods: [{ index: 1, value: '5' }], period: { index: 1, value: '5' } }] },
+        { name: 'B.kt', measures: [{ metric: 'new_uncovered_lines', period: { index: 1, value: '2' } }, { metric: 'coverage', value: '50' }] },
+      ],
+    },
+  })
+
+  const answer = parsed(
+    await fileMeasures(ctx, { projectKey: 'app', metricKeys: ['new_uncovered_lines', 'coverage'], pullRequest: '71', sortMetric: 'new_uncovered_lines', descending: true, q: 'kt' }),
+  )
+
+  expect(calls).toEqual([
+    {
+      endpoint: 'measuresTree',
+      params: {
+        component: 'app', metricKeys: 'new_uncovered_lines,coverage', qualifiers: 'FIL', strategy: 'all', p: 1, ps: 20, pullRequest: '71', q: 'kt',
+        s: 'metric', metricSort: 'new_uncovered_lines', metricSortFilter: 'withMeasuresOnly', asc: 'false',
+      },
+    },
+  ])
+  expect(answer).toEqual({
+    projectKey: 'app',
+    pullRequest: '71',
+    total: 2,
+    page: 1,
+    pageSize: 20,
+    files: [
+      { path: 'src/A.kt', measures: { new_uncovered_lines: '5' } },
+      { path: 'B.kt', measures: { new_uncovered_lines: '2', coverage: '50' } },
+    ],
+  })
+})
+
+test('file measures refuse a missing metric list and a non-boolean descending, before any request', async () => {
+  const { ctx, calls } = fakeCtx()
+
+  await expect(fileMeasures(ctx, { projectKey: 'app' })).rejects.toThrow('metricKeys is required')
+  await expect(fileMeasures(ctx, { projectKey: 'app', metricKeys: ['bugs'], descending: 'yes' })).rejects.toThrow('descending must be')
   expect(calls).toEqual([])
 })

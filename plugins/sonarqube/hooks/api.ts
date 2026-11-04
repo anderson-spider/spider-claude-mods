@@ -5,6 +5,7 @@
 export const ENDPOINTS = {
   qualityGate: '/api/qualitygates/project_status',
   measures: '/api/measures/component',
+  measuresTree: '/api/measures/component_tree',
   issues: '/api/issues/search',
   rule: '/api/rules/show',
   hotspots: '/api/hotspots/search',

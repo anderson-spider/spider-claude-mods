@@ -16,6 +16,17 @@ declare module 'claude-code' {
       branch?: string
       pullRequest?: string
     }
+    mcp__sonarqube__sonarqube_file_measures: {
+      metricKeys: string[]
+      projectKey?: string
+      branch?: string
+      pullRequest?: string
+      q?: string
+      sortMetric?: string
+      descending?: boolean
+      page?: number
+      pageSize?: number
+    }
     mcp__sonarqube__sonarqube_issues: {
       projectKey?: string
       branch?: string
