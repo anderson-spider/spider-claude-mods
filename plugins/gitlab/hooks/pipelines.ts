@@ -72,7 +72,7 @@ async function mrOrBranch(ctx: Ctx, input: PipelineInput): Promise<number | unde
 
 async function refOrBranch(ctx: Ctx, input: PipelineInput): Promise<string> {
   const branch = str(input.ref) ?? (await ctx.branch())
-  if (!branch) throw new InputError(ctx.foreign ? 'Pass iid, ref or pipelineId when project names another project.' : 'Pass iid, ref or pipelineId: the current branch is unknown (detached HEAD).')
+  if (!branch) throw new InputError(ctx.foreign ? "Pass iid, ref or pipelineId when the project is not the remote's." : 'Pass iid, ref or pipelineId: the current branch is unknown (detached HEAD).')
   return branch
 }
 

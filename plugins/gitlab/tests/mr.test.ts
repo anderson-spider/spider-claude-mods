@@ -88,7 +88,7 @@ test('create assigns @me unless assignees is given, and an empty list assigns no
 test('create refuses a missing title and an unknown user', async () => {
   const { ctx } = fakeCtx({ 'GET ROOT/users': [] })
   await expect(mr(ctx, { action: 'create' })).rejects.toThrow('create needs a title.')
-  await expect(mr(fakeCtx({}, 'x', true).ctx, { action: 'create', title: 't' })).rejects.toThrow('create needs sourceBranch when project names another project.')
+  await expect(mr(fakeCtx({}, 'x', true).ctx, { action: 'create', title: 't' })).rejects.toThrow("create needs sourceBranch when the project is not the remote's.")
   await expect(mr(ctx, { action: 'create', title: 't', targetBranch: 'main', assignees: ['ghost'] })).rejects.toThrow('No GitLab user named ghost on this host.')
 })
 
@@ -354,6 +354,6 @@ test('create and update refuse labels the project lacks, naming them, unless cre
 
 test('with project naming another project, an MR action needs iid instead of using the current branch', async () => {
   const { ctx, calls } = fakeCtx({}, 'feature/x', true)
-  await expect(mr(ctx, { action: 'get' })).rejects.toThrow('Pass iid: project names another project, so the current branch is not used.')
+  await expect(mr(ctx, { action: 'get' })).rejects.toThrow("Pass iid: the project is not the remote's, so the current branch is not used.")
   expect(calls).toEqual([])
 })

@@ -48,13 +48,16 @@ function tokenIo($: EngineInterface): TokenIo {
   }
 }
 
-/** Where a call goes: the host, its token and, when the host is the remote's, the remote's project. */
-type Target = { host: string; token: string; current?: string } | { error: string }
+/**
+ * Where a call goes: the host, its token and, when the host is the remote's, the remote's project. `fallback` marks a
+ * remote that names no GitLab with a token (none, unreadable, or a host missing from tokens), the only case defaultHost serves.
+ */
+type Target = { host: string; token: string; current?: string } | { error: string; fallback?: true }
 
 /** The remote's host (an SSH alias resolved through `ssh -G`) and its token. */
 async function fromRemote(git: Git, ssh: Ssh, io: TokenIo, tokens: unknown): Promise<Target> {
   const where = await locate(git)
-  if ('error' in where) return where
+  if ('error' in where) return { error: where.error, fallback: true }
   let host = where.host
   let access = await resolveToken(io, tokens, host)
   if (access.off === 'no-host' && where.ssh) {
@@ -62,12 +65,13 @@ async function fromRemote(git: Git, ssh: Ssh, io: TokenIo, tokens: unknown): Pro
     const real = await sshHostname(ssh, host)
     if (real && real !== host) {
       access = await resolveToken(io, tokens, real)
-      if (access.off === 'no-host') return { error: `The remote's host ${host} is an SSH alias for ${real}. ${offText('no-host', real)}` }
+      if (access.off === 'no-host') return { error: `The remote's host ${host} is an SSH alias for ${real}. ${offText('no-host', real)}`, fallback: true }
       host = real
     } else if (!host.includes('.')) {
-      return { error: `${offText('no-host', host)} If ${host} is an SSH alias from ~/.ssh/config, ssh -G could not resolve it: give the remote the real host name.` }
+      return { error: `${offText('no-host', host)} If ${host} is an SSH alias from ~/.ssh/config, ssh -G could not resolve it: give the remote the real host name.`, fallback: true }
     }
   }
+  if (access.off === 'no-host') return { error: offText(access.off, host), fallback: true }
   if (access.off !== undefined) return { error: offText(access.off, host) }
   return { host, token: access.token, current: where.project }
 }
@@ -102,7 +106,7 @@ async function run(
     target = await onHost(git, ssh, io, options.tokens, named)
   } else {
     target = await fromRemote(git, ssh, io, options.tokens)
-    if ('error' in target) {
+    if ('error' in target && target.fallback) {
       const fallback = isSet(options.defaultHost) ? options.defaultHost : await $.env.get('SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST')
       if (isSet(fallback)) {
         const named = hostName(fallback)
