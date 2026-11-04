@@ -381,7 +381,7 @@ test('every tool leaves isError unset on success and returns an error status as 
   }
 })
 
-test('without the options, SPIDER_PLUGIN_OPTION_COOLIFY_URL and _API_KEY give the instance and token, and a repository env setting refuses them', NO_KEY, async ($, on) => {
+test('without the options, SPIDER_PLUGIN_OPTION_COOLIFY_URL and _API_KEY give the instance and token, and a repository env setting refuses them', { options: {} }, async ($, on) => {
   const { sent, tools, host } = world(on)
   host.env = { SPIDER_PLUGIN_OPTION_COOLIFY_URL: URL_OPTION, SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY: KEY }
   await started($, tools)

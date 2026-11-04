@@ -24,7 +24,7 @@ export const OFF_TEXT: Record<Off, string> = {
     `The comfyui-local url option (or ${ENV_NAME}, when the option is not set) must be an http or https origin with no user, path, query or fragment, such as http://comfy.local:8188. Set it again in the plugin options (/plugin, comfyui-local, configure).`,
   unreadable: `The project or local settings could not be read, so the comfyui-local url option (or ${ENV_NAME}) is not used.`,
   'repo-option': 'The repository settings declare the comfyui-local url option, so it is not used. Set it in your user plugin options instead.',
-  'repo-env': `The repository settings set ${ENV_NAME}, so it is not used. Set it in your user plugin options or your shell's environment instead.`,
+  'repo-env': `The repository settings set ${ENV_NAME}, so the comfyui-local url is not used. Set it in your user plugin options or your shell's environment instead.`,
 }
 
 /** The server origin (`http://host[:port]`) of the `url` option, or why there is none. http is allowed: the server is on the local network. */

@@ -29,7 +29,7 @@ export const OFF_TEXT: Record<Off, string> = {
   unreadable: `The project or local settings could not be read, so the coolify url and apiKey options (or ${ENV_URL} and ${ENV_KEY}) are not used.`,
   'repo-option':
     'The repository settings declare the coolify url or apiKey option, so neither is used. Set them in your user plugin options instead.',
-  'repo-env': `The repository settings set ${ENV_URL} or ${ENV_KEY}, so neither is used. Set them in your user plugin options or your shell's environment instead.`,
+  'repo-env': `The repository settings set ${ENV_URL} or ${ENV_KEY}, so the coolify url and apiKey are not used. Set them in your user plugin options or your shell's environment instead.`,
 }
 
 /** The path every Coolify API call goes under. */
