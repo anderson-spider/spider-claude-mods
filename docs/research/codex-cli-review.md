@@ -79,3 +79,17 @@ Review comment:
 ```
 
 Note the path is absolute and resolved (`/private/tmp`, not `/tmp`). The reviewer also read the user's Codex skills and memory files from `~/.codex` during the run; `--ignore-user-config` exists if that is unwanted.
+
+## Alternative: the app-server `review/start`
+
+Question: does `codex app-server` give a review something `codex exec review` does not, namely the structured `ReviewOutputEvent` or custom focus together with a branch target?
+
+Sources: `codex app-server generate-json-schema` of `codex-cli 0.166.0`, and a live run over stdio JSON-RPC (`initialize`, `thread/start`, `review/start`) on a throwaway repository, read-only (`-c sandbox_mode="read-only" -c approval_policy="never"`).
+
+Answer: no on both counts; it is the same review behind a heavier protocol.
+
+- `review/start` takes `{ threadId, target, delivery? }`. `target` is the same four-way `ReviewTarget` (`uncommittedChanges`, `baseBranch { branch }`, `commit { sha, title? }`, `custom { instructions }`), one per call, so focus text still cannot ride along with `baseBranch`. `delivery` only accepts `inline`.
+- The result is text. The turn ends with an `exitedReviewMode` item whose `review` is a string, followed by an `agentMessage` with the same text. The schema has no `ReviewOutputEvent`, `overall_correctness` or confidence fields, and `findings` do not appear as data. The live run returned the same rendered text as `exec review` (`[P1] title — /abs/path:2-2`, indented body).
+- Extra cost: a long-lived process, the `initialize` handshake, thread management and notification handling, where `exec review` is one command with `--json` and `-o`.
+
+Conclusion: keep `codex exec review`. The app-server adds no structured findings and no new target, so it is not worth replacing the CLI call.
