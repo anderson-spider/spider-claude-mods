@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { checkKey, declaresOption, isOff, OFF_TEXT, OFFS, pickSource, repoDeclares, resolveAccess } from '../hooks/key'
+import { checkKey, declaresOption, isOff, OFF_TEXT, OFFS, pickEnv, pickSource, repoDeclares, resolveAccess } from '../hooks/key'
 import type { KeyIo } from '../hooks/key'
 
 const KEY = ['key-', 'test', '-0123456789'].join('')
@@ -74,4 +74,19 @@ test('each configuration reason has a fix text naming the apiKey option and JEV_
   expect(Object.keys(OFF_TEXT).sort()).toEqual([...OFFS].sort())
   for (const off of OFFS) { expect(isOff(off)).toBe(true); expect(OFF_TEXT[off]).toContain('JEV_API_KEY'); expect(OFF_TEXT[off]).toContain('apiKey') }
   for (const reason of ['timeout', 'http', 'breaker', 'config', null, undefined, 7]) expect(isOff(reason)).toBe(false)
+})
+
+test('pickEnv takes SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY first, else JEV_API_KEY, skipping a blank one', () => {
+  expect(pickEnv(['spider', 'jev'])).toEqual({ name: 'SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY', value: 'spider' })
+  expect(pickEnv(['  ', 'jev'])).toEqual({ name: 'JEV_API_KEY', value: 'jev' })
+  expect(pickEnv([undefined, 'jev'])).toEqual({ name: 'JEV_API_KEY', value: 'jev' })
+  expect(pickEnv([undefined, undefined])).toEqual({ name: 'JEV_API_KEY', value: undefined })
+})
+
+test('a repository env declaration of SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY is refused for the environment source only', async () => {
+  const declared = { env: { SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY: '' } }
+  for (const source of ['project', 'local']) {
+    expect(await resolveAccess(io({ [source]: declared }), { env: KEY })).toEqual({ off: 'repo-declared-key' })
+    expect(await resolveAccess(io({ [source]: declared }), { option: KEY })).toEqual({ key: KEY, source: 'option' })
+  }
 })

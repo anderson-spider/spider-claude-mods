@@ -324,3 +324,11 @@ test('parallel calls with the same task are each sent back for Jev’s effort: e
   await Promise.all(probes.map(probe => settle($.tool.call({ ...probe, effort: 'low' } as never))))
   expect(received.map(r => [r.description, r.effort])).toEqual(probes.map(probe => [probe.description, 'low']))
 })
+
+test('SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY is the key Jev gets, over JEV_API_KEY, and the stats command names it', async ($, on) => {
+  const h = world(on), received = dispatched(on); h.env.JEV_API_KEY = 'jev-test-key'; h.env.SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY = 'spider-test-key'
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true } as never)
+  const text = (await $.command.run({ command: STATS_COMMAND } as never) as { text: string }).text
+  expect(text).toMatch(/^Jev access in this session: ok \(key from SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY\)\./)
+  expect(received).toBeDefined()
+})

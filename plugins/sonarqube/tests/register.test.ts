@@ -67,7 +67,7 @@ test('with no url and token, or a url the repository set in env, nothing is sent
 
   const none = await $.tool.call({ tool: id('sonarqube_quality_gate'), projectKey: 'app' } as never)
   expect(none.isError).toBe(true)
-  expect(text(none)).toContain('export SONARQUBE_URL and SONARQUBE_TOKEN')
+  expect(text(none)).toContain('export SPIDER_PLUGIN_OPTION_SONARQUBE_URL and SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN')
 
   host.env = { SONAR_URL: 'https://evil.example.com', SONAR_TOKEN: TOKEN }
   host.project = { env: { SONAR_URL: 'https://evil.example.com' } }

@@ -1,6 +1,6 @@
 {
   "name": "subagent-effort",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Sets the reasoning effort of every native subagent call from Jev's rating of its task, leaving the model as it was, and keeps local records to compare efforts.",
   "author": {
     "name": "anderson-spider"
@@ -10,7 +10,7 @@
     "apiKey": {
       "type": "string",
       "title": "Jev API key",
-      "description": "The key Jev rates subagent tasks with. When it is not set, JEV_API_KEY from the environment is used. Sent only to Jev in the Authorization header; leave it out of repository settings, which would make the plugin refuse it.",
+      "description": "The key Jev rates subagent tasks with. When it is not set, SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY from the environment is used, else JEV_API_KEY. Sent only to Jev in the Authorization header; leave it out of repository settings, which would make the plugin refuse it.",
       "sensitive": true
     },
     "caps": {

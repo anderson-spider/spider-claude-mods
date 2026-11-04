@@ -6,7 +6,7 @@ import { evalArgs, formatEval, rated } from './evaluate'
 import type { Rated } from './evaluate'
 import type { Effort, EffortIo } from './effort'
 import { createBreaker, createGate } from './jev'
-import { ENV_NAME, isOff, OFF_TEXT, resolveAccess } from './key'
+import { isOff, OFF_TEXT, pickEnv, resolveAccess } from './key'
 import { afterAgentCall, afterTurn, appendLine, createPending, decisionLine, formatSummary, ledgerPath, parseLedger, readAll, runsInBackground, summarize } from './ledger'
 import type { Context, FileIo, Line, TurnEnd } from './ledger'
 
@@ -55,11 +55,14 @@ async function record($: Dollar, what: string, line: Line) {
 const stamp = () => new Date().toISOString()
 // The host's time, or null: measuring the wait for a call sent back never blocks routing.
 const now = async ($: Dollar): Promise<number | null> => { try { return await $.clock.now() } catch { return null } }
+// The environment variable that gives the key, read through the host (a `$` call stays visible to the engine here).
+const jevEnv = async ($: Dollar) => pickEnv([await $.env.get('SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY'), await $.env.get('JEV_API_KEY')])
 // Whether this process can reach Jev now, checked the way routing checks it; the ledger only tells what past calls saw.
 async function accessLine($: Dollar, option: unknown): Promise<string> {
   try {
-    const access = await resolveAccess(io($), { option, env: await $.env.get('JEV_API_KEY') })
-    return access.key !== undefined ? `Jev access in this session: ok (key from ${access.source === 'option' ? 'the apiKey option' : ENV_NAME}).` : `Jev access in this session: off (${access.off}). ${OFF_TEXT[access.off]}`
+    const env = await jevEnv($)
+    const access = await resolveAccess(io($), { option, env: env.value })
+    return access.key !== undefined ? `Jev access in this session: ok (key from ${access.source === 'option' ? 'the apiKey option' : env.name}).` : `Jev access in this session: off (${access.off}). ${OFF_TEXT[access.off]}`
   } catch { return 'Jev access in this session: could not be checked.' }
 }
 // A configuration problem turns Jev off until the person fixes it, so it is shown once per reason in this load, not per call.
@@ -74,7 +77,7 @@ async function evaluate($: Dollar, args: string, option: unknown): Promise<strin
   const parsed = evalArgs(args)
   if ('error' in parsed) return parsed.error
   const own: EffortIo = { ...io($), breaker: createBreaker(() => Date.now()), gate: createGate() }
-  const call = { keys: { option, env: await $.env.get('JEV_API_KEY') }, home: await $.env.get('HOME') ?? '', root: await $.session.root() }
+  const call = { keys: { option, env: (await jevEnv($)).value }, home: await $.env.get('HOME') ?? '', root: await $.session.root() }
   const briefs = EVAL_BRIEFS.filter(brief => !parsed.split || brief.split === parsed.split), rounds: Rated[][] = []
   for (let n = 0; n < parsed.rounds; n++) {
     const round: Rated[] = []
@@ -142,7 +145,7 @@ export const register: Register = (on, options) => {
     // The effort the call first came with, null for none: what Jev decided over, kept across the calls sent back.
     const firstEffort: Effort | null = waiting ? waiting.received : effortOfCall
     const choice = waiting?.choice ?? await assessEffort(io($), {
-      task: call.prompt, home: await $.env.get('HOME') ?? '', root: await $.session.root(), keys: { option: options.apiKey, env: await $.env.get('JEV_API_KEY') },
+      task: call.prompt, home: await $.env.get('HOME') ?? '', root: await $.session.root(), keys: { option: options.apiKey, env: (await jevEnv($)).value },
     })
     const held = waiting ? { effort: waiting.effort, cap: waiting.cap } : choice.effort ? capped(choice.effort, agentType, caps) : null
     const routed: Effort | null = held?.effort ?? null
