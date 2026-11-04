@@ -6,7 +6,7 @@ import { HOTSPOT_STATUSES, hotspots } from './hotspots'
 import { InputError, type Ctx, type Input } from './input'
 import { SEVERITIES, STATUSES, TYPES, issue, issues, rule } from './issues'
 import { findProjectKey, type ProjectIo } from './project'
-import { measures, qualityGate } from './quality'
+import { fileMeasures, measures, qualityGate } from './quality'
 import { allOf, type SchemaFor } from './schema'
 
 type Inputs = McpToolInputs
@@ -120,6 +120,27 @@ export const register: Register = (on, options) => {
       } satisfies SchemaFor<Inputs['mcp__sonarqube__sonarqube_measures']>,
     })
     await $.tool.register({
+      name: 'sonarqube_file_measures',
+      description:
+        'Read SonarQube metrics per file of a project, branch or pull request, paged, for coverage by file (new_uncovered_lines, new_lines_to_cover, new_coverage). ' +
+        'Files without a value for a metric lack it. sortMetric orders by one metric and keeps only files with a value for it.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          metricKeys: { type: 'array', items: { type: 'string' }, description: '1 to 20 keys.' },
+          projectKey: PROJECT,
+          branch: BRANCH,
+          pullRequest: PULL_REQUEST,
+          q: { type: 'string', description: 'Keep files whose name or path contains this text.' },
+          sortMetric: { type: 'string', description: 'A metric key from metricKeys; ascending unless descending.' },
+          descending: { type: 'boolean' },
+          page: PAGE,
+          pageSize: PAGE_SIZE,
+        },
+        required: ['metricKeys'],
+      } satisfies SchemaFor<Inputs['mcp__sonarqube__sonarqube_file_measures']>,
+    })
+    await $.tool.register({
       name: 'sonarqube_issues',
       description:
         'List SonarQube issues (bugs, vulnerabilities, code smells) of a project, branch or pull request, paged: open ones (OPEN, CONFIRMED, REOPENED) unless statuses says otherwise. ' +
@@ -188,6 +209,7 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'mcp__sonarqube__sonarqube_quality_gate' }, async ($, e) => run($, qualityGate, e as Input, options)).catch(failed)
   on('tool.call', { tool: 'mcp__sonarqube__sonarqube_measures' }, async ($, e) => run($, measures, e as Input, options)).catch(failed)
+  on('tool.call', { tool: 'mcp__sonarqube__sonarqube_file_measures' }, async ($, e) => run($, fileMeasures, e as Input, options)).catch(failed)
   on('tool.call', { tool: 'mcp__sonarqube__sonarqube_issues' }, async ($, e) => run($, issues, e as Input, options)).catch(failed)
   on('tool.call', { tool: 'mcp__sonarqube__sonarqube_issue' }, async ($, e) => run($, issue, e as Input, options)).catch(failed)
   on('tool.call', { tool: 'mcp__sonarqube__sonarqube_rule' }, async ($, e) => run($, rule, e as Input, options)).catch(failed)

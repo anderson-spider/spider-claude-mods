@@ -23,6 +23,7 @@ A source counts only with both values: setting just one option is refused instea
 
 - `mcp__sonarqube__sonarqube_quality_gate`: the gate's status and every condition with its actual value and threshold. Start here when an analysis failed.
 - `mcp__sonarqube__sonarqube_measures`: up to 20 metrics (`new_coverage`, `new_branch_coverage`, `bugs`, ...); a new-code period value takes precedence, and metrics with no value are listed in `noValue`.
+- `mcp__sonarqube__sonarqube_file_measures`: the same metrics per file, paged (`page`, `pageSize` up to 100), for coverage by file of a pull request (`new_uncovered_lines`, `new_lines_to_cover`). `q` keeps files whose name or path contains it; `sortMetric` orders by one metric (`descending` flips it) and keeps only files with a value for it.
 - `mcp__sonarqube__sonarqube_issues`: issues, paged (`page`, `pageSize` up to 100), open ones unless `statuses` says otherwise, filtered by `severities` and `type`.
 - `mcp__sonarqube__sonarqube_issue`: one open issue by key, or `null` when it is resolved, closed or absent. For an issue of a branch or pull request, pass that scope.
 - `mcp__sonarqube__sonarqube_rule`: a rule's name, type, severity, tags and description (with its compliant and noncompliant examples) as text.
@@ -31,7 +32,7 @@ A source counts only with both values: setting just one option is refused instea
 
 Every tool but `sonarqube_rule` takes `projectKey`; without it, the plugin reads `sonar.projectKey` from the nearest `sonar-project.properties`, from the session's folder up to the root of its git working tree. The scoped tools take `branch` or `pullRequest` (never both); with neither they read the main branch. Answers are compact JSON, cut past 60,000 characters.
 
-A diagnosis usually goes: `sonarqube_quality_gate` for the scope of the failing analysis, `sonarqube_measures` for the failed conditions' metrics, then `sonarqube_issues` (and `sonarqube_rule` for how to fix one) when the gate points at issues.
+A diagnosis usually goes: `sonarqube_quality_gate` for the scope of the failing analysis, `sonarqube_measures` for the failed conditions' metrics, `sonarqube_file_measures` for which files cause them, then `sonarqube_issues` (and `sonarqube_rule` for how to fix one) when the gate points at issues.
 
 ## Privacy
 

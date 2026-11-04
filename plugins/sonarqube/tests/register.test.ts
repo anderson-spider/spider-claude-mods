@@ -4,6 +4,7 @@ import { AUTH, BASE, TOKEN, id, started, world } from './host'
 const TOOLS = [
   'sonarqube_quality_gate',
   'sonarqube_measures',
+  'sonarqube_file_measures',
   'sonarqube_issues',
   'sonarqube_issue',
   'sonarqube_rule',
@@ -18,7 +19,7 @@ const GATE = { text: JSON.stringify({ projectStatus: { status: 'OK', conditions:
 
 const text = (result: { result?: unknown }) => String(result.result)
 
-test('session start registers the seven read-only tools and no other', ON, async ($, on) => {
+test('session start registers the eight read-only tools and no other', ON, async ($, on) => {
   const { tools } = world(on)
 
   expect((await started($, tools)).sort()).toEqual([...TOOLS].sort())
