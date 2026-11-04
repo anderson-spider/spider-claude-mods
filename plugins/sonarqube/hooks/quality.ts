@@ -52,6 +52,17 @@ export async function measures(ctx: Ctx, input: Input): Promise<string> {
   return json({ projectKey: str(component.key) ?? key, name: str(component.name), ...where, measures: found, ...(missing.length ? { noValue: missing } : {}) })
 }
 
+/** A new-code metric (`new_*`) has only a period value, so it sorts on the first period; others sort on the overall value. */
+function sortParams(metric: string, descending: boolean) {
+  return {
+    s: metric.startsWith('new_') ? 'metricPeriod' : 'metric',
+    metricSort: metric,
+    ...(metric.startsWith('new_') ? { metricPeriodSort: 1 } : {}),
+    metricSortFilter: 'withMeasuresOnly',
+    asc: descending ? 'false' : 'true',
+  }
+}
+
 /** The asked metrics per file of the analysis, paged; `sortMetric` orders them and keeps only files with a value for it. */
 export async function fileMeasures(ctx: Ctx, input: Input): Promise<string> {
   const metricKeys = metricKeysOf(input)
@@ -69,7 +80,7 @@ export async function fileMeasures(ctx: Ctx, input: Input): Promise<string> {
     ...page,
     ...where,
     q,
-    ...(sortMetric ? { s: 'metric', metricSort: sortMetric, metricSortFilter: 'withMeasuresOnly', asc: input.descending === true ? 'false' : 'true' } : {}),
+    ...(sortMetric ? sortParams(sortMetric, input.descending === true) : {}),
   })
   const paged = isObject(data) && isObject(data.paging) ? data.paging : {}
   return json({

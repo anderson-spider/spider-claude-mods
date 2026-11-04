@@ -109,7 +109,7 @@ test('file measures list each file of a pull request with its new-code values, s
       endpoint: 'measuresTree',
       params: {
         component: 'app', metricKeys: 'new_uncovered_lines,coverage', qualifiers: 'FIL', strategy: 'all', p: 1, ps: 20, pullRequest: '71', q: 'kt',
-        s: 'metric', metricSort: 'new_uncovered_lines', metricSortFilter: 'withMeasuresOnly', asc: 'false',
+        s: 'metricPeriod', metricSort: 'new_uncovered_lines', metricPeriodSort: 1, metricSortFilter: 'withMeasuresOnly', asc: 'false',
       },
     },
   ])
@@ -124,6 +124,19 @@ test('file measures list each file of a pull request with its new-code values, s
       { path: 'B.kt', measures: { new_uncovered_lines: '2', coverage: '50' } },
     ],
   })
+})
+
+test('file measures sort ascending by default, an overall metric on the metric value, and send no sort without sortMetric', async () => {
+  const { ctx, calls } = fakeCtx()
+
+  await fileMeasures(ctx, { projectKey: 'app', metricKeys: ['coverage'], sortMetric: 'coverage' })
+  await fileMeasures(ctx, { projectKey: 'app', metricKeys: ['coverage'] })
+
+  const base = { component: 'app', metricKeys: 'coverage', qualifiers: 'FIL', strategy: 'all', p: 1, ps: 20 }
+  expect(calls).toEqual([
+    { endpoint: 'measuresTree', params: { ...base, s: 'metric', metricSort: 'coverage', metricSortFilter: 'withMeasuresOnly', asc: 'true' } },
+    { endpoint: 'measuresTree', params: base },
+  ])
 })
 
 test('file measures refuse a missing metric list and a non-boolean descending, before any request', async () => {
