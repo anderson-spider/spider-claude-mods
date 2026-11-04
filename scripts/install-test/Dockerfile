@@ -1,4 +1,4 @@
-# A clean machine for `npm run install:test`: Node, the Claude Code CLI package.json pins, and a user with an empty HOME.
+# A clean machine for `bash scripts/tasks/install-test.sh`: Node, the Claude Code CLI package.json pins, and a user with an empty HOME.
 # Build from the repository root; the checkout is copied to /src as the marketplace source.
 FROM node:24-bookworm-slim
 WORKDIR /opt/tools

@@ -60,7 +60,7 @@ claude plugin marketplace update spider-claude-mods
 claude plugin update <plugin>@spider-claude-mods
 ```
 
-Rerunning the one-step command does both for every plugin. From the main checkout, `npm run update:all` pulls `main` (fast-forward only, clean tree), reinstalls the pinned tools, updates every installed plugin and uninstalls those the marketplace no longer lists; then run `/reload-plugins` or start a new session.
+Rerunning the one-step command does both for every plugin.
 
 ## Contributing
 
@@ -82,10 +82,6 @@ Load a plugin from its folder so edits reload automatically, with `claude --plug
 | `npm run plugins:validate [-- <name>]` | `validate --strict` the marketplace and every plugin, or one plugin, then `check-consistency`. |
 | `npm run typecheck [-- <name>]` | Run the pinned `tsc` on one plugin, or every plugin with TypeScript; a plugin without typings gets them copied from the main checkout, else generated (`plugins:types`). |
 | `npm run plugins:test [-- <name>]` | Script tests, every plugin's tests (a plugin that ships only skills has none), and, with the ChatGPT app installed, the codex computer use helper tests; with a name, only that plugin's tests and its helper's. |
-| `npm run plugins:scan` | Save each plugin's `validate --strict` output under `.scan/` to diff before and after a refactor. |
-| `npm run plugins:sync` | Refresh the marketplace, then update every installed plugin it lists and uninstall those it no longer lists, each in its own scope. |
-| `npm run update:all` | Pull `main`, run `npm ci` and `plugins:sync` (main checkout only). |
-| `npm run install:test` | Install the marketplace from the checkout on a clean Linux image (Docker) as a new user would, and check that every plugin is installed at its source version, passes its tests from the installed copy and loads in a session without login (codex without its macOS-only computer use tool), and that a second bootstrap run updates cleanly. |
 
 `/reload-plugins` and `claude plugin details` report `0 hooks` for every plugin here, because they count only `hooks.json` command hooks and these plugins ship hooks modules. `claude plugin validate plugins/<name>` lists a module's events and `$` calls; a module that fails to load leaves a line in `claude --debug`.
 

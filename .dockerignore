@@ -4,5 +4,4 @@ node_modules
 plugins/*/.claude-plugin/types
 plugins/codex/helper/state
 plugins/codex/helper/run
-.scan*
 .reports
