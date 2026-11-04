@@ -1,5 +1,5 @@
 import type { EngineInterface, McpToolInputs, Register } from 'claude-code'
-import { GitlabError, gitlab } from './api'
+import { GitlabError, NoProjectError, gitlab } from './api'
 import { comment } from './comments'
 import { InputError, makeCtx, type Ctx } from './context'
 import { errorText } from './errors'
@@ -7,9 +7,9 @@ import { jobLog } from './joblog'
 import { label } from './labels'
 import { mr } from './mr'
 import { pipeline } from './pipelines'
-import { currentBranch, locate, projectPath, sshHostname, type Git, type Ssh } from './remote'
+import { currentBranch, hostName, locate, projectPath, sshHostname, type Git, type Ssh } from './remote'
 import { allOf, type SchemaFor } from './schema'
-import { offText, resolveToken, type TokenIo } from './tokens'
+import { DEFAULT_HOST_ENV, isSet, offText, resolveToken, type TokenIo } from './tokens'
 import { user } from './users'
 
 type Inputs = McpToolInputs
@@ -26,7 +26,8 @@ const PIPELINE_ACTIONS = allOf<Inputs['mcp__gitlab__gitlab_pipeline']['action']>
 
 const IID = { type: 'integer', description: 'MR !iid. Default: the open MR of the current branch.' } as const
 const NAMES = { type: 'array', items: { type: 'string' } } as const
-const PROJECT = { type: 'string', description: 'Another project path on the same host (group/project).' } as const
+const PROJECT = { type: 'string', description: 'group/project or numeric id.' } as const
+const HOST = { type: 'string', description: "Default: the remote's host." } as const
 const PAGE = { type: 'integer' } as const
 const PER_PAGE = { type: 'integer', description: 'Max 100.' } as const
 const ALLOW_OTHERS = { type: 'boolean', description: "Write on someone else's MR; only when the user asked." } as const
@@ -47,46 +48,82 @@ function tokenIo($: EngineInterface): TokenIo {
   }
 }
 
+/** Where a call goes: the host, its token and, when the host is the remote's, the remote's project. */
+type Target = { host: string; token: string; current?: string } | { error: string }
+
+/** The remote's host (an SSH alias resolved through `ssh -G`) and its token. */
+async function fromRemote(git: Git, ssh: Ssh, io: TokenIo, tokens: unknown): Promise<Target> {
+  const where = await locate(git)
+  if ('error' in where) return where
+  let host = where.host
+  let access = await resolveToken(io, tokens, host)
+  if (access.off === 'no-host' && where.ssh) {
+    // an SSH remote may name a ~/.ssh/config alias (`git@work:group/app.git`): its token is the real host's
+    const real = await sshHostname(ssh, host)
+    if (real && real !== host) {
+      access = await resolveToken(io, tokens, real)
+      if (access.off === 'no-host') return { error: `The remote's host ${host} is an SSH alias for ${real}. ${offText('no-host', real)}` }
+      host = real
+    } else if (!host.includes('.')) {
+      return { error: `${offText('no-host', host)} If ${host} is an SSH alias from ~/.ssh/config, ssh -G could not resolve it: give the remote the real host name.` }
+    }
+  }
+  if (access.off !== undefined) return { error: offText(access.off, host) }
+  return { host, token: access.token, current: where.project }
+}
+
+/** A host named by the `host` input or the defaultHost option, and its token; the remote's project only when the remote is on it. */
+async function onHost(git: Git, ssh: Ssh, io: TokenIo, tokens: unknown, host: string): Promise<Target> {
+  const access = await resolveToken(io, tokens, host)
+  if (access.off !== undefined) return { error: offText(access.off, host) }
+  const where = await locate(git)
+  if ('error' in where) return { host, token: access.token }
+  const same = where.host === host || (!!where.ssh && (await sshHostname(ssh, where.host)) === host)
+  return { host, token: access.token, current: same ? where.project : undefined }
+}
+
 /**
- * The host wiring every tool shares: finds the project from the git remote (an SSH alias resolved through `ssh -G`),
- * picks that host's token, switches to `project` when given (same host only) and runs the tool.
+ * The host wiring every tool shares: picks the host (the `host` input, else the remote's, else the defaultHost option
+ * when the remote gives none with a token) and its token, switches to `project` when given and runs the tool.
  */
 async function run(
   $: EngineInterface,
   tool: (ctx: Ctx, input: Record<string, unknown>) => Promise<string>,
   input: Record<string, unknown>,
-  option: unknown,
+  options: { tokens?: unknown; defaultHost?: unknown },
 ): Promise<ReturnType<typeof reply>> {
   const git: Git = (args) => $.process.run(['git', ...args], { timeoutMs: 10_000 })
   const ssh: Ssh = (args) => $.process.run(['ssh', ...args], { timeoutMs: 5_000 })
-  const where = await locate(git)
-  if ('error' in where) return reply(where.error, true)
   const io = tokenIo($)
-  let host = where.host
-  let access = await resolveToken(io, option, host)
-  if (access.off === 'no-host' && where.ssh) {
-    // an SSH remote may name a ~/.ssh/config alias (`git@work:group/app.git`): its token is the real host's
-    const real = await sshHostname(ssh, host)
-    if (real && real !== host) {
-      access = await resolveToken(io, option, real)
-      if (access.off === 'no-host') return reply(`The remote's host ${host} is an SSH alias for ${real}. ${offText('no-host', real)}`, true)
-      host = real
-    } else if (!host.includes('.')) {
-      return reply(`${offText('no-host', host)} If ${host} is an SSH alias from ~/.ssh/config, ssh -G could not resolve it: give the remote the real host name.`, true)
+  let target: Target
+  if (input.host !== undefined) {
+    const named = hostName(input.host)
+    if (!named) return reply('host must be a GitLab host name (gitlab.example.com), not a URL.', true)
+    target = await onHost(git, ssh, io, options.tokens, named)
+  } else {
+    target = await fromRemote(git, ssh, io, options.tokens)
+    if ('error' in target) {
+      const fallback = isSet(options.defaultHost) ? options.defaultHost : await $.env.get('SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST')
+      if (isSet(fallback)) {
+        const named = hostName(fallback)
+        if (!named) return reply(`The gitlab defaultHost option (or ${DEFAULT_HOST_ENV}) is not a host name (gitlab.example.com).`, true)
+        target = await onHost(git, ssh, io, options.tokens, named)
+      }
     }
   }
-  if (access.off !== undefined) return reply(offText(access.off, host), true)
-  let project = where.project
+  if ('error' in target) return reply(target.error, true)
+  const { host, token, current } = target
+  let project = current
   if (input.project !== undefined) {
-    const named = typeof input.project === 'string' ? projectPath(input.project) : undefined
-    if (!named) return reply(`project must be a project path on ${host} (group/project), not a URL: the token goes only to the remote's host.`, true)
+    const named = projectPath(input.project)
+    if (!named) return reply(`project must be a project path (group/project) or numeric id on ${host}, not a URL: name another GitLab with host.`, true)
     project = named
   }
   // $.http.fetch is wrapped, not passed as a value: the engine's validate rejects the latter.
-  const api = gitlab((url, init) => $.http.fetch(url, init), host, project, access.token)
+  const api = gitlab((url, init) => $.http.fetch(url, init), host, project, token)
   // an answer can echo what the request carried (a proxy's error page, a fetch error), so the token is masked in every output
-  const masked = (text: string, isError = false) => reply(text.split(access.token).join('[token]'), isError)
-  const foreign = project.toLowerCase() !== where.project.toLowerCase()
+  const masked = (text: string, isError = false) => reply(text.split(token).join('[token]'), isError)
+  const foreign = project === undefined || current === undefined || project.toLowerCase() !== current.toLowerCase()
   try {
     const clock = {
       now: () => Date.now(),
@@ -97,8 +134,9 @@ async function run(
     }
     return masked(await tool(makeCtx(api, () => currentBranch(git), clock, foreign), input))
   } catch (err) {
+    if (err instanceof NoProjectError) return masked(`Name the project (group/project or its numeric id): the repository's remote is not on ${host}.`, true)
     if (err instanceof InputError) return masked(err.message, true)
-    if (err instanceof GitlabError) return masked(errorText(err, project, host), true)
+    if (err instanceof GitlabError) return masked(errorText(err, project ?? host, host), true)
     return masked(`Call to ${host} failed: ${err instanceof Error ? err.message : String(err)}`, true)
   }
 }
@@ -121,6 +159,7 @@ export const register: Register = (on, options) => {
         type: 'object',
         properties: {
           action: { type: 'string', enum: MR_ACTIONS },
+          host: HOST,
           project: PROJECT,
           iid: IID,
           state: { type: 'string', enum: allOf<'opened' | 'merged' | 'closed' | 'all'>()('opened', 'merged', 'closed', 'all') },
@@ -167,6 +206,7 @@ export const register: Register = (on, options) => {
         type: 'object',
         properties: {
           action: { type: 'string', enum: COMMENT_ACTIONS },
+          host: HOST,
           project: PROJECT,
           iid: IID,
           body: { type: 'string', description: 'Markdown text.' },
@@ -196,6 +236,7 @@ export const register: Register = (on, options) => {
         type: 'object',
         properties: {
           action: { type: 'string', enum: PIPELINE_ACTIONS },
+          host: HOST,
           project: PROJECT,
           iid: IID,
           ref: { type: 'string', description: 'Branch or tag instead of an MR.' },
@@ -220,6 +261,7 @@ export const register: Register = (on, options) => {
         type: 'object',
         properties: {
           jobId: { type: 'integer' },
+          host: HOST,
           project: PROJECT,
           mode: { type: 'string', enum: allOf<'errors' | 'tail' | 'full'>()('errors', 'tail', 'full') },
           lines: { type: 'integer', description: 'tail: how many lines (default 100).' },
@@ -238,6 +280,7 @@ export const register: Register = (on, options) => {
         type: 'object',
         properties: {
           action: { type: 'string', enum: allOf<Inputs['mcp__gitlab__gitlab_label']['action']>()('list', 'create') },
+          host: HOST,
           project: PROJECT,
           name: { type: 'string' },
           color: { type: 'string', description: 'Hex, like #428BCA.' },
@@ -255,6 +298,7 @@ export const register: Register = (on, options) => {
       inputSchema: {
         type: 'object',
         properties: {
+          host: HOST,
           username: { type: 'string', description: 'Default: the token owner.' },
         },
         required: [],
@@ -263,10 +307,10 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_mr' }, async ($, e) => run($, mr, e, options.tokens)).catch(failed)
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_mr_comment' }, async ($, e) => run($, comment, e, options.tokens)).catch(failed)
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_pipeline' }, async ($, e) => run($, pipeline, e, options.tokens)).catch(failed)
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_job_log' }, async ($, e) => run($, jobLog, e, options.tokens)).catch(failed)
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_label' }, async ($, e) => run($, label, e, options.tokens)).catch(failed)
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_user' }, async ($, e) => run($, user, e, options.tokens)).catch(failed)
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_mr' }, async ($, e) => run($, mr, e, options)).catch(failed)
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_mr_comment' }, async ($, e) => run($, comment, e, options)).catch(failed)
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_pipeline' }, async ($, e) => run($, pipeline, e, options)).catch(failed)
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_job_log' }, async ($, e) => run($, jobLog, e, options)).catch(failed)
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_label' }, async ($, e) => run($, label, e, options)).catch(failed)
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_user' }, async ($, e) => run($, user, e, options)).catch(failed)
 }

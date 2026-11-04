@@ -1,7 +1,7 @@
 {
   "name": "gitlab",
-  "version": "0.5.1",
-  "description": "Work on GitLab merge requests and pipelines of the current repository, picking the host and token from its git remote.",
+  "version": "0.6.0",
+  "description": "Work on GitLab merge requests and pipelines of the current repository, picking the host and token from its git remote, or from a host you name.",
   "author": {
     "name": "anderson-spider"
   },
@@ -10,8 +10,13 @@
     "tokens": {
       "type": "string",
       "title": "GitLab tokens",
-      "description": "host=token pairs separated by commas, one per GitLab you use (gitlab.com=glpat-..., gitlab.example.com=glpat-...). Each token is sent only to its own host, picked from the repository's git remote. Needs the api scope; when this option is not set, the SPIDER_PLUGIN_OPTION_GITLAB_TOKENS environment variable gives the same pairs; leave it out of repository settings, which would make the plugin refuse it.",
+      "description": "host=token pairs separated by commas, one per GitLab you use (gitlab.com=glpat-..., gitlab.example.com=glpat-...). Each token is sent only to its own host: the repository's git remote, the host a tool call names, or defaultHost. Needs the api scope; when this option is not set, the SPIDER_PLUGIN_OPTION_GITLAB_TOKENS environment variable gives the same pairs; leave it out of repository settings, which would make the plugin refuse it.",
       "sensitive": true
+    },
+    "defaultHost": {
+      "type": "string",
+      "title": "Default GitLab host",
+      "description": "The GitLab host (gitlab.example.com) the tools use when the repository's remote is not a GitLab with a token, such as a GitHub repository about work MRs. It needs a token in tokens; tools then need project (group/project or numeric id). When not set, SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST gives it."
     }
   }
 }

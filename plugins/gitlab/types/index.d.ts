@@ -7,6 +7,7 @@ declare module 'claude-code' {
   interface McpToolInputs {
     mcp__gitlab__gitlab_mr: {
       action: 'list' | 'get' | 'status' | 'create' | 'update' | 'diff' | 'commits' | 'approve' | 'unapprove' | 'rebase' | 'merge'
+      host?: string
       project?: string
       iid?: number
       state?: 'opened' | 'merged' | 'closed' | 'all'
@@ -40,6 +41,7 @@ declare module 'claude-code' {
     }
     mcp__gitlab__gitlab_mr_comment: {
       action: 'list' | 'unresolved' | 'drafts' | 'comment' | 'reply' | 'line' | 'edit' | 'resolve' | 'unresolve' | 'publish'
+      host?: string
       project?: string
       iid?: number
       body?: string
@@ -56,6 +58,7 @@ declare module 'claude-code' {
     }
     mcp__gitlab__gitlab_pipeline: {
       action: 'list' | 'jobs' | 'wait' | 'run' | 'retry' | 'cancel' | 'play' | 'artifacts'
+      host?: string
       project?: string
       iid?: number
       ref?: string
@@ -70,6 +73,7 @@ declare module 'claude-code' {
     }
     mcp__gitlab__gitlab_job_log: {
       jobId: number
+      host?: string
       project?: string
       mode?: 'errors' | 'tail' | 'full'
       lines?: number
@@ -77,6 +81,7 @@ declare module 'claude-code' {
     }
     mcp__gitlab__gitlab_label: {
       action: 'list' | 'create'
+      host?: string
       project?: string
       name?: string
       color?: string
@@ -86,6 +91,7 @@ declare module 'claude-code' {
       perPage?: number
     }
     mcp__gitlab__gitlab_user: {
+      host?: string
       username?: string
     }
   }

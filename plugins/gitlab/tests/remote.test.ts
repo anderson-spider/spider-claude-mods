@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { NO_REMOTE, currentBranch, locate, parseRemote, projectPath, sshHostname, type Git, type Ssh } from '../hooks/remote'
+import { NO_REMOTE, currentBranch, hostName, locate, parseRemote, projectPath, sshHostname, type Git, type Ssh } from '../hooks/remote'
 
 test('parseRemote reads SSH, scp-like and https remotes, with nested groups', () => {
   expect(parseRemote('git@gitlab.com:anderson-spider/tools.git')).toEqual({ host: 'gitlab.com', project: 'anderson-spider/tools', ssh: true })
@@ -47,10 +47,20 @@ test('currentBranch is undefined on a detached HEAD or a failure', async () => {
   expect(await currentBranch(git({}))).toBeUndefined()
 })
 
-test('projectPath takes a group/project path and refuses URLs, hosts and dot segments', () => {
+test('projectPath takes a group/project path or a numeric id and refuses URLs, hosts and dot segments', () => {
   expect(projectPath(' group/sub-group/app/ ')).toBe('group/sub-group/app')
-  for (const bad of ['app', 'https://gitlab.com/a/b', 'gitlab.com:a/b', 'git@h:a/b', 'a/../b', 'a/b?x=1', 'a b/c', '']) {
-    expect(projectPath(bad), bad).toBeUndefined()
+  expect(projectPath('5325')).toBe('5325')
+  expect(projectPath(47)).toBe('47')
+  for (const bad of ['app', 'https://gitlab.com/a/b', 'gitlab.com:a/b', 'git@h:a/b', 'a/../b', 'a/b?x=1', 'a b/c', '', '0', '-4', '4.5', 0, -4, 4.5, true]) {
+    expect(projectPath(bad), String(bad)).toBeUndefined()
+  }
+})
+
+test('hostName takes a lower-cased host name with an optional port and refuses URLs and bare words', () => {
+  expect(hostName(' GitLab.Example.com ')).toBe('gitlab.example.com')
+  expect(hostName('gitlab.example.com:8443')).toBe('gitlab.example.com:8443')
+  for (const bad of ['https://gitlab.example.com', 'gitlab.example.com/api', 'user@gitlab.example.com', 'work', '', 7]) {
+    expect(hostName(bad), String(bad)).toBeUndefined()
   }
 })
 

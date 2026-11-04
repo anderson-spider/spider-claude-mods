@@ -15,6 +15,9 @@ export type TokenIo = {
 
 export const ENV_NAME = 'SPIDER_PLUGIN_OPTION_GITLAB_TOKENS'
 
+/** The variable that gives the defaultHost option when it is not set. */
+export const DEFAULT_HOST_ENV = 'SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST'
+
 export type Off = 'no-tokens' | 'bad-tokens' | 'no-host' | 'unreadable' | 'repo-tokens' | 'repo-env'
 
 const CONFIGURE = 'the plugin options (/plugin, gitlab, configure)'
@@ -75,7 +78,7 @@ export function declaresEnv(env: unknown): boolean {
 }
 
 /** Present: a string with something but spaces. */
-const isSet = (value: unknown): boolean => value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())
+export const isSet = (value: unknown): boolean => value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())
 
 /** The token for `host`, or why there is none. Settings are read only once a token was found. */
 export async function resolveToken(
