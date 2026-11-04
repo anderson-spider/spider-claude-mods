@@ -140,7 +140,7 @@ export const register: Register = (on, options) => {
           addLabels: NAMES,
           removeLabels: NAMES,
           createMissingLabels: { type: 'boolean' },
-          assignees: { ...NAMES, description: '@me is the token owner.' },
+          assignees: { ...NAMES, description: '@me=owner; create default' },
           reviewers: NAMES,
           draft: { type: 'boolean' },
           stateEvent: { type: 'string', enum: allOf<'close' | 'reopen'>()('close', 'reopen') },
