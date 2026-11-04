@@ -78,6 +78,13 @@ test('create opens a draft unless draft is false, and keeps a title that already
   expect(writes().map((c) => c.body?.title)).toEqual(['Draft: Add things', 'Draft: Add things', 'Add things'])
 })
 
+test('create assigns @me unless assignees is given, and an empty list assigns nobody', async () => {
+  const { ctx, writes } = fakeCtx({ 'POST /merge_requests': MR })
+  await mr(ctx, { action: 'create', title: 'a', targetBranch: 'main' })
+  await mr(ctx, { action: 'create', title: 'b', targetBranch: 'main', assignees: [] })
+  expect(writes().map((c) => c.body?.assignee_ids)).toEqual([[ME.id], []])
+})
+
 test('create refuses a missing title and an unknown user', async () => {
   const { ctx } = fakeCtx({ 'GET ROOT/users': [] })
   await expect(mr(ctx, { action: 'create' })).rejects.toThrow('create needs a title.')

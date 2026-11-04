@@ -145,7 +145,8 @@ async function create(ctx: Ctx, input: MrInput): Promise<string> {
   const source = str(input.sourceBranch) ?? (await ctx.branch())
   if (!source) throw new InputError(ctx.foreign ? 'create needs sourceBranch when project names another project.' : 'create needs sourceBranch: the current branch is unknown (detached HEAD).')
   await checkLabels(ctx, input)
-  const body = await fields(ctx, input)
+  // a new MR is assigned to the token's user unless assignees says otherwise (an empty list leaves it unassigned)
+  const body = await fields(ctx, { ...input, assignees: input.assignees ?? ['@me'] })
   if (body.target_branch === undefined) {
     const project = (await ctx.api.get('')) as { default_branch?: string }
     body.target_branch = need(project.default_branch, 'create needs targetBranch: the project has no default branch.')
