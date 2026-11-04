@@ -67,7 +67,7 @@ test('a host with no token in the option is refused by name, and nothing is sent
   for (const name of await started($, tools)) {
     const result = await $.tool.call(call(name))
     expect(result.isError, name).toBe(true)
-    expect(text(result), name).toBe('The gitlab tokens option has no token for gitlab.other.org. Add gitlab.other.org=<token> in the plugin options (/plugin, gitlab, configure).')
+    expect(text(result), name).toBe('The gitlab tokens option has no token for gitlab.other.org. Add gitlab.other.org=<token> in the plugin options (/plugin, gitlab, configure), or in SPIDER_PLUGIN_OPTION_GITLAB_TOKENS when the option is not set.')
   }
   expect(sent).toEqual([])
 })
@@ -91,8 +91,22 @@ test('without the option, outside a GitLab repository, with repository-declared 
 test('an unset option says where to set it', async ($, on) => {
   const { sent } = world(on)
   const result = await $.tool.call({ tool: MR, action: 'get', iid: 7 } as never)
-  expect(text(result)).toBe('The gitlab tokens option is not set. Set it in the plugin options (/plugin, gitlab, configure) as host=token pairs.')
+  expect(text(result)).toBe('The gitlab tokens option is not set. Set it in the plugin options (/plugin, gitlab, configure) as host=token pairs, or export SPIDER_PLUGIN_OPTION_GITLAB_TOKENS with the same pairs before starting Claude.')
   expect(sent).toEqual([])
+})
+
+test('without the option, SPIDER_PLUGIN_OPTION_GITLAB_TOKENS gives the token, and a repository env setting refuses it', async ($, on) => {
+  const { sent, tools, host } = world(on, { api: { [`${WORK_API}/merge_requests/7`]: { text: MR_JSON } } })
+  host.env = { SPIDER_PLUGIN_OPTION_GITLAB_TOKENS: `gitlab.example.com=${WORK}` }
+  const names = await started($, tools)
+
+  expect(text(await $.tool.call(call('gitlab_mr')))).toContain('"iid":7')
+  expect(sent[0]?.headers?.['PRIVATE-TOKEN']).toBe(WORK)
+
+  host.project = { env: { SPIDER_PLUGIN_OPTION_GITLAB_TOKENS: 'x' } }
+  const before = sent.length
+  for (const name of names) expect(text(await $.tool.call(call(name))), name).toMatch(/repository settings set SPIDER_PLUGIN_OPTION_GITLAB_TOKENS/)
+  expect(sent.length).toBe(before)
 })
 
 test('API errors and failed calls are error results naming the project, and no output carries a token', ON, async ($, on) => {
@@ -189,7 +203,7 @@ test("an SSH alias remote uses its real host's token, found through ssh -G, and 
 
   host.ssh.work = 'gitlab.other.org'
   expect(text(await $.tool.call({ tool: MR, action: 'get', iid: 7 } as never))).toBe(
-    "The remote's host work is an SSH alias for gitlab.other.org. The gitlab tokens option has no token for gitlab.other.org. Add gitlab.other.org=<token> in the plugin options (/plugin, gitlab, configure).",
+    "The remote's host work is an SSH alias for gitlab.other.org. The gitlab tokens option has no token for gitlab.other.org. Add gitlab.other.org=<token> in the plugin options (/plugin, gitlab, configure), or in SPIDER_PLUGIN_OPTION_GITLAB_TOKENS when the option is not set.",
   )
   host.remote = 'git@nowhere:team/app.git'
   expect(text(await $.tool.call({ tool: MR, action: 'get', iid: 7 } as never))).toMatch(/If nowhere is an SSH alias from ~\/\.ssh\/config, ssh -G could not resolve it/)

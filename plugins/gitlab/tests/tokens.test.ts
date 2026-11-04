@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { offText, parseTokens, resolveToken, type Off, type TokenIo } from '../hooks/tokens'
+import { ENV_NAME, offText, parseTokens, resolveToken, type Off, type TokenIo } from '../hooks/tokens'
 
 const OPTION = 'gitlab.com=glpat-personal, gitlab.example.com=glpat-work'
 
@@ -20,8 +20,9 @@ test('parseTokens tells an absent option from a malformed one', () => {
   }
 })
 
-const io = (sources: Partial<Record<'project' | 'local', { pluginConfigs?: unknown }>> = {}): TokenIo => ({
+const io = (sources: Partial<Record<'project' | 'local', { pluginConfigs?: unknown; env?: unknown }>> = {}, env?: string): TokenIo => ({
   settings: async (source) => sources[source],
+  env: async () => env,
 })
 
 test('resolveToken picks the token of the remote host only', async () => {
@@ -35,12 +36,32 @@ test('resolveToken refuses tokens the repository declares, and unreadable settin
   expect(await resolveToken(io({ project: declared }), OPTION, 'gitlab.com')).toEqual({ off: 'repo-tokens' })
   expect(await resolveToken(io({ local: declared }), OPTION, 'gitlab.com')).toEqual({ off: 'repo-tokens' })
   expect(await resolveToken(io({ project: { pluginConfigs: { gitlabx: { options: { tokens: 'x' } } } } }), OPTION, 'gitlab.com')).toEqual({ token: 'glpat-personal' })
-  expect(await resolveToken({ settings: () => Promise.reject(new Error('x')) }, OPTION, 'gitlab.com')).toEqual({ off: 'unreadable' })
+  expect(await resolveToken({ settings: () => Promise.reject(new Error('x')), env: async () => undefined }, OPTION, 'gitlab.com')).toEqual({ off: 'unreadable' })
+})
+
+test('resolveToken takes the option first, else the environment variable, and never mixes the two', async () => {
+  const env = 'gitlab.com=glpat-env, gitlab.other.org=glpat-env-other'
+  expect(await resolveToken(io({}, env), undefined, 'gitlab.com')).toEqual({ token: 'glpat-env' })
+  expect(await resolveToken(io({}, env), '  ', 'gitlab.com')).toEqual({ token: 'glpat-env' })
+  expect(await resolveToken(io({}, env), OPTION, 'gitlab.com')).toEqual({ token: 'glpat-personal' })
+  expect(await resolveToken(io({}, env), OPTION, 'gitlab.other.org')).toEqual({ off: 'no-host' })
+  expect(await resolveToken(io(), undefined, 'gitlab.com')).toEqual({ off: 'no-tokens' })
+  expect(await resolveToken(io({}, 'glpat-only'), undefined, 'gitlab.com')).toEqual({ off: 'bad-tokens' })
+})
+
+test('resolveToken refuses a variable the repository sets in env, but only when the variable is the source in use', async () => {
+  const set = { env: { [ENV_NAME]: 'gitlab.com=x' } }
+  const env = 'gitlab.com=glpat-env'
+  expect(await resolveToken(io({ project: set }, env), undefined, 'gitlab.com')).toEqual({ off: 'repo-env' })
+  expect(await resolveToken(io({ local: set }, env), undefined, 'gitlab.com')).toEqual({ off: 'repo-env' })
+  expect(await resolveToken(io({ project: set }, env), OPTION, 'gitlab.com')).toEqual({ token: 'glpat-personal' })
+  const declared = { pluginConfigs: { gitlab: { options: { tokens: 'x' } } } }
+  expect(await resolveToken(io({ project: declared }, env), undefined, 'gitlab.com')).toEqual({ token: 'glpat-env' })
 })
 
 test('every refusal names the option or the settings, never a token, and no-host names the host to add', () => {
-  for (const off of ['no-tokens', 'bad-tokens', 'no-host', 'unreadable', 'repo-tokens'] as Off[]) {
-    expect(offText(off, 'gitlab.other.org')).toMatch(/tokens option/)
+  for (const off of ['no-tokens', 'bad-tokens', 'no-host', 'unreadable', 'repo-tokens', 'repo-env'] as Off[]) {
+    expect(offText(off, 'gitlab.other.org')).toMatch(/tokens option|SPIDER_PLUGIN_OPTION_GITLAB_TOKENS/)
     expect(offText(off, 'gitlab.other.org')).not.toContain('glpat')
   }
   expect(offText('no-host', 'gitlab.other.org')).toContain('Add gitlab.other.org=<token>')
