@@ -14,11 +14,15 @@ function io(opts: { env?: Partial<Record<EnvName, string>>; user?: Settings; pro
   }
 }
 
-test('the url and token options come first, then SONARQUBE_URL/SONARQUBE_TOKEN, then SONAR_URL/SONAR_TOKEN', async () => {
+test('the url and token options come first, then SPIDER_PLUGIN_OPTION_SONARQUBE_*, then SONARQUBE_URL/SONARQUBE_TOKEN, then SONAR_URL/SONAR_TOKEN', async () => {
   const env = { SONARQUBE_URL: URL_A, SONARQUBE_TOKEN: 'env-a', SONAR_URL: URL_B, SONAR_TOKEN: 'env-b' }
 
   expect(await resolveAccess(io({ env }), { url: 'https://opt.example.com/', token: 'opt' })).toEqual({ base: 'https://opt.example.com', token: 'opt', source: 'options' })
   expect(await resolveAccess(io({ env }), {})).toEqual({ base: URL_A, token: 'env-a', source: 'SONARQUBE_*' })
+  const spider = { SPIDER_PLUGIN_OPTION_SONARQUBE_URL: 'https://spider.example.com', SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN: 'env-s' }
+  expect(await resolveAccess(io({ env: { ...env, ...spider } }), {})).toEqual({ base: 'https://spider.example.com', token: 'env-s', source: 'SPIDER_PLUGIN_OPTION_SONARQUBE_*' })
+  expect(await resolveAccess(io({ env: { ...env, SPIDER_PLUGIN_OPTION_SONARQUBE_URL: 'https://spider.example.com' } }), {})).toEqual({ base: URL_A, token: 'env-a', source: 'SONARQUBE_*' })
+  expect(await resolveAccess(io({ env: { ...env, ...spider }, project: { env: { SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN: 'x' } } }), {})).toEqual({ off: 'repo-env' })
   expect(await resolveAccess(io({ env: { SONAR_URL: URL_B, SONAR_TOKEN: 'env-b' } }), { url: '', token: '  ' })).toEqual({ base: URL_B, token: 'env-b', source: 'SONAR_*' })
 })
 

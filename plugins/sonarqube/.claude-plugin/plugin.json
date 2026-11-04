@@ -1,7 +1,7 @@
 {
   "name": "sonarqube",
-  "version": "0.1.1",
-  "description": "Diagnose SonarQube 9.x analyses (quality gate, measures, issues, rules, hotspots, branches and pull requests) through its read-only Web API, using the url and token plugin options or the SONARQUBE_* or SONAR_* environment variables.",
+  "version": "0.2.0",
+  "description": "Diagnose SonarQube 9.x analyses (quality gate, measures, issues, rules, hotspots, branches and pull requests) through its read-only Web API, using the url and token plugin options or the SPIDER_PLUGIN_OPTION_SONARQUBE_*, SONARQUBE_* or SONAR_* environment variables.",
   "author": {
     "name": "anderson-spider"
   },
@@ -10,7 +10,7 @@
     "url": {
       "type": "string",
       "title": "SonarQube URL",
-      "description": "Your server's https address, such as https://sonarqube.example.com (with its context path if it has one). The token is sent only there. Leave both options empty to use SONARQUBE_URL/SONARQUBE_TOKEN or SONAR_URL/SONAR_TOKEN. Leave it out of repository settings, which would make the plugin refuse it."
+      "description": "Your server's https address, such as https://sonarqube.example.com (with its context path if it has one). The token is sent only there. Leave both options empty to use SPIDER_PLUGIN_OPTION_SONARQUBE_URL/SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN, SONARQUBE_URL/SONARQUBE_TOKEN or SONAR_URL/SONAR_TOKEN. Leave it out of repository settings, which would make the plugin refuse it."
     },
     "token": {
       "type": "string",

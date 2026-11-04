@@ -1,7 +1,8 @@
 // Repository settings cannot choose the account receiving the user's task.
-// The key is the `apiKey` plugin option when it is set, else JEV_API_KEY from the user's environment. A key that the
-// repository's own settings (project or local) declare for the source in use is refused, and so are settings that
-// cannot be read.
+// The key is the `apiKey` plugin option when it is set, else SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY, else
+// JEV_API_KEY from the user's environment (the first of the two that is set is the environment source). A key that the
+// repository's own settings (project or local) declare for the source in use (the option, or either variable in `env`)
+// is refused, and so are settings that cannot be read.
 export type KeyIo = {
   /** Missing settings are undefined; unreadable settings reject. */
   settings: (source: 'project' | 'local') => Promise<{ env?: unknown; pluginConfigs?: unknown } | undefined>
@@ -14,7 +15,17 @@ export type KeySources = { option?: unknown; env?: unknown }
 
 export const PLUGIN = 'subagent-effort'
 export const OPTION = 'apiKey'
-export const ENV_NAME = 'JEV_API_KEY'
+/** The environment variables, in the order they are tried. */
+export const ENV_NAMES = ['SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY', 'JEV_API_KEY'] as const
+
+/** The first of the variables' values that is set and not blank, with its name (JEV_API_KEY when none is). Values are read by the caller, since the host takes only literal names. */
+export function pickEnv(values: readonly [string | undefined, string | undefined]): { name: string; value: string | undefined } {
+  for (const [index, name] of ENV_NAMES.entries()) {
+    const value = values[index]
+    if (value !== undefined && value.trim()) return { name, value }
+  }
+  return { name: ENV_NAMES[1], value: undefined }
+}
 
 /** Why the key is not used: a configuration problem, unlike a Jev failure, so it lasts until the person fixes it. */
 export const OFFS = ['no-key', 'bad-key', 'unreadable-settings', 'repo-declared-key'] as const
@@ -22,10 +33,10 @@ export type Off = (typeof OFFS)[number]
 export const isOff = (reason: unknown): reason is Off => (OFFS as readonly unknown[]).includes(reason)
 /** What each reason tells the person: what is wrong and where to fix it, never a value. */
 export const OFF_TEXT: Record<Off, string> = {
-  'no-key': 'No Jev key. Set the subagent-effort apiKey option (/plugin, subagent-effort, configure), or set JEV_API_KEY where Claude Code inherits it (your shell profile for the terminal, `launchctl setenv` for the macOS desktop app) and restart Claude Code.',
-  'bad-key': 'The Jev key (the apiKey option, or JEV_API_KEY when the option is not set) is not a valid key (printable characters, no spaces). Set it again.',
-  'unreadable-settings': 'The project or local settings could not be read, so the Jev key (apiKey option or JEV_API_KEY) is not used. Fix .claude/settings.json or .claude/settings.local.json so each is valid JSON.',
-  'repo-declared-key': 'The project or local settings declare the Jev key in use (the subagent-effort apiKey option, or JEV_API_KEY in env), so it is not used. Remove it from the repository settings and keep it in your user plugin options or your own environment.',
+  'no-key': 'No Jev key. Set the subagent-effort apiKey option (/plugin, subagent-effort, configure), or set SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY (or JEV_API_KEY) where Claude Code inherits it (your shell profile for the terminal, `launchctl setenv` for the macOS desktop app) and restart Claude Code.',
+  'bad-key': 'The Jev key (the apiKey option, or SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY or JEV_API_KEY when the option is not set) is not a valid key (printable characters, no spaces). Set it again.',
+  'unreadable-settings': 'The project or local settings could not be read, so the Jev key (apiKey option, SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY or JEV_API_KEY) is not used. Fix .claude/settings.json or .claude/settings.local.json so each is valid JSON.',
+  'repo-declared-key': 'The project or local settings declare the Jev key in use (the subagent-effort apiKey option, or SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY or JEV_API_KEY in env), so it is not used. Remove it from the repository settings and keep it in your user plugin options or your own environment.',
 }
 export type Access = { key: string; source: KeySource; off?: undefined } | { key?: undefined; source?: undefined; off: Off }
 const KEY_SHAPE = /^[\x21-\x7e]{1,512}$/
@@ -66,7 +77,7 @@ export async function repoDeclares(io: KeyIo, source: KeySource): Promise<boolea
       if (declaresOption(settings?.pluginConfigs)) declared = true
     } else {
       const env = settings?.env
-      if (env && typeof env === 'object' && Object.hasOwn(env, ENV_NAME)) declared = true
+      if (env && typeof env === 'object' && ENV_NAMES.some((name) => Object.hasOwn(env, name))) declared = true
     }
   }
   return declared

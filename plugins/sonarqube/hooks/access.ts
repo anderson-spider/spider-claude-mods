@@ -1,16 +1,17 @@
 // Where the SonarQube server and its token come from. Pure: the settings and environment reads are injected.
-// The `url` and `token` options come first; with neither set, the SONARQUBE_URL/SONARQUBE_TOKEN pair, then
-// SONAR_URL/SONAR_TOKEN. A source counts only whole: a url from one source never receives the token of another.
+// The `url` and `token` options come first; with neither set, the SPIDER_PLUGIN_OPTION_SONARQUBE_URL/
+// SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN pair, then SONARQUBE_URL/SONARQUBE_TOKEN, then SONAR_URL/SONAR_TOKEN. A source counts only whole: a url from one source never receives the token of another.
 // A value the repository's own settings (project or local) chose, as a plugin option or in `env`, refuses the call: a
 // repository that set the url could send the user's token to a host it controls. The same value as the user's settings
 // give is not a choice of the repository: with Claude opened in the home folder, the project settings are the user's own
 // ~/.claude/settings.json. Settings that cannot be read refuse the call as well. No message carries a value.
 
-export const ENV_NAMES = ['SONARQUBE_URL', 'SONARQUBE_TOKEN', 'SONAR_URL', 'SONAR_TOKEN'] as const
+export const ENV_NAMES = ['SPIDER_PLUGIN_OPTION_SONARQUBE_URL', 'SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN', 'SONARQUBE_URL', 'SONARQUBE_TOKEN', 'SONAR_URL', 'SONAR_TOKEN'] as const
 export type EnvName = (typeof ENV_NAMES)[number]
 
 /** The environment pairs, in the order they are tried. */
 const ENV_PAIRS = [
+  { url: 'SPIDER_PLUGIN_OPTION_SONARQUBE_URL', token: 'SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN' },
   { url: 'SONARQUBE_URL', token: 'SONARQUBE_TOKEN' },
   { url: 'SONAR_URL', token: 'SONAR_TOKEN' },
 ] as const
@@ -32,7 +33,7 @@ const CONFIGURE = 'the plugin options (/plugin, sonarqube, configure)'
 
 /** What each refusal tells the user: where to set the url and token, never a value. */
 export const OFF_TEXT: Record<Off, string> = {
-  none: `No SonarQube server is configured. Set the sonarqube url and token in ${CONFIGURE}, or export SONARQUBE_URL and SONARQUBE_TOKEN (or SONAR_URL and SONAR_TOKEN) before starting Claude.`,
+  none: `No SonarQube server is configured. Set the sonarqube url and token in ${CONFIGURE}, or export SPIDER_PLUGIN_OPTION_SONARQUBE_URL and SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN (or SONARQUBE_URL and SONARQUBE_TOKEN, or SONAR_URL and SONAR_TOKEN) before starting Claude.`,
   'half-option': `Only one of the sonarqube url and token options is set. Set both in ${CONFIGURE}, or clear both to use the environment variables.`,
   'bad-token': 'The SonarQube token is not a valid token (printable characters, no spaces). Set it again.',
   'bad-url':
@@ -109,7 +110,7 @@ export function repoChose(repo: Map<string, unknown[]>, user: Map<string, unknow
   return false
 }
 
-export type Source = 'options' | 'SONARQUBE_*' | 'SONAR_*'
+export type Source = 'options' | 'SPIDER_PLUGIN_OPTION_SONARQUBE_*' | 'SONARQUBE_*' | 'SONAR_*'
 export type Access = { base: string; token: string; source: Source; off?: undefined } | { off: Off }
 
 type Picked = { url: unknown; token: unknown; source: Source; names: readonly string[]; off?: undefined } | { off: 'none' | 'half-option' }
@@ -122,7 +123,7 @@ function pick(options: { url?: unknown; token?: unknown }, env: Partial<Record<E
   }
   for (const pair of ENV_PAIRS) {
     if (isSet(env[pair.url]) && isSet(env[pair.token])) {
-      const source = pair.url === 'SONARQUBE_URL' ? 'SONARQUBE_*' : 'SONAR_*'
+      const source = pair.url === 'SPIDER_PLUGIN_OPTION_SONARQUBE_URL' ? 'SPIDER_PLUGIN_OPTION_SONARQUBE_*' : pair.url === 'SONARQUBE_URL' ? 'SONARQUBE_*' : 'SONAR_*'
       return { url: env[pair.url], token: env[pair.token], source, names: [pair.url, pair.token] }
     }
   }

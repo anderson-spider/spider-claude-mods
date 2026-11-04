@@ -13,8 +13,9 @@ The server and token come from the first of these that gives both:
 1. The plugin options, from the plugin's configuration in `/plugin` (or `claude plugin configure sonarqube`), in your user options, not in a repository's settings:
    - `url`: your server's https address, such as `https://sonarqube.example.com`, with its context path if it runs under one (`https://example.com/sonar`). Plain `http`, credentials, a query or a fragment are refused.
    - `token` (sensitive, kept in secure storage): a user token from **My Account > Security** that can browse the projects you want to read.
-2. `SONARQUBE_URL` and `SONARQUBE_TOKEN` in the environment Claude Code starts with.
-3. `SONAR_URL` and `SONAR_TOKEN`.
+2. `SPIDER_PLUGIN_OPTION_SONARQUBE_URL` and `SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN` in the environment Claude Code starts with (the same name rule as the other plugins' options).
+3. `SONARQUBE_URL` and `SONARQUBE_TOKEN`.
+4. `SONAR_URL` and `SONAR_TOKEN`.
 
 A source counts only with both values: setting just one option is refused instead of falling back, and a url from one source never receives the token of another. With no source the tools answer with an error that says where to set them.
 

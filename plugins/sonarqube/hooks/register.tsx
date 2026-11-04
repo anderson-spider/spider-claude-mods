@@ -40,6 +40,8 @@ function accessIo($: EngineInterface): AccessIo {
       return { pluginConfigs: settings?.pluginConfigs, env: settings?.env }
     },
     env: async () => ({
+      SPIDER_PLUGIN_OPTION_SONARQUBE_URL: await $.env.get('SPIDER_PLUGIN_OPTION_SONARQUBE_URL'),
+      SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN: await $.env.get('SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN'),
       SONARQUBE_URL: await $.env.get('SONARQUBE_URL'),
       SONARQUBE_TOKEN: await $.env.get('SONARQUBE_TOKEN'),
       SONAR_URL: await $.env.get('SONAR_URL'),

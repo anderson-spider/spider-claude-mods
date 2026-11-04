@@ -45,7 +45,7 @@
     {
       "name": "sonarqube",
       "source": "./plugins/sonarqube",
-      "description": "Diagnose SonarQube 9.x analyses (quality gate, measures, issues, rules, hotspots, branches and pull requests) through its read-only Web API, using the url and token plugin options or the SONARQUBE_* or SONAR_* environment variables."
+      "description": "Diagnose SonarQube 9.x analyses (quality gate, measures, issues, rules, hotspots, branches and pull requests) through its read-only Web API, using the url and token plugin options or the SPIDER_PLUGIN_OPTION_SONARQUBE_*, SONARQUBE_* or SONAR_* environment variables."
     },
     {
       "name": "subagent-effort",
