@@ -5,9 +5,6 @@ plugins/*/.claude-plugin/types/
 plugins/codex/helper/state/
 plugins/codex/helper/run/
 
-# Saved `claude plugin validate --strict` output (npm run plugins:scan)
-.scan*/
-
 # Local review and test reports
 .reports/
 
