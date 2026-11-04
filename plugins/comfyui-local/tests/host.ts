@@ -20,7 +20,8 @@ export function world(on: On, opts: { routes?: Record<string, { status?: number;
   const sent: Sent[] = []
   const processes: string[][] = []
   const written: Record<string, string> = {}
-  const host = { ...opts, settingsFail: false }
+  const host = { ...opts, settingsFail: false, env: {} as Record<string, string> }
+  on('env.get', (_$, e) => ({ value: host.env[e.name] }) as never)
 
   on('tool.register', (_$, e) => (tools.push(e as unknown as Tool), { value: { tool: id(e.name) } }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))

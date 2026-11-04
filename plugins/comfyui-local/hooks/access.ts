@@ -1,24 +1,30 @@
-// Where the ComfyUI instance comes from. Pure: the settings read is injected.
-// The `url` option is the only source. A url declared by the repository's own settings (project or local) with a value
-// the user's settings do not give it refuses the call: the model uploads local files and saves what the server answers,
+// Where the ComfyUI instance comes from. Pure: the settings and environment reads are injected.
+// The `url` option comes first, else the SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL environment variable. A url declared by
+// the repository's own settings (project or local), as the option or in `env`, with a value the user's settings do not
+// give it refuses the call: the model uploads local files and saves what the server answers,
 // so a repository must not pick the server. The same value as the user's is not a choice of the repository: with Claude
 // opened in the home folder, the project settings are the user's own ~/.claude/settings.json. Settings that cannot be
 // read refuse the call as well. No message carries a value.
 
+export const ENV_NAME = 'SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL'
+
 export type AccessIo = {
-  /** One settings source's `pluginConfigs`; rejects when it cannot be read. */
-  settings: (source: 'user' | 'project' | 'local') => Promise<{ pluginConfigs?: unknown } | undefined>
+  /** One settings source's `pluginConfigs` and `env`; rejects when it cannot be read. */
+  settings: (source: 'user' | 'project' | 'local') => Promise<{ pluginConfigs?: unknown; env?: unknown } | undefined>
+  /** The process environment's value of `ENV_NAME`. */
+  env: () => Promise<string | undefined>
 }
 
-export type Off = 'no-url' | 'bad-url' | 'unreadable' | 'repo-option'
+export type Off = 'no-url' | 'bad-url' | 'unreadable' | 'repo-option' | 'repo-env'
 
 /** What each refusal tells the user: where to set the option, never a value. */
 export const OFF_TEXT: Record<Off, string> = {
-  'no-url': 'The comfyui-local url option is not set. Set it to your server, such as http://comfy.local:8188, in the plugin options (/plugin, comfyui-local, configure).',
+  'no-url': `The comfyui-local url option is not set. Set it to your server, such as http://comfy.local:8188, in the plugin options (/plugin, comfyui-local, configure), or export ${ENV_NAME} before starting Claude.`,
   'bad-url':
-    'The comfyui-local url option must be an http or https origin with no user, path, query or fragment, such as http://comfy.local:8188. Set it again in the plugin options (/plugin, comfyui-local, configure).',
-  unreadable: 'The project or local settings could not be read, so the comfyui-local url option is not used.',
+    `The comfyui-local url option (or ${ENV_NAME}, when the option is not set) must be an http or https origin with no user, path, query or fragment, such as http://comfy.local:8188. Set it again in the plugin options (/plugin, comfyui-local, configure).`,
+  unreadable: `The project or local settings could not be read, so the comfyui-local url option (or ${ENV_NAME}) is not used.`,
   'repo-option': 'The repository settings declare the comfyui-local url option, so it is not used. Set it in your user plugin options instead.',
+  'repo-env': `The repository settings set ${ENV_NAME}, so it is not used. Set it in your user plugin options or your shell's environment instead.`,
 }
 
 /** The server origin (`http://host[:port]`) of the `url` option, or why there is none. http is allowed: the server is on the local network. */
@@ -64,6 +70,16 @@ export function repoChose(repo: Map<string, unknown[]>, user: Map<string, unknow
   return false
 }
 
+/** The values a settings source's `env` gives `ENV_NAME`. */
+export function declaredEnv(env: unknown): Map<string, unknown[]> {
+  const found = new Map<string, unknown[]>()
+  if (env && typeof env === 'object' && Object.hasOwn(env, ENV_NAME)) found.set(ENV_NAME, [(env as Record<string, unknown>)[ENV_NAME]])
+  return found
+}
+
+/** Present: a string with something but spaces. */
+const isSet = (value: unknown): boolean => value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())
+
 export type Access = { base: string; off?: undefined } | { base?: undefined; off: Off }
 
 const PLUGIN = 'comfyui-local'
@@ -71,17 +87,19 @@ const OPTIONS = ['url'] as const
 
 /** The server origin to use, or why there is none. Settings are read only when the url is valid. */
 export async function resolveAccess(io: AccessIo, options: { url?: unknown }): Promise<Access> {
-  const url = checkUrl(options.url)
+  const fromOption = isSet(options.url)
+  const url = checkUrl(fromOption ? options.url : await io.env())
   if (url.base === undefined) return { off: url.off }
-  let declared = false
+  const declared = (settings: { pluginConfigs?: unknown; env?: unknown } | undefined) =>
+    fromOption ? declaredOptions(settings?.pluginConfigs, PLUGIN, OPTIONS) : declaredEnv(settings?.env)
+  let chosen = false
   try {
-    const user = declaredOptions((await io.settings('user'))?.pluginConfigs, PLUGIN, OPTIONS)
+    const user = declared(await io.settings('user'))
     for (const source of ['project', 'local'] as const) {
-      const settings = await io.settings(source)
-      if (repoChose(declaredOptions(settings?.pluginConfigs, PLUGIN, OPTIONS), user)) declared = true
+      if (repoChose(declared(await io.settings(source)), user)) chosen = true
     }
   } catch {
     return { off: 'unreadable' }
   }
-  return declared ? { off: 'repo-option' } : { base: url.base }
+  return chosen ? { off: fromOption ? 'repo-option' : 'repo-env' } : { base: url.base }
 }

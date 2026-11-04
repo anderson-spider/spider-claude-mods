@@ -28,7 +28,8 @@ function world(on: On, opts: { project?: Settings; local?: Settings; text?: stri
   const sent: Sent[] = []
   const tools: Tool[] = []
   /** Mutable, so one test can change the repository's settings or the API's answer between calls. */
-  const host = { ...opts, settingsFail: false }
+  const host = { ...opts, settingsFail: false, env: {} as Record<string, string> }
+  on('env.get', (_$, e) => ({ value: host.env[e.name] }) as never)
 
   on('settings.read', (_$, e) => {
     if (host.settingsFail) throw new Error('settings unreadable')
@@ -228,7 +229,8 @@ test('write refuses every rejected path for DELETE too, so no smuggled path dele
 
 // The tests below run once per registered tool: a new tool adds its entry to CALLS and nothing else.
 
-const MISSING = 'The tailscale apiKey option is not set. Set it in the plugin options (/plugin, tailscale, configure).'
+const MISSING =
+  'The tailscale apiKey option is not set. Set it in the plugin options (/plugin, tailscale, configure), or export SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY before starting Claude.'
 
 test('every tool reports a missing apiKey option, tells where to set it and sends nothing', OFF, async ($, on) => {
   const { sent, tools } = world(on)
@@ -434,4 +436,22 @@ test('every tool returns an error status from the API as an error result', ON, a
     expect(result.isError, name).toBe(true)
     expect(text(result), name).toBe('HTTP 403\n{"message":"forbidden"}')
   }
+})
+
+const ENV_KEY = 'SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY'
+
+test('without the option, SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY gives the key, and a repository env setting refuses it', OFF, async ($, on) => {
+  const { sent, tools, host } = world(on)
+  host.env = { [ENV_KEY]: KEY }
+  await started($, tools)
+
+  const result = await $.tool.call(CALLS.tailscale_get!.input('/tailnet/-/devices') as never)
+  expect(result.isError).toBeUndefined()
+  expect(sent[0]!.headers!.Authorization).toBe(`Bearer ${KEY}`)
+
+  host.project = { env: { [ENV_KEY]: 'x' } }
+  const refused = await $.tool.call(CALLS.tailscale_get!.input('/tailnet/-/devices') as never)
+  expect(refused.isError).toBe(true)
+  expect(text(refused)).toMatch(/repository settings set SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY/)
+  expect(sent).toHaveLength(1)
 })

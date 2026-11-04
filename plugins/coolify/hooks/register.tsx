@@ -16,14 +16,18 @@ function accessIo($: EngineInterface): AccessIo {
   return {
     settings: async (source) => {
       const settings = await $.settings.read({ source })
-      return { pluginConfigs: settings?.pluginConfigs }
+      return { pluginConfigs: settings?.pluginConfigs, env: settings?.env }
     },
+    env: async () => ({
+      url: await $.env.get('SPIDER_PLUGIN_OPTION_COOLIFY_URL'),
+      apiKey: await $.env.get('SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY'),
+    }),
   }
 }
 
 /** The host wiring every tool shares: resolves the instance and token, then calls the API. `$` is passed only to this top-level function so the engine's source analysis still sees each `$` call. */
 async function run($: EngineInterface, req: Request, options: { url?: unknown; apiKey?: unknown }): Promise<ReturnType<typeof reply>> {
-  // The instance and token come from the options only, checked against the repository's settings on every call.
+  // The instance and token come from the options, else the environment variables, checked against the repository's settings on every call.
   const access = await resolveAccess(accessIo($), options)
   if (access.off !== undefined) return reply({ text: OFF_TEXT[access.off], isError: true })
   // $.http.fetch is wrapped, not passed as a value: the engine's validate rejects the latter.

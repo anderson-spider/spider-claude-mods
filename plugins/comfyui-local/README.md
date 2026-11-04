@@ -12,7 +12,7 @@ Set one plugin option from the plugin's configuration in `/plugin` (or `claude p
 
 - `url`: your server's origin, such as `http://192.168.0.10:8188`. Plain `http` is accepted, since the server is on your local network; ComfyUI has no authentication of its own, and this plugin sends none.
 
-Without it the tools answer with an error that says where to set it. Requires ComfyUI 0.3 or later for the core tools and ComfyUI-Manager 4 or later for `manager_packs`, `manager_task` and `restart_server` (a 404 from the Manager, missing or older, is reported as such). `manager_search_packs` queries the public registry and needs no Manager.
+Instead of the option you can export `SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL`, where Claude Code inherits it (your shell profile for the terminal, `launchctl setenv` for the macOS desktop app), and restart Claude Code. The option comes first: when it is set, the variable is ignored. Without either the tools answer with an error that says where to set it. Requires ComfyUI 0.3 or later for the core tools and ComfyUI-Manager 4 or later for `manager_packs`, `manager_task` and `restart_server` (a 404 from the Manager, missing or older, is reported as such). `manager_search_packs` queries the public registry and needs no Manager.
 
 ## Use
 
@@ -41,7 +41,7 @@ Node packs and Python dependencies: `manager_task` install lets the Manager inst
 
 ## Privacy
 
-The server comes only from the `url` option, not from tool input or the environment. On every call the plugin reads the user, project and local settings; if the project or local settings declare `url` for this plugin with a value your user settings do not give it, or the settings cannot be read, the call is refused and nothing is sent, because a repository could otherwise point your uploads at a server it chose. A value equal to your own is accepted. The only request that leaves your network is `manager_search_packs`, which queries `api.comfy.org` with the search words.
+The server comes only from the `url` option or the `SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL` variable, never from tool input. On every call the plugin reads the user, project and local settings; if the project or local settings declare `url` for this plugin (or, when the variable is the source, set it in `env`) with a value your user settings do not give it, or the settings cannot be read, the call is refused and nothing is sent, because a repository could otherwise point your uploads at a server it chose. A value equal to your own is accepted. The only request that leaves your network is `manager_search_packs`, which queries `api.comfy.org` with the search words.
 
 ## Tests
 

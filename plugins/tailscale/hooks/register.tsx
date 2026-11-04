@@ -11,19 +11,20 @@ function reply(out: { text: string; isError: boolean }): { result: string } | { 
   return out.isError ? { result: out.text, isError: true as const } : { result: out.text }
 }
 
-/** The repository's settings, which decide whether the key option may be used. */
+/** The repository's settings, which decide whether the key may be used, and the environment variable that is its second source. */
 function keyIo($: EngineInterface): KeyIo {
   return {
     settings: async (source) => {
       const settings = await $.settings.read({ source })
-      return { pluginConfigs: settings?.pluginConfigs }
+      return { pluginConfigs: settings?.pluginConfigs, env: settings?.env }
     },
+    env: () => $.env.get('SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY'),
   }
 }
 
 /** The host wiring every tool shares: resolves the key and calls the API. `$` is passed only to this top-level function so the engine's source analysis still sees each `$` call. */
 async function run($: EngineInterface, req: Request, option: unknown): Promise<ReturnType<typeof reply>> {
-  // The key comes from the `apiKey` option only, checked against the repository's settings on every call.
+  // The key comes from the `apiKey` option, else the environment variable, checked against the repository's settings on every call.
   const access = await resolveKey(keyIo($), option)
   if (access.off !== undefined) return reply({ text: OFF_TEXT[access.off], isError: true })
   // $.http.fetch is wrapped, not passed as a value: the engine's validate rejects the latter.

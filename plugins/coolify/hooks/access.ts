@@ -1,27 +1,35 @@
-// Where the Coolify instance and its API token come from. Pure: the settings read is injected.
-// The `url` and `apiKey` options are the only sources. Either one declared by the repository's own settings (project or
-// local) with a value the user's settings do not give it refuses the call: a repository that set the url could send the
+// Where the Coolify instance and its API token come from. Pure: the settings and environment reads are injected.
+// The `url` and `apiKey` options come first; with neither set, the SPIDER_PLUGIN_OPTION_COOLIFY_URL and
+// SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY variables. A source counts only whole: a url from one source never receives the
+// token of another. Either value declared by the repository's own settings (project or local), as an option or in `env`,
+// with a value the user's settings do not give it refuses the call: a repository that set the url could send the
 // user's token to a host it controls, and one that set the key would choose the account. The same value as the user's is
 // not a choice of the repository: with Claude opened in the home folder, the project settings are the user's own
 // ~/.claude/settings.json. Settings that cannot be read refuse the call as well. No message carries a value.
 
+export const ENV_URL = 'SPIDER_PLUGIN_OPTION_COOLIFY_URL'
+export const ENV_KEY = 'SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY'
+const ENV_NAMES = [ENV_URL, ENV_KEY] as const
+
 export type AccessIo = {
-  /** One settings source's `pluginConfigs`; rejects when it cannot be read. */
-  settings: (source: 'user' | 'project' | 'local') => Promise<{ pluginConfigs?: unknown } | undefined>
+  /** One settings source's `pluginConfigs` and `env`; rejects when it cannot be read. */
+  settings: (source: 'user' | 'project' | 'local') => Promise<{ pluginConfigs?: unknown; env?: unknown } | undefined>
+  /** The process environment's `ENV_URL` and `ENV_KEY`. */
+  env: () => Promise<{ url?: string; apiKey?: string }>
 }
 
-export type Off = 'no-key' | 'bad-key' | 'no-url' | 'bad-url' | 'unreadable' | 'repo-option'
+export type Off = 'no-key' | 'bad-key' | 'no-url' | 'bad-url' | 'unreadable' | 'repo-option' | 'repo-env'
 
 /** What each refusal tells the user: where to set the option, never a value. */
 export const OFF_TEXT: Record<Off, string> = {
-  'no-key': 'The coolify apiKey option is not set. Set it in the plugin options (/plugin, coolify, configure).',
-  'bad-key': 'The coolify apiKey option is not a valid token. Set it again in the plugin options (/plugin, coolify, configure).',
-  'no-url': 'The coolify url option is not set. Set it to your instance, such as https://coolify.example.com, in the plugin options (/plugin, coolify, configure).',
-  'bad-url':
-    'The coolify url option must be an https address with no user, path, query or fragment, such as https://coolify.example.com. Set it again in the plugin options (/plugin, coolify, configure).',
-  unreadable: 'The project or local settings could not be read, so the coolify url and apiKey options are not used.',
+  'no-key': `The coolify apiKey option is not set. Set it in the plugin options (/plugin, coolify, configure), or export ${ENV_KEY} (with ${ENV_URL}) before starting Claude.`,
+  'bad-key': `The coolify apiKey option (or ${ENV_KEY}, when the options are not set) is not a valid token. Set it again in the plugin options (/plugin, coolify, configure).`,
+  'no-url': `The coolify url option is not set. Set it to your instance, such as https://coolify.example.com, in the plugin options (/plugin, coolify, configure), or export ${ENV_URL} (with ${ENV_KEY}) before starting Claude.`,
+  'bad-url': `The coolify url option (or ${ENV_URL}, when the options are not set) must be an https address with no user, path, query or fragment, such as https://coolify.example.com. Set it again in the plugin options (/plugin, coolify, configure).`,
+  unreadable: `The project or local settings could not be read, so the coolify url and apiKey options (or ${ENV_URL} and ${ENV_KEY}) are not used.`,
   'repo-option':
     'The repository settings declare the coolify url or apiKey option, so neither is used. Set them in your user plugin options instead.',
+  'repo-env': `The repository settings set ${ENV_URL} or ${ENV_KEY}, so neither is used. Set them in your user plugin options or your shell's environment instead.`,
 }
 
 /** The path every Coolify API call goes under. */
@@ -76,6 +84,16 @@ export function declaredOptions(configs: unknown, plugin: string, options: reado
   return found
 }
 
+/** The values a settings source's `env` gives `ENV_NAMES`. */
+export function declaredEnv(env: unknown): Map<string, unknown[]> {
+  const found = new Map<string, unknown[]>()
+  if (!env || typeof env !== 'object') return found
+  for (const name of ENV_NAMES) {
+    if (Object.hasOwn(env, name)) found.set(name, [(env as Record<string, unknown>)[name]])
+  }
+  return found
+}
+
 /** Whether `repo` declares an option value that `user` does not declare: a value only the repository chose. */
 export function repoChose(repo: Map<string, unknown[]>, user: Map<string, unknown[]>): boolean {
   for (const [option, values] of repo) {
@@ -87,22 +105,28 @@ export function repoChose(repo: Map<string, unknown[]>, user: Map<string, unknow
 
 export type Access = { key: string; base: string; off?: undefined } | { key?: undefined; base?: undefined; off: Off }
 
-/** The token and API base to use, or why there are none. Settings are read only when both options are valid. */
+/** Present: a string with something but spaces. */
+const isSet = (value: unknown): boolean => value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())
+
+/** The token and API base to use, or why there are none. Settings are read only when both values are valid. */
 export async function resolveAccess(io: AccessIo, options: { url?: unknown; apiKey?: unknown }): Promise<Access> {
-  const key = checkKey(options.apiKey)
+  const fromOptions = isSet(options.url) || isSet(options.apiKey)
+  const values = fromOptions ? options : await io.env()
+  const key = checkKey(values.apiKey)
   if (key.key === undefined) return { off: key.off }
-  const url = checkUrl(options.url)
+  const url = checkUrl(values.url)
   if (url.base === undefined) return { off: url.off }
   const OPTION_NAMES = ['url', 'apiKey'] as const
-  let declared = false
+  const declared = (settings: { pluginConfigs?: unknown; env?: unknown } | undefined) =>
+    fromOptions ? declaredOptions(settings?.pluginConfigs, 'coolify', OPTION_NAMES) : declaredEnv(settings?.env)
+  let chosen = false
   try {
-    const user = declaredOptions((await io.settings('user'))?.pluginConfigs, 'coolify', OPTION_NAMES)
+    const user = declared(await io.settings('user'))
     for (const source of ['project', 'local'] as const) {
-      const settings = await io.settings(source)
-      if (repoChose(declaredOptions(settings?.pluginConfigs, 'coolify', OPTION_NAMES), user)) declared = true
+      if (repoChose(declared(await io.settings(source)), user)) chosen = true
     }
   } catch {
     return { off: 'unreadable' }
   }
-  return declared ? { off: 'repo-option' } : { key: key.key, base: url.base }
+  return chosen ? { off: fromOptions ? 'repo-option' : 'repo-env' } : { key: key.key, base: url.base }
 }

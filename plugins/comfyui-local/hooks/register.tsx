@@ -41,8 +41,9 @@ function accessIo($: EngineInterface): AccessIo {
   return {
     settings: async (source) => {
       const settings = await $.settings.read({ source })
-      return { pluginConfigs: settings?.pluginConfigs }
+      return { pluginConfigs: settings?.pluginConfigs, env: settings?.env }
     },
+    env: () => $.env.get('SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL'),
   }
 }
 
