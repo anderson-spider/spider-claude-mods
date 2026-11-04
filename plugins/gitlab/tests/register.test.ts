@@ -270,6 +270,14 @@ test('defaultHost, from the option or SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST, 
   ])
 })
 
+test('a repository env setting of SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST refuses the variable, and nothing is sent', ON, async ($, on) => {
+  const { sent, host } = world(on, { remote: GITHUB })
+  host.env = { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' }
+  host.project = { env: { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' } }
+  expect(text(await $.tool.call({ tool: MR, action: 'list', project: 47 } as never))).toMatch(/^The repository settings set SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST, so it is not used\./)
+  expect(sent).toEqual([])
+})
+
 test('the defaultHost option comes before its environment variable', { options: { tokens: `gitlab.example.com=${WORK}, gitlab.com=${PERSONAL}`, defaultHost: 'gitlab.com' } }, async ($, on) => {
   const { sent, host } = world(on, { remote: GITHUB, api: { [`${PERSONAL_API}/merge_requests/7`]: { text: MR_JSON } } })
   host.env = { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' }

@@ -9,7 +9,7 @@ import { mr } from './mr'
 import { pipeline } from './pipelines'
 import { currentBranch, hostName, locate, projectPath, sshHostname, type Git, type Ssh } from './remote'
 import { allOf, type SchemaFor } from './schema'
-import { DEFAULT_HOST_ENV, isSet, offText, resolveToken, type TokenIo } from './tokens'
+import { DEFAULT_HOST_ENV, offText, resolveDefaultHost, resolveToken, type TokenIo } from './tokens'
 import { user } from './users'
 
 type Inputs = McpToolInputs
@@ -26,7 +26,7 @@ const PIPELINE_ACTIONS = allOf<Inputs['mcp__gitlab__gitlab_pipeline']['action']>
 
 const IID = { type: 'integer', description: 'MR !iid. Default: the open MR of the current branch.' } as const
 const NAMES = { type: 'array', items: { type: 'string' } } as const
-const PROJECT = { type: 'string', description: 'group/project or numeric id.' } as const
+const PROJECT = { type: ['string', 'integer'], description: 'group/project or numeric id.' } as const
 const HOST = { type: 'string', description: "Default: the remote's host." } as const
 const PAGE = { type: 'integer' } as const
 const PER_PAGE = { type: 'integer', description: 'Max 100.' } as const
@@ -107,9 +107,10 @@ async function run(
   } else {
     target = await fromRemote(git, ssh, io, options.tokens)
     if ('error' in target && target.fallback) {
-      const fallback = isSet(options.defaultHost) ? options.defaultHost : await $.env.get('SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST')
-      if (isSet(fallback)) {
-        const named = hostName(fallback)
+      const fallback = await resolveDefaultHost(io, options.defaultHost, () => $.env.get('SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST'))
+      if (fallback.off !== undefined) return reply(offText(fallback.off), true)
+      if (fallback.value !== undefined) {
+        const named = hostName(fallback.value)
         if (!named) return reply(`The gitlab defaultHost option (or ${DEFAULT_HOST_ENV}) is not a host name (gitlab.example.com).`, true)
         target = await onHost(git, ssh, io, options.tokens, named)
       }

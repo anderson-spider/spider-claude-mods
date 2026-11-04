@@ -74,3 +74,11 @@ allOf<'a' | 'b'>()(...(['a'] as ('a' | 'b')[]))
 // An object-typed property fails closed, whatever its schema.
 // @ts-expect-error an object property
 ;({ type: 'object', properties: { nested: { type: 'object' } }, required: ['nested'] }) satisfies SchemaFor<Nested>
+
+// `string | number` takes both types, a string or a number alone does not.
+;({ type: 'object', properties: { id: { type: ['string', 'integer'] } } } as const) satisfies SchemaFor<{ id?: string | number }>
+;({ type: 'object', properties: { id: { type: ['string', 'number'] } } } as const) satisfies SchemaFor<{ id?: string | number }>
+// @ts-expect-error string | number given as string only
+;({ type: 'object', properties: { id: T } }) satisfies SchemaFor<{ id?: string | number }>
+// @ts-expect-error a string given as string | number
+;({ type: 'object', properties: { id: { type: ['string', 'integer'] } } } as const) satisfies SchemaFor<{ id?: string }>

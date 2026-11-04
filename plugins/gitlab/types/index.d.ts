@@ -8,7 +8,7 @@ declare module 'claude-code' {
     mcp__gitlab__gitlab_mr: {
       action: 'list' | 'get' | 'status' | 'create' | 'update' | 'diff' | 'commits' | 'approve' | 'unapprove' | 'rebase' | 'merge'
       host?: string
-      project?: string
+      project?: string | number
       iid?: number
       state?: 'opened' | 'merged' | 'closed' | 'all'
       scope?: 'created_by_me' | 'assigned_to_me' | 'all'
@@ -42,7 +42,7 @@ declare module 'claude-code' {
     mcp__gitlab__gitlab_mr_comment: {
       action: 'list' | 'unresolved' | 'drafts' | 'comment' | 'reply' | 'line' | 'edit' | 'resolve' | 'unresolve' | 'publish'
       host?: string
-      project?: string
+      project?: string | number
       iid?: number
       body?: string
       discussionId?: string
@@ -59,7 +59,7 @@ declare module 'claude-code' {
     mcp__gitlab__gitlab_pipeline: {
       action: 'list' | 'jobs' | 'wait' | 'run' | 'retry' | 'cancel' | 'play' | 'artifacts'
       host?: string
-      project?: string
+      project?: string | number
       iid?: number
       ref?: string
       pipelineId?: number
@@ -74,7 +74,7 @@ declare module 'claude-code' {
     mcp__gitlab__gitlab_job_log: {
       jobId: number
       host?: string
-      project?: string
+      project?: string | number
       mode?: 'errors' | 'tail' | 'full'
       lines?: number
       pattern?: string
@@ -82,7 +82,7 @@ declare module 'claude-code' {
     mcp__gitlab__gitlab_label: {
       action: 'list' | 'create'
       host?: string
-      project?: string
+      project?: string | number
       name?: string
       color?: string
       description?: string

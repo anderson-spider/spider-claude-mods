@@ -18,7 +18,7 @@ export const ENV_NAME = 'SPIDER_PLUGIN_OPTION_GITLAB_TOKENS'
 /** The variable that gives the defaultHost option when it is not set. */
 export const DEFAULT_HOST_ENV = 'SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST'
 
-export type Off = 'no-tokens' | 'bad-tokens' | 'no-host' | 'unreadable' | 'repo-tokens' | 'repo-env'
+export type Off = 'no-tokens' | 'bad-tokens' | 'no-host' | 'unreadable' | 'repo-tokens' | 'repo-env' | 'repo-default-host'
 
 const CONFIGURE = 'the plugin options (/plugin, gitlab, configure)'
 
@@ -37,6 +37,8 @@ export function offText(off: Off, host?: string): string {
       return 'The repository settings declare the gitlab tokens option, so it is not used. Set it in your user plugin options instead.'
     case 'repo-env':
       return `The repository settings set ${ENV_NAME}, so it is not used. Set it in your user plugin options or your shell's environment instead.`
+    case 'repo-default-host':
+      return `The repository settings set ${DEFAULT_HOST_ENV}, so it is not used. Set defaultHost in your user plugin options, or the variable in your shell's environment, instead.`
   }
 }
 
@@ -72,9 +74,9 @@ export function declaresOption(configs: unknown, plugin: string, option: string)
   return false
 }
 
-/** Whether a settings source's `env` sets `ENV_NAME`. */
-export function declaresEnv(env: unknown): boolean {
-  return !!env && typeof env === 'object' && Object.hasOwn(env, ENV_NAME)
+/** Whether a settings source's `env` sets `name` (`ENV_NAME` by default). */
+export function declaresEnv(env: unknown, name: string = ENV_NAME): boolean {
+  return !!env && typeof env === 'object' && Object.hasOwn(env, name)
 }
 
 /** Present: a string with something but spaces. */
@@ -101,4 +103,27 @@ export async function resolveToken(
     return { off: 'unreadable' }
   }
   return declared ? { off: fromOption ? 'repo-tokens' : 'repo-env' } : { token }
+}
+
+/**
+ * The defaultHost option, else `DEFAULT_HOST_ENV` (undefined when neither is set). The variable is refused when the
+ * repository's settings (project or local) set it in `env`, or cannot be read, as the tokens variable is: a repository
+ * would otherwise pick which of the user's GitLabs its calls reach.
+ */
+export async function resolveDefaultHost(
+  io: Pick<TokenIo, 'settings'>,
+  option: unknown,
+  env: () => Promise<string | undefined>,
+): Promise<{ value: unknown; off?: undefined } | { value?: undefined; off: 'repo-default-host' | 'unreadable' }> {
+  if (isSet(option)) return { value: option }
+  const value = await env()
+  if (!isSet(value)) return { value: undefined }
+  try {
+    for (const source of ['project', 'local'] as const) {
+      if (declaresEnv((await io.settings(source))?.env, DEFAULT_HOST_ENV)) return { off: 'repo-default-host' }
+    }
+  } catch {
+    return { off: 'unreadable' }
+  }
+  return { value }
 }
