@@ -6,7 +6,7 @@ Query or modify your tailnet through the Tailscale API.
 /plugin install tailscale --marketplace anderson-spider/claude-mods
 ```
 
-Set the `apiKey` plugin option (a sensitive field, kept in secure storage) with a `tskey-api-...` API key, from the plugin's configuration in `/plugin`. Set it in your user options, not in a repository's settings. `tskey-client-...` OAuth secrets require a token exchange this plugin does not provide. Without the option the tools answer with an error that says where to set it.
+Set the `apiKey` plugin option (a sensitive field, kept in secure storage) with a `tskey-api-...` API key, from the plugin's configuration in `/plugin`. Set it in your user options, not in a repository's settings. `tskey-client-...` OAuth secrets require a token exchange this plugin does not provide. Instead of the option you can export `SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY` with the same key, where Claude Code inherits it (your shell profile for the terminal, `launchctl setenv` for the macOS desktop app), and restart Claude Code. The option comes first: when it is set, the variable is ignored. Without either the tools answer with an error that says where to set it.
 
 ## Use
 
@@ -19,7 +19,7 @@ For ACL updates, GET `/tailnet/-/acl`, then POST with its quoted ETag in `ifMatc
 
 ## Privacy
 
-The key comes only from the `apiKey` option, not from tool input or the environment. It is sent only in the `Authorization` header to the Tailscale API, and the plugin's own messages never include it. On every call the plugin reads the project and local settings; if either declares `apiKey` for this plugin, or the settings cannot be read, the call is refused and nothing is sent, because the repository could otherwise choose which account the key is used under. Requests go only to the Tailscale API. Read responses remove the fields `machineKey`, `nodeKey`, `tailnetLockKey`, `secret`, `s3SecretAccessKey` and `token`, and any field whose name ends in `Key`, `Secret` or `Token`; write responses are unfiltered, so handle new secrets privately.
+The key comes only from the `apiKey` option or the `SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY` variable, never from tool input. It is sent only in the `Authorization` header to the Tailscale API, and the plugin's own messages never include it. On every call the plugin reads the project and local settings; if either declares `apiKey` for this plugin (or, when the variable is the source, sets it in `env`), or the settings cannot be read, the call is refused and nothing is sent, because the repository could otherwise choose which account the key is used under. Requests go only to the Tailscale API. Read responses remove the fields `machineKey`, `nodeKey`, `tailnetLockKey`, `secret`, `s3SecretAccessKey` and `token`, and any field whose name ends in `Key`, `Secret` or `Token`; write responses are unfiltered, so handle new secrets privately.
 
 ## Tests
 

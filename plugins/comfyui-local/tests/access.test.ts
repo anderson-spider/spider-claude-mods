@@ -1,9 +1,10 @@
 import { expect, test } from 'claude-code/testing'
-import { OFF_TEXT, checkUrl, declaredOptions, repoChose, resolveAccess, type AccessIo } from '../hooks/access'
+import { ENV_NAME, OFF_TEXT, checkUrl, declaredOptions, repoChose, resolveAccess, type AccessIo } from '../hooks/access'
 
 const URL_OPTION = 'http://192.168.0.10:8188'
-const io = (sources: Partial<Record<'user' | 'project' | 'local', { pluginConfigs?: unknown }>> = {}): AccessIo => ({
+const io = (sources: Partial<Record<'user' | 'project' | 'local', { pluginConfigs?: unknown; env?: unknown }>> = {}, env?: string): AccessIo => ({
   settings: async (source) => sources[source],
+  env: async () => env,
 })
 
 test('checkUrl keeps an http or https origin', () => {
@@ -43,8 +44,24 @@ test('resolveAccess answers the base, or why there is none', async () => {
   expect(await resolveAccess(io({ local: repo }), { url: URL_OPTION })).toEqual({ off: 'repo-option' })
   const same = { pluginConfigs: { 'comfyui-local': { options: { url: URL_OPTION } } } }
   expect(await resolveAccess(io({ user: same, project: same }), { url: URL_OPTION })).toEqual({ base: URL_OPTION })
-  const failing: AccessIo = { settings: async () => { throw new Error('unreadable') } }
+  const failing: AccessIo = { settings: async () => { throw new Error('unreadable') }, env: async () => undefined }
   expect(await resolveAccess(failing, { url: URL_OPTION })).toEqual({ off: 'unreadable' })
+})
+
+test('resolveAccess takes the option first, else the environment variable', async () => {
+  expect(await resolveAccess(io({}, 'http://env:8188'), { url: URL_OPTION })).toEqual({ base: URL_OPTION })
+  expect(await resolveAccess(io({}, 'http://env:8188'), {})).toEqual({ base: 'http://env:8188' })
+  expect(await resolveAccess(io({}, 'http://env:8188'), { url: ' ' })).toEqual({ base: 'http://env:8188' })
+  expect(await resolveAccess(io({}, 'nope'), {})).toEqual({ off: 'bad-url' })
+  expect(await resolveAccess(io({}, undefined), {})).toEqual({ off: 'no-url' })
+})
+
+test('resolveAccess refuses a variable the repository sets in env, unless the user sets the same value', async () => {
+  const evil = { env: { [ENV_NAME]: 'http://evil:8188' } }
+  expect(await resolveAccess(io({ project: evil }, 'http://env:8188'), {})).toEqual({ off: 'repo-env' })
+  expect(await resolveAccess(io({ local: evil }, 'http://env:8188'), {})).toEqual({ off: 'repo-env' })
+  expect(await resolveAccess(io({ user: evil, project: evil }, 'http://env:8188'), {})).toEqual({ base: 'http://env:8188' })
+  expect(await resolveAccess(io({ project: evil }, 'http://env:8188'), { url: URL_OPTION })).toEqual({ base: URL_OPTION })
 })
 
 test('no refusal text carries a value, and each names where to set the option', () => {

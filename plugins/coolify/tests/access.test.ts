@@ -1,10 +1,11 @@
 import { expect, test } from 'claude-code/testing'
-import { OFF_TEXT, checkKey, checkUrl, declaredOptions, repoChose, resolveAccess, type AccessIo } from '../hooks/access'
+import { ENV_KEY, ENV_URL, OFF_TEXT, checkKey, checkUrl, declaredOptions, repoChose, resolveAccess, type AccessIo } from '../hooks/access'
 
 const KEY = '1|coolify-test-token'
 const URL_OPTION = 'https://coolify.example.com'
-const io = (sources: Partial<Record<'user' | 'project' | 'local', { pluginConfigs?: unknown }>> = {}): AccessIo => ({
+const io = (sources: Partial<Record<'user' | 'project' | 'local', { pluginConfigs?: unknown; env?: unknown }>> = {}, env: { url?: string; apiKey?: string } = {}): AccessIo => ({
   settings: async (source) => sources[source],
+  env: async () => env,
 })
 
 test('checkKey tells an absent key from a malformed one', () => {
@@ -67,7 +68,7 @@ test('repoChose is true only for a value the user settings do not declare', () =
 
 test('resolveAccess reads settings only when both options are valid', async () => {
   let reads = 0
-  const counting: AccessIo = { settings: async () => (reads++, undefined) }
+  const counting: AccessIo = { settings: async () => (reads++, undefined), env: async () => ({}) }
   expect(await resolveAccess(counting, { url: URL_OPTION })).toEqual({ off: 'no-key' })
   expect(await resolveAccess(counting, { apiKey: KEY })).toEqual({ off: 'no-url' })
   expect(await resolveAccess(counting, { apiKey: KEY, url: 'http://coolify.example.com' })).toEqual({ off: 'bad-url' })
@@ -82,8 +83,8 @@ test('resolveAccess refuses a url or key the repository declares, and unreadable
   const key = { pluginConfigs: { coolify: { options: { apiKey: 'r' } } } }
   expect(await resolveAccess(io({ project: url }), options)).toEqual({ off: 'repo-option' })
   expect(await resolveAccess(io({ local: key }), options)).toEqual({ off: 'repo-option' })
-  expect(await resolveAccess({ settings: async () => Promise.reject(new Error('x')) }, options)).toEqual({ off: 'unreadable' })
-  expect(await resolveAccess({ settings: async (s) => (s === 'user' ? Promise.reject(new Error('x')) : undefined) }, options)).toEqual({ off: 'unreadable' })
+  expect(await resolveAccess({ settings: async () => Promise.reject(new Error('x')), env: async () => ({}) }, options)).toEqual({ off: 'unreadable' })
+  expect(await resolveAccess({ settings: async (s) => (s === 'user' ? Promise.reject(new Error('x')) : undefined), env: async () => ({}) }, options)).toEqual({ off: 'unreadable' })
 })
 
 test('resolveAccess accepts project settings that repeat the user settings, as with Claude opened in the home folder', async () => {
@@ -101,4 +102,23 @@ test('no refusal text names a value, and each one points at an option or the set
   for (const text of Object.values(OFF_TEXT)) expect(text).toMatch(/url|apiKey/)
   expect(OFF_TEXT['no-key']).toContain('plugin options')
   expect(OFF_TEXT['no-url']).toContain('plugin options')
+})
+
+test('resolveAccess takes the options first, else the environment variables, and never mixes the two', async () => {
+  const env = { url: 'https://env.example.com', apiKey: 'env-key' }
+  expect(await resolveAccess(io({}, env), { url: URL_OPTION, apiKey: KEY })).toEqual({ key: KEY, base: 'https://coolify.example.com/api/v1' })
+  expect(await resolveAccess(io({}, env), {})).toEqual({ key: 'env-key', base: 'https://env.example.com/api/v1' })
+  expect(await resolveAccess(io({}, env), { url: ' ', apiKey: ' ' })).toEqual({ key: 'env-key', base: 'https://env.example.com/api/v1' })
+  expect(await resolveAccess(io({}, env), { url: URL_OPTION })).toEqual({ off: 'no-key' })
+  expect(await resolveAccess(io({}, { url: 'https://env.example.com' }), {})).toEqual({ off: 'no-key' })
+  expect(await resolveAccess(io({}, { apiKey: 'env-key' }), {})).toEqual({ off: 'no-url' })
+})
+
+test('resolveAccess refuses a variable the repository sets in env, unless the user sets the same value', async () => {
+  const env = { url: 'https://env.example.com', apiKey: 'env-key' }
+  const evil = { env: { [ENV_URL]: 'https://evil.example.com' } }
+  expect(await resolveAccess(io({ project: evil }, env), {})).toEqual({ off: 'repo-env' })
+  expect(await resolveAccess(io({ local: { env: { [ENV_KEY]: 'k' } } }, env), {})).toEqual({ off: 'repo-env' })
+  expect(await resolveAccess(io({ user: evil, project: evil }, env), {})).toEqual({ key: 'env-key', base: 'https://env.example.com/api/v1' })
+  expect(await resolveAccess(io({ project: evil }, env), { url: URL_OPTION, apiKey: KEY })).toEqual({ key: KEY, base: 'https://coolify.example.com/api/v1' })
 })

@@ -11,7 +11,7 @@ Set two plugin options from the plugin's configuration in `/plugin` (or `claude 
 - `url`: your instance's https address, such as `https://coolify.example.com`, or `https://app.coolify.io` for Coolify Cloud. Plain `http` is refused so the token never travels in clear text. A trailing `/api/v1` is accepted; any other path, a query or a fragment is refused.
 - `apiKey` (sensitive, kept in secure storage): a token from **Keys & Tokens > API tokens**. Give it only the permissions Claude needs (`read`, `deploy`, `write`) and leave out `read:sensitive` and `root`, so Coolify itself hides secrets from the answers.
 
-Without either option the tools answer with an error that says where to set it.
+Instead of the options you can export `SPIDER_PLUGIN_OPTION_COOLIFY_URL` and `SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY`, where Claude Code inherits them (your shell profile for the terminal, `launchctl setenv` for the macOS desktop app), and restart Claude Code. The options come first: when either is set, both variables are ignored, and values of the two sources are never mixed. Without a complete source the tools answer with an error that says where to set it.
 
 ## Use
 
@@ -24,7 +24,7 @@ A `DELETE` is sent only when its `confirm` input repeats the id at the end of th
 
 ## Privacy
 
-The instance and token come only from the `url` and `apiKey` options, not from tool input or the environment. The token is sent only in the `Authorization` header to that instance, and the plugin's own messages never include it. On every call the plugin reads the user, project and local settings; if the project or local settings declare `url` or `apiKey` for this plugin with a value your user settings do not give it, or the settings cannot be read, the call is refused and nothing is sent, because a repository could otherwise send your token to a host it chose. A value equal to your own is accepted, so a session opened in your home folder, where the project settings are your own `~/.claude/settings.json`, still works. Read answers remove fields named like a password, secret, token, private key or API key, any field whose name ends in `_key`, and the values of environment variables; write answers are unfiltered.
+The instance and token come only from the `url` and `apiKey` options or the two `SPIDER_PLUGIN_OPTION_COOLIFY_*` variables, never from tool input. The token is sent only in the `Authorization` header to that instance, and the plugin's own messages never include it. On every call the plugin reads the user, project and local settings; if the project or local settings declare `url` or `apiKey` for this plugin (or, when the variables are the source, set them in `env`) with a value your user settings do not give it, or the settings cannot be read, the call is refused and nothing is sent, because a repository could otherwise send your token to a host it chose. A value equal to your own is accepted, so a session opened in your home folder, where the project settings are your own `~/.claude/settings.json`, still works. Read answers remove fields named like a password, secret, token, private key or API key, any field whose name ends in `_key`, and the values of environment variables; write answers are unfiltered.
 
 ## Tests
 

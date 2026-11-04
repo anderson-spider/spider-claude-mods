@@ -125,3 +125,14 @@ test('get_workflow and save_workflow round-trip a workflow through a local file 
   expect(text(await $.tool.call({ tool: id('save_workflow'), path: 'big', file: '/proj/w/big.json', overwrite: true } as never))).toContain('Saved workflows/big.json')
   expect(sent.at(-1)?.body).toBe(JSON.stringify(ui))
 })
+
+test('without the option, SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL gives the server, and a repository env setting refuses it', async ($, on) => {
+  const { tools, sent, host } = world(on, { routes: { 'GET /queue': { body: { queue_running: [], queue_pending: [] } } } })
+  host.env = { SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL: URL_OPTION }
+  await started($, tools)
+  expect(text(await $.tool.call({ tool: id('get_job_status') } as never))).toBe('0 running, 0 pending.')
+  expect(sent[0]?.url).toBe(`${URL_OPTION}/queue`)
+  host.project = { env: { SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL: 'http://evil.example' } }
+  expect(text(await $.tool.call({ tool: id('get_job_status') } as never))).toBe(OFF_TEXT['repo-env'])
+  expect(sent).toHaveLength(1)
+})

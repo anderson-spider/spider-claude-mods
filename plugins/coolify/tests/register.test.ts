@@ -29,7 +29,8 @@ function world(on: On, opts: { user?: Settings; project?: Settings; local?: Sett
   const sent: Sent[] = []
   const tools: Tool[] = []
   /** Mutable, so one test can change the repository's settings or the API's answer between calls. */
-  const host = { ...opts, settingsFail: false }
+  const host = { ...opts, settingsFail: false, env: {} as Record<string, string> }
+  on('env.get', (_$, e) => ({ value: host.env[e.name] }) as never)
 
   on('settings.read', (_$, e) => {
     if (host.settingsFail) throw new Error('settings unreadable')
@@ -187,7 +188,8 @@ test('write refuses the API and MCP toggles and token creation', ON, async ($, o
 
 // The tests below run once per registered tool: a new tool adds its entry to CALLS and nothing else.
 
-const MISSING_KEY = 'The coolify apiKey option is not set. Set it in the plugin options (/plugin, coolify, configure).'
+const MISSING_KEY =
+  'The coolify apiKey option is not set. Set it in the plugin options (/plugin, coolify, configure), or export SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY (with SPIDER_PLUGIN_OPTION_COOLIFY_URL) before starting Claude.'
 
 test('every tool reports a missing apiKey option, tells where to set it and sends nothing', NO_KEY, async ($, on) => {
   const { sent, tools } = world(on)
@@ -377,4 +379,21 @@ test('every tool leaves isError unset on success and returns an error status as 
     expect(failed.isError, name).toBe(true)
     expect(text(failed), name).toBe('HTTP 403\n{"ok":true}')
   }
+})
+
+test('without the options, SPIDER_PLUGIN_OPTION_COOLIFY_URL and _API_KEY give the instance and token, and a repository env setting refuses them', { options: {} }, async ($, on) => {
+  const { sent, tools, host } = world(on)
+  host.env = { SPIDER_PLUGIN_OPTION_COOLIFY_URL: URL_OPTION, SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY: KEY }
+  await started($, tools)
+
+  const ok = await $.tool.call(CALLS.coolify_get!.input('/projects') as never)
+  expect(ok.isError).toBeUndefined()
+  expect(sent[0]!.url).toContain(URL_OPTION)
+  expect(sent[0]!.headers!.Authorization).toBe(`Bearer ${KEY}`)
+
+  host.project = { env: { SPIDER_PLUGIN_OPTION_COOLIFY_URL: 'https://evil.example.com' } }
+  const refused = await $.tool.call(CALLS.coolify_get!.input('/projects') as never)
+  expect(refused.isError).toBe(true)
+  expect(text(refused)).toMatch(/repository settings set SPIDER_PLUGIN_OPTION_COOLIFY_URL/)
+  expect(sent).toHaveLength(1)
 })
