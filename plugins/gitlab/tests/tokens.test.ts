@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { ENV_NAME, offText, parseTokens, resolveToken, type Off, type TokenIo } from '../hooks/tokens'
+import { DEFAULT_HOST_ENV, ENV_NAME, offText, parseTokens, resolveDefaultHost, resolveToken, type Off, type TokenIo } from '../hooks/tokens'
 
 const OPTION = 'gitlab.com=glpat-personal, gitlab.example.com=glpat-work'
 
@@ -65,4 +65,21 @@ test('every refusal names the option or the settings, never a token, and no-host
     expect(offText(off, 'gitlab.other.org')).not.toContain('glpat')
   }
   expect(offText('no-host', 'gitlab.other.org')).toContain('Add gitlab.other.org=<token>')
+})
+
+test('resolveDefaultHost takes the option first, else the variable, refused when the repository declares it or settings are unreadable', async () => {
+  const variable = async () => 'gitlab.example.com'
+  const repoEnv = { env: { [DEFAULT_HOST_ENV]: 'gitlab.evil.org' } }
+  expect(await resolveDefaultHost(io(), 'gitlab.com', variable)).toEqual({ value: 'gitlab.com' })
+  expect(await resolveDefaultHost(io({ project: repoEnv }), 'gitlab.com', variable)).toEqual({ value: 'gitlab.com' })
+  const repoOption = { pluginConfigs: { 'gitlab@spider-claude-mods': { options: { defaultHost: 'gitlab.evil.org' } } } }
+  expect(await resolveDefaultHost(io({ project: repoOption }), 'gitlab.evil.org', variable)).toEqual({ off: 'repo-default-host' })
+  expect(await resolveDefaultHost(io({ local: repoOption }), 'gitlab.evil.org', variable)).toEqual({ off: 'repo-default-host' })
+  expect(await resolveDefaultHost({ settings: () => Promise.reject(new Error('x')) }, 'gitlab.com', variable)).toEqual({ off: 'unreadable' })
+  expect(await resolveDefaultHost(io(), undefined, variable)).toEqual({ value: 'gitlab.example.com' })
+  expect(await resolveDefaultHost(io(), ' ', async () => undefined)).toEqual({ value: undefined })
+  expect(await resolveDefaultHost(io({ project: repoEnv }), undefined, variable)).toEqual({ off: 'repo-default-host' })
+  expect(await resolveDefaultHost(io({ local: repoEnv }), undefined, variable)).toEqual({ off: 'repo-default-host' })
+  expect(await resolveDefaultHost({ settings: () => Promise.reject(new Error('x')) }, undefined, variable)).toEqual({ off: 'unreadable' })
+  expect(offText('repo-default-host')).toBe(`The repository settings set the gitlab defaultHost option (or ${DEFAULT_HOST_ENV}), so it is not used. Set it in your user plugin options or your shell's environment instead.`)
 })

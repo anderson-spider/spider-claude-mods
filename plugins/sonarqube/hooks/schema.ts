@@ -17,8 +17,8 @@ type HasDuplicate<A extends readonly unknown[]> = A extends readonly [infer H, .
 
 /**
  * The JSON Schema of one property, tied to the type `V` of the same property in `McpToolInputs`. A union of string
- * literals needs an `enum` built with `allOf`; a number may be `number` or `integer`; a number or boolean literal and
- * an object fail closed.
+ * literals needs an `enum` built with `allOf`; a number may be `number` or `integer`; `string | number` is
+ * `['string', 'number']` or `['string', 'integer']`; a number or boolean literal and an object fail closed.
  */
 type PropertySchema<V> = { description?: string } & (unknown extends V
   ? unknown
@@ -36,7 +36,11 @@ type PropertySchema<V> = { description?: string } & (unknown extends V
           : { type: 'string'; enum: AllOf<V> }
         : [V] extends [readonly (infer I)[]]
           ? { type: 'array'; items: PropertySchema<I> }
-          : never)
+          : [V] extends [string | number]
+            ? [string | number] extends [V]
+              ? { type: readonly ['string', 'number'] } | { type: readonly ['string', 'integer'] }
+              : never
+            : never)
 
 /**
  * Ties a tool's `inputSchema` to its `McpToolInputs` entry in types/index.d.ts: `satisfies SchemaFor<McpToolInputs[...]>`

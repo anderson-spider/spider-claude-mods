@@ -9,7 +9,7 @@ export type Clock = { now: () => number; sleep: (ms: number) => Promise<void> }
 
 export type Ctx = {
   api: Api
-  /** The checked-out branch, or undefined on a detached HEAD or when `project` names another project. */
+  /** The checked-out branch, or undefined on a detached HEAD or when the project is not the remote's. */
   branch: () => Promise<string | undefined>
   /** The token's own user, read once per call. */
   me: () => Promise<{ id: number; username?: string }>
@@ -100,7 +100,7 @@ type MrRef = { iid: number; project_id?: number; source_project_id?: number }
 export async function mrIid(ctx: Ctx, iid: unknown): Promise<number> {
   const given = id(iid, 'iid')
   if (given !== undefined) return given
-  if (ctx.foreign) throw new InputError('Pass iid: project names another project, so the current branch is not used.')
+  if (ctx.foreign) throw new InputError("Pass iid: the project is not the remote's, so the current branch is not used.")
   const branch = await ctx.branch()
   if (!branch) throw new InputError('No iid was given and the current branch is unknown (detached HEAD). Pass iid.')
   const open = (await ctx.api.get('/merge_requests', { state: 'opened', source_branch: branch, per_page: 20 })) as MrRef[]

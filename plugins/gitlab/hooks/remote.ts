@@ -48,10 +48,23 @@ export function parseRemote(url: string): Location | undefined {
   return ssh ? { host, project, ssh: true } : { host, project }
 }
 
-/** A project path the model names (`group/sub/project`): the same shape as a remote's, never a URL or another host. */
-export function projectPath(value: string): string | undefined {
+/**
+ * A project the model names: a path (`group/sub/project`, the same shape as a remote's) or GitLab's numeric project id;
+ * never a URL or another host.
+ */
+export function projectPath(value: unknown): string | undefined {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? String(value) : undefined
+  if (typeof value !== 'string') return undefined
   const project = value.trim().replace(/^\/+|\/+$/g, '')
+  if (/^[1-9]\d{0,15}$/.test(project)) return project
   return PROJECT.test(project) && !project.split('/').some((s) => /^\.+$/.test(s)) ? project : undefined
+}
+
+/** A host name a tool input or the defaultHost option gives (`gitlab.example.com` or `localhost:8080`, with an optional port), lower-cased; never a URL. */
+export function hostName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const host = value.trim().toLowerCase()
+  return HOST.test(host) ? host : undefined
 }
 
 /** Runs `ssh <args>`; only `ssh -G <host>`, which prints the resolved configuration and connects nowhere. */

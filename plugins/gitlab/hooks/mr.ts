@@ -143,7 +143,7 @@ async function list(ctx: Ctx, input: MrInput): Promise<string> {
 async function create(ctx: Ctx, input: MrInput): Promise<string> {
   const title = need(str(input.title), 'create needs a title.')
   const source = str(input.sourceBranch) ?? (await ctx.branch())
-  if (!source) throw new InputError(ctx.foreign ? 'create needs sourceBranch when project names another project.' : 'create needs sourceBranch: the current branch is unknown (detached HEAD).')
+  if (!source) throw new InputError(ctx.foreign ? "create needs sourceBranch when the project is not the remote's." : 'create needs sourceBranch: the current branch is unknown (detached HEAD).')
   await checkLabels(ctx, input)
   // a new MR is assigned to the token's user unless assignees says otherwise (an empty list leaves it unassigned)
   const body = await fields(ctx, { ...input, assignees: input.assignees ?? ['@me'] })

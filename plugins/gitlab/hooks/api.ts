@@ -20,6 +20,9 @@ export class GitlabError extends Error {
   }
 }
 
+/** A project call on a host that is not the remote's, made without naming the project. */
+export class NoProjectError extends Error {}
+
 export type Api = {
   /** GET under the API root (`/user`, `/users`), parsed JSON. */
   root: (path: string, query?: Query) => Promise<unknown>
@@ -62,9 +65,13 @@ export function nextPage(headers: Record<string, string> | undefined): number | 
   return Number.isSafeInteger(n) && n > 0 ? n : undefined
 }
 
-export function gitlab(fetch: Fetch, host: string, project: string, token: string): Api {
+/** The API of `host` and `project`; with no project, only the root calls work and the others throw `NoProjectError`. */
+export function gitlab(fetch: Fetch, host: string, project: string | undefined, token: string): Api {
   const base = `https://${host}/api/v4`
-  const projectBase = `${base}/projects/${encodeURIComponent(project)}`
+  const under = (path: string): string => {
+    if (project === undefined) throw new NoProjectError()
+    return `${base}/projects/${encodeURIComponent(project)}${path}`
+  }
 
   async function request(method: string, url: string, body?: Record<string, unknown>): Promise<FetchResponse> {
     const headers: Record<string, string> = { 'PRIVATE-TOKEN': token, Accept: 'application/json' }
@@ -79,10 +86,10 @@ export function gitlab(fetch: Fetch, host: string, project: string, token: strin
   return {
     root: async (path, query) => json(await request('GET', base + path + search(query))),
     rootPage: async (path, query) => page(await request('GET', base + path + search(query))),
-    get: async (path, query) => json(await request('GET', projectBase + path + search(query))),
-    page: async (path, query) => page(await request('GET', projectBase + path + search(query))),
-    text: async (path) => (await request('GET', projectBase + path)).text,
-    send: async (method, path, body) => json(await request(method, projectBase + path, body)),
-    url: (path) => projectBase + path,
+    get: async (path, query) => json(await request('GET', under(path) + search(query))),
+    page: async (path, query) => page(await request('GET', under(path) + search(query))),
+    text: async (path) => (await request('GET', under(path))).text,
+    send: async (method, path, body) => json(await request(method, under(path), body)),
+    url: (path) => under(path),
   }
 }

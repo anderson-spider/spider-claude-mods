@@ -185,12 +185,111 @@ test('project switches to another project on the same host with the same token, 
   expect(ok.isError).toBeUndefined()
   expect(sent.map((s) => [s.url, s.headers?.['PRIVATE-TOKEN']])).toEqual([[`${other}/merge_requests/3`, WORK]])
 
-  for (const project of ['https://gitlab.com/anderson-spider/tools', 'gitlab.com:anderson-spider/tools', 'app', 7]) {
+  for (const project of ['https://gitlab.com/anderson-spider/tools', 'gitlab.com:anderson-spider/tools', 'app', -7]) {
     const refused = await $.tool.call({ tool: MR, action: 'get', iid: 3, project } as never)
     expect(refused.isError, String(project)).toBe(true)
-    expect(text(refused)).toBe("project must be a project path on gitlab.example.com (group/project), not a URL: the token goes only to the remote's host.")
+    expect(text(refused)).toBe('project must be a project path (group/project) or numeric id on gitlab.example.com, not a URL: name another GitLab with host.')
   }
   expect(sent).toHaveLength(1)
+})
+
+const GITHUB = 'git@github.com:anderson-spider/gitlab-review.git'
+const LIST_47 = 'https://gitlab.example.com/api/v4/projects/47/merge_requests?state=opened&labels=In+review&order_by=updated_at&per_page=20&page=1'
+
+test('host names a GitLab other than the remote: its own token, project by path or numeric id, and no current-branch MR', ON, async ($, on) => {
+  const { sent, tools } = world(on, { remote: GITHUB, api: { [LIST_47]: { text: '[]' }, [USER]: { text: '{"id":1,"username":"ann"}' } } })
+  const names = await started($, tools)
+
+  const listed = await $.tool.call({ tool: MR, action: 'list', host: 'gitlab.example.com', project: 47, labels: ['In review'], state: 'opened' } as never)
+  expect(listed.isError).toBeUndefined()
+  expect(sent.map((s) => [s.url, s.headers?.['PRIVATE-TOKEN']])).toEqual([[LIST_47, WORK]])
+
+  expect(text(await $.tool.call({ tool: id('gitlab_user'), host: 'gitlab.example.com' } as never))).toContain('ann')
+  expect(text(await $.tool.call({ tool: MR, action: 'status', host: 'gitlab.example.com', project: '47' } as never))).toMatch(/iid/)
+  const before = sent.length
+  for (const name of names.filter((n) => n !== 'gitlab_user' && n !== 'gitlab_job_log')) {
+    expect(text(await $.tool.call({ tool: id(name), ...CALLS[name], host: 'gitlab.example.com' } as never)), name).toBe("Name the project (group/project or its numeric id): the repository's remote is not on gitlab.example.com.")
+  }
+  expect(sent.length).toBe(before)
+})
+
+test('host is refused unsent when it is a URL or has no token, naming the host and never a token', ON, async ($, on) => {
+  const { sent } = world(on, { remote: GITHUB })
+
+  expect(text(await $.tool.call({ tool: MR, action: 'list', host: 'https://gitlab.example.com', project: 47 } as never))).toBe('host must be a GitLab host name (gitlab.example.com), not a URL.')
+  const missing = text(await $.tool.call({ tool: MR, action: 'list', host: 'gitlab.other.org', project: 47 } as never))
+  expect(missing).toBe('The gitlab tokens option has no token for gitlab.other.org. Add gitlab.other.org=<token> in the plugin options (/plugin, gitlab, configure), or in SPIDER_PLUGIN_OPTION_GITLAB_TOKENS when the option is not set.')
+  expect(missing).not.toContain(WORK)
+  expect(sent).toEqual([])
+})
+
+test('host equal to the remote keeps the remote project and the current branch MR', ON, async ($, on) => {
+  const { sent } = world(on, { api: { [`${WORK_API}/merge_requests?source_branch=feature%2Fx&state=opened&per_page=100`]: { text: '[]' } } })
+  const result = await $.tool.call({ tool: MR, action: 'get', host: 'gitlab.example.com' } as never)
+  expect(sent[0]?.url.startsWith(`${WORK_API}/merge_requests`)).toBe(true)
+  expect(text(result)).not.toMatch(/Name the project/)
+})
+
+test('host equal to the real host of an SSH alias remote keeps the remote project; an alias for another host does not', ON, async ($, on) => {
+  const { sent, host } = world(on, { remote: 'git@work:team/app.git', api: { [`${WORK_API}/merge_requests?state=opened&source_branch=feature%2Fx&per_page=20`]: { text: '[]' } } })
+  host.ssh.work = 'gitlab.example.com'
+  expect(text(await $.tool.call({ tool: MR, action: 'get', host: 'gitlab.example.com' } as never))).toMatch(/No open merge request has feature\/x/)
+  host.ssh.work = 'gitlab.other.org'
+  expect(text(await $.tool.call({ tool: MR, action: 'get', host: 'gitlab.example.com' } as never))).toBe("Pass iid: the project is not the remote's, so the current branch is not used.")
+  expect(sent).toHaveLength(1)
+})
+
+test('defaultHost does not replace a remote whose token is refused for another reason than a missing host', { options: { tokens: `gitlab.example.com=${WORK}`, defaultHost: 'gitlab.example.com' } }, async ($, on) => {
+  const { sent, host } = world(on)
+  host.project = { pluginConfigs: { gitlab: { options: { tokens: `gitlab.example.com=${WORK}` } } } }
+  expect(text(await $.tool.call({ tool: MR, action: 'get', iid: 7 } as never))).toMatch(/repository settings declare/)
+  expect(sent).toEqual([])
+})
+
+test('defaultHost, from the option or SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST, serves a remote with no token; host and a GitLab remote come first', async ($, on) => {
+  const { sent, host } = world(on, { remote: GITHUB, api: { [LIST_47]: { text: '[]' }, [`${WORK_API}/merge_requests/7`]: { text: MR_JSON }, [`${PERSONAL_API}/merge_requests/7`]: { text: MR_JSON } } })
+  const tokens = `gitlab.example.com=${WORK}, gitlab.com=${PERSONAL}`
+  host.env = { SPIDER_PLUGIN_OPTION_GITLAB_TOKENS: tokens }
+  const list = { tool: MR, action: 'list', project: 47, labels: ['In review'], state: 'opened' } as never
+
+  expect(text(await $.tool.call(list))).toMatch(/^The gitlab tokens option has no token for github\.com\./)
+  host.env.SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST = 'gitlab.example.com'
+  expect((await $.tool.call(list)).isError).toBeUndefined()
+  host.env.SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST = 'https://gitlab.example.com'
+  expect(text(await $.tool.call(list))).toBe('The gitlab defaultHost option (or SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST) is not a host name (gitlab.example.com).')
+  host.env.SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST = 'gitlab.example.com'
+  host.remote = 'https://gitlab.com/anderson-spider/tools.git'
+  await $.tool.call({ tool: MR, action: 'get', iid: 7 } as never)
+  host.remote = GITHUB
+  await $.tool.call({ tool: MR, action: 'get', iid: 7, host: 'gitlab.com', project: 'anderson-spider/tools' } as never)
+
+  expect(sent.map((s) => [s.url, s.headers?.['PRIVATE-TOKEN']])).toEqual([
+    [LIST_47, WORK],
+    [`${PERSONAL_API}/merge_requests/7`, PERSONAL],
+    [`${PERSONAL_API}/merge_requests/7`, PERSONAL],
+  ])
+})
+
+test('a repository env setting of the defaultHost variable refuses it, and nothing is sent', ON, async ($, on) => {
+  const { sent, host } = world(on, { remote: GITHUB })
+  host.env = { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' }
+  host.project = { env: { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' } }
+  expect(text(await $.tool.call({ tool: MR, action: 'list', project: 47 } as never))).toMatch(/^The repository settings set the gitlab defaultHost option \(or SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST\), so it is not used\./)
+  expect(sent).toEqual([])
+})
+
+test('a repository setting of the defaultHost option refuses it, and nothing is sent', { options: { tokens: `gitlab.example.com=${WORK}`, defaultHost: 'gitlab.example.com' } }, async ($, on) => {
+  const { sent, host } = world(on, { remote: GITHUB })
+  host.project = { pluginConfigs: { gitlab: { options: { defaultHost: 'gitlab.example.com' } } } }
+  expect(text(await $.tool.call({ tool: MR, action: 'list', project: 47 } as never))).toMatch(/^The repository settings set the gitlab defaultHost option/)
+  expect(sent).toEqual([])
+})
+
+test('the defaultHost option comes before its environment variable', { options: { tokens: `gitlab.example.com=${WORK}, gitlab.com=${PERSONAL}`, defaultHost: 'gitlab.com' } }, async ($, on) => {
+  const { sent, host } = world(on, { remote: GITHUB, api: { [`${PERSONAL_API}/merge_requests/7`]: { text: MR_JSON } } })
+  host.env = { SPIDER_PLUGIN_OPTION_GITLAB_DEFAULT_HOST: 'gitlab.example.com' }
+  await $.tool.call({ tool: MR, action: 'get', iid: 7, project: 'anderson-spider/tools' } as never)
+  expect(sent.map((s) => s.url)).toEqual([`${PERSONAL_API}/merge_requests/7`])
 })
 
 test("an SSH alias remote uses its real host's token, found through ssh -G, and an unresolved alias says so", ON, async ($, on) => {
