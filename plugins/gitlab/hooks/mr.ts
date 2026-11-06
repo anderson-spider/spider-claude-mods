@@ -154,8 +154,8 @@ async function create(ctx: Ctx, input: MrInput): Promise<string> {
   const mr = (await ctx.api.send('POST', '/merge_requests', {
     ...body,
     source_branch: source,
-    // a new MR opens as a draft unless draft: false says it is ready
-    title: withDraft(title, bool(input.draft) ?? true),
+    // a new MR opens ready unless draft: true (or a title that already says draft)
+    title: withDraft(title, bool(input.draft)),
   })) as Mr
   return json(summary(mr))
 }
