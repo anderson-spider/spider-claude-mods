@@ -155,8 +155,7 @@ export const register: Register = (on, options) => {
       name: 'gitlab_mr',
       description:
         "Merge requests of the repo's GitLab project. list (allProjects: every project; next = more " +
-        'pages), get, status (pipeline, approvals, discussions, conflicts, blockers), diff, commits, create (draft by ' +
-        'default), update, ' +
+        'pages), get, status (pipeline, approvals, discussions, conflicts, blockers), diff, commits, create, update, ' +
         'approve, unapprove, rebase, merge (only when the user asks; iid and head sha required; refused for drafts, ' +
         'conflicts, blocking discussions, release* or protected targets besides main/master/develop unless ' +
         'allowProtectedTarget). Labels must exist unless createMissingLabels. Writes on MRs by others are refused without allowOthers.',

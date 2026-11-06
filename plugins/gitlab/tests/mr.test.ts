@@ -70,12 +70,13 @@ test('create defaults the source to the current branch and the target to the def
   })
 })
 
-test('create opens a draft unless draft is false, and keeps a title that already says draft', async () => {
+test('create opens ready unless draft is true, and keeps a title that already says draft', async () => {
   const { ctx, writes } = fakeCtx({ 'POST /merge_requests': MR })
   await mr(ctx, { action: 'create', title: 'Add things', targetBranch: 'main' })
   await mr(ctx, { action: 'create', title: 'Draft: Add things', targetBranch: 'main' })
-  await mr(ctx, { action: 'create', title: 'Add things', targetBranch: 'main', draft: false })
-  expect(writes().map((c) => c.body?.title)).toEqual(['Draft: Add things', 'Draft: Add things', 'Add things'])
+  await mr(ctx, { action: 'create', title: 'Add things', targetBranch: 'main', draft: true })
+  await mr(ctx, { action: 'create', title: 'Draft: Add things', targetBranch: 'main', draft: false })
+  expect(writes().map((c) => c.body?.title)).toEqual(['Add things', 'Draft: Add things', 'Draft: Add things', 'Add things'])
 })
 
 test('create assigns @me unless assignees is given, and an empty list assigns nobody', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "gitlab",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Work on GitLab merge requests and pipelines of the current repository, picking the host and token from its git remote, or from a host you name.",
   "author": {
     "name": "anderson-spider"
