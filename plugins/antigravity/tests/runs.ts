@@ -52,10 +52,14 @@ export function memoryStore(init: Record<string, unknown> = {}) {
   return { store, data }
 }
 
-/** Git workspaces in memory: an ask's folder is a repository whose fingerprint stays `t1`; reviews make worktrees. */
+/**
+ * Git workspaces in memory: an ask's folder is a repository whose fingerprint stays `t1`; reviews make worktrees, and
+ * images work folders.
+ */
 export function fakeWorkspaces(init: { left?: string[] } = {}) {
   const made: string[] = []
   const removed: { project: string; worktree: string }[] = []
+  const discarded: string[] = []
   const left = new Set(init.left ?? [])
   const pathOf = (id: string) => `/tmp/agy/worktrees/${id}`
   const workspaces: Workspaces = {
@@ -67,6 +71,12 @@ export function fakeWorkspaces(init: { left?: string[] } = {}) {
       left.add(id)
       return { cwd: worktree, worktree, before: 'w1', diff: { path: `${worktree}/.agy-review.diff`, files: ['a.ts'] } } satisfies Workspace
     },
+    image: async id => {
+      const cwd = `/tmp/agy/.work/${id}`
+      made.push(cwd)
+      return { cwd, workFolder: cwd }
+    },
+    discard: async path => void discarded.push(path),
     changed: async () => undefined,
     remove: async (project, worktree) => {
       removed.push({ project, worktree })
@@ -74,5 +84,5 @@ export function fakeWorkspaces(init: { left?: string[] } = {}) {
     },
     left: async () => [...left],
   }
-  return { workspaces, made, removed, left }
+  return { workspaces, made, removed, discarded, left }
 }

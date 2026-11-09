@@ -32,11 +32,13 @@ export type DoctorDeps = {
   run: ProcessRunner
   /** The model ids `agy models` lists, or why it failed (most often a missing sign-in). */
   models(agy: string): Promise<string[] | { error: string }>
+  /** agy's folder of per-conversation artifacts, where image requests find their images, and whether it exists. */
+  artifacts: { path: string; exists: boolean }
 }
 
 /**
- * What /agy-doctor checks, spending no quota: the executable, its version, the sign-in through `agy models`, and the
- * quota through `/usage`, which starts no model turn. The probe keeps slash commands on: with
+ * What /agy-doctor checks, spending no quota: the executable, its version, the sign-in through `agy models`, the
+ * quota through `/usage`, which starts no model turn, and the artifacts folder image requests read. The probe keeps slash commands on: with
  * `--disable-slash-commands` it would be a real prompt.
  */
 export async function diagnose(deps: DoctorDeps): Promise<Check[]> {
@@ -53,6 +55,9 @@ export async function diagnose(deps: DoctorDeps): Promise<Check[]> {
   const usage = await run(['--output-format=json', '-p=/usage'])
   const quota = usage.exitCode === 0 ? quotaOf(usage.stdout) : undefined
   checks.push({ name: 'quota', ok: quota !== undefined, detail: quota ?? ((usage.stderr.trim() || usage.stdout.trim()).split('\n')[0] || 'agy did not report it') })
+  // agy keeps this folder to itself and may move it in a release: a missing one shows here before an image run.
+  const { path, exists } = deps.artifacts
+  checks.push({ name: 'image artifacts', ok: exists, detail: exists ? path : `${path} not found; image requests will find no images` })
   return checks
 }
 

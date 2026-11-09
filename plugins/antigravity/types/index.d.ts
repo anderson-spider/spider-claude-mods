@@ -18,6 +18,15 @@ declare module 'claude-code' {
       out?: string
       maxChars?: number
     }
+    mcp__antigravity__image: {
+      prompt: string
+      reference?: string
+      conversationId?: string
+      model?: string
+      effort?: Effort
+      wait?: boolean
+      out?: string
+    }
     mcp__antigravity__review: {
       base?: string
       commit?: string

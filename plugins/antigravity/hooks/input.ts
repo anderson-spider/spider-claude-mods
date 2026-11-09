@@ -1,4 +1,4 @@
-import { folderOf, within } from './args'
+import { IMAGE_FILE, folderOf, readsOf, within } from './args'
 import type { Kind, Request, ReviewTarget } from './model'
 import { EFFORTS } from './tool-schemas'
 
@@ -56,10 +56,23 @@ export function askRequestOf(e: Record<string, unknown>, defaultModel?: string):
   return { kind: 'ask', prompt, ...(conversationId ? { conversationId } : {}), ...tuning, files, ...output }
 }
 
-/** A command's text as an ask: the trimmed text is the whole prompt; a blank text answers the usage. */
-export function commandRequestOf(args: string, usage: string, defaultModel?: string): Request | string {
+/** Reads an image tool call's input into a request, or the error to answer. */
+export function imageRequestOf(e: Record<string, unknown>, defaultModel?: string): Request | string {
+  const asked = askRequestOf({ ...e, files: [], maxChars: undefined }, defaultModel)
+  if (typeof asked === 'string') return asked
+  const reference = trimmedOf(e.reference)
+  if (reference) {
+    const bad = pathError(reference)
+    if (bad) return bad
+    if (!IMAGE_FILE.test(reference)) return `${reference} is not a PNG, JPEG, WebP or GIF image.`
+  }
+  return { ...asked, kind: 'image', ...(reference ? { reference } : {}) }
+}
+
+/** A command's text as an ask (or an image): the trimmed text is the whole prompt; a blank text answers the usage. */
+export function commandRequestOf(args: string, usage: string, defaultModel?: string, kind: Kind = 'ask'): Request | string {
   const prompt = args.trim()
-  return prompt ? { kind: 'ask' as Kind, prompt, ...(defaultModel ? { model: defaultModel } : {}), files: [] } : usage
+  return prompt ? { kind, prompt, ...(defaultModel ? { model: defaultModel } : {}), files: [] } : usage
 }
 
 /**
@@ -88,19 +101,19 @@ export function reviewRequestOf(e: Record<string, unknown>, defaultModel?: strin
 
 /**
  * The error when a request reaches past what it needs: a listed file outside the project whose folder is the home
- * folder or above (agy gets each such file's whole folder with `--add-dir`), or an answer saved outside the project
+ * folder or above (agy gets each such file's whole folder with `--add-dir`; an image's reference counts), or an answer saved outside the project
  * and the answers folder, or inside a `.git` folder. The answer is agy's text, so it never lands in a shell profile
  * or a key file.
  */
 export function placementError(request: Request, at: { project: string; outDir: string; home?: string }): string | undefined {
-  for (const path of request.files) {
+  for (const path of readsOf(request)) {
     if (within(path, at.project)) continue
     const dir = folderOf(path)
     if (dir === '/' || (at.home && within(at.home, dir))) return `${path} is in ${dir}, and agy would get that whole folder; copy the file into a narrower folder first.`
   }
   const { out } = request
   if (!out) return undefined
-  if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save the answer in one of them.`
-  if (out.toLowerCase().split('/').includes('.git')) return `${out} is inside a .git folder; save the answer elsewhere.`
+  if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save it in one of them.`
+  if (out.toLowerCase().split('/').includes('.git')) return `${out} is inside a .git folder; save it elsewhere.`
   return undefined
 }

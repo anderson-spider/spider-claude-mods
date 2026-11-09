@@ -6,6 +6,16 @@ const TIMEOUT_MARGIN_MS = 30_000
 /** What every prompt ends with: agy has no read-only mode, so the sandbox, this line and the edit check stand for one. */
 export const NO_EDIT = 'Do not edit, create or delete any file and do not run commands that change anything; answer in text only.'
 
+/**
+ * What an image prompt ends with instead: agy's image-generator subagent saves the image in the conversation's
+ * artifacts folder, where the plugin finds it, so agy has nothing to write itself.
+ */
+export const IMAGE_CLOSE =
+  "Generate the image with your image-generator subagent and leave it in this conversation's artifacts. Do not copy, move or write any file yourself and do not run commands; answer in text only."
+
+/** The images agy makes and takes as a reference (PNG, JPEG, WebP, GIF), by extension. */
+export const IMAGE_FILE = /\.(png|jpe?g|webp|gif)$/i
+
 /** Whether a path is the folder `dir` or lies within it; an empty `dir` (no project yet) or `/` holds nothing. */
 export const within = (path: string, dir: string) => dir !== '' && dir !== '/' && (path === dir || path.startsWith(`${dir.replace(/\/$/, '')}/`))
 
@@ -34,8 +44,18 @@ export function reviewPrompt(request: Request, workspace: Workspace): string {
   ].join('\n')
 }
 
-/** The prompt agy gets: the request (or the review's instructions), the files to read, then the no-edit line. */
+/** The paths agy reads: the listed files and an image's reference. */
+export const readsOf = (request: Request) => (request.reference ? [...request.files, request.reference] : request.files)
+
+/**
+ * The prompt agy gets: the request (or the review's instructions), the files to read, then the no-edit line; an
+ * image's names its reference and ends with the image line.
+ */
 export function promptOf(request: Request, workspace: Workspace): string {
+  if (request.kind === 'image') {
+    const reference = request.reference ? `\n\nReference image to edit from: ${request.reference}` : ''
+    return `${request.prompt}${reference}\n\n${IMAGE_CLOSE}`
+  }
   const text = request.kind === 'review' ? reviewPrompt(request, workspace) : request.prompt
   const files = request.files.length ? `\n\nFiles to read (absolute paths):\n${request.files.map(path => `- ${path}`).join('\n')}` : ''
   return `${text}${files}\n\n${NO_EDIT}`
@@ -58,7 +78,7 @@ export function argsOf(request: Request, workspace: Workspace, timeoutMs: number
     ...(request.model ? [`--model=${request.model}`] : []),
     ...(request.effort ? [`--effort=${request.effort}`] : []),
     ...(request.conversationId ? [`--conversation=${request.conversationId}`] : []),
-    ...outsideDirs(request.files, workspace.cwd).map(dir => `--add-dir=${dir}`),
+    ...outsideDirs(readsOf(request), workspace.cwd).map(dir => `--add-dir=${dir}`),
     `--print=${promptOf(request, workspace)}`,
   ]
 }

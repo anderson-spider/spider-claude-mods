@@ -15,6 +15,9 @@ export type AgyRun = { stdout: string; stderr?: string; code?: number; onEnd?: (
 
 type Done = { exitCode: number; stdout?: string; stderr?: string }
 
+/** A listed folder entry: a file or a folder, and when it last changed. */
+export type Entry = { name: string; kind: 'file' | 'dir'; mtimeMs: number }
+
 export type HostState = {
   env: Record<string, string | undefined>
   /** The paths that exist. */
@@ -32,8 +35,8 @@ export type HostState = {
   git: Record<string, Done>
   /** What other commands answer, by their whole argv joined with spaces. */
   commands: Record<string, Done>
-  /** Folder listings by path: the names in it. */
-  dirs: Record<string, string[]>
+  /** Folder listings by path: the names in it (a folder each), or entries with their kind and modification time. */
+  dirs: Record<string, (string | Entry)[]>
   /** What the plugin's `$.store` holds at the start. */
   store: Record<string, unknown>
   /** `git` cannot run at all, as where it is not installed. */
@@ -83,9 +86,10 @@ export function world(on: On, init: Partial<HostState> = {}) {
   on('fs.exists', (_$, e) => ({ value: state.files.has(e.path) }))
   on('fs.list', (_$, e) => {
     const names = state.dirs[e.path ?? '']
-    return names ? { value: names.map(name => ({ name, kind: 'dir' as const, mtimeMs: 1, size: 1, isLink: false })) } : { deny: `ENOENT: ${e.path}` }
+    const entries = names?.map(entry => (typeof entry === 'string' ? { name: entry, kind: 'dir' as const, mtimeMs: 1 } : entry))
+    return entries ? { value: entries.map(entry => ({ ...entry, size: 1, isLink: false })) } : { deny: `ENOENT: ${e.path}` }
   })
-  on('fs.read', (_$, e) => (e.path in state.texts ? { value: state.texts[e.path]! } : { deny: `ENOENT: ${e.path}` }))
+  on('fs.read', (_$, e) => (e.as === 'bytes' ? { value: { base64: 'SlBH' } } : e.path in state.texts ? { value: state.texts[e.path]! } : { deny: `ENOENT: ${e.path}` }))
   on('fs.write', (_$, e) => (written.push({ path: e.path, text: e.text }), { value: undefined }))
   on('process.run', (_$, e) => {
     const argv = [...e.argv]

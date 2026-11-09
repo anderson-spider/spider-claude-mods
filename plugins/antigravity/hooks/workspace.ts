@@ -1,3 +1,4 @@
+import { within } from './args'
 import type { ProcessRunner, ReviewTarget, Workspace, Workspaces } from './model'
 
 /** The diff file a review's worktree holds, named in the review prompt. */
@@ -29,9 +30,11 @@ export type WorkspaceHost = {
   list(path: string): Promise<string[]>
   /** Where review worktrees go: `$TMPDIR/agy/worktrees`. */
   dir: string
+  /** Where image runs get their work folders: `$TMPDIR/agy/.work`. */
+  workDir: string
 }
 
-/** The git side of the runs: an ask's edit check and a review's throwaway worktree. */
+/** The folders the runs work in: an ask's edit check, a review's throwaway worktree and an image's work folder. */
 export function workspaces(host: WorkspaceHost): Workspaces {
   const git = (cwd: string, args: string[]) => host.run(['git', '-C', cwd, ...args], { timeoutMs: 60_000 })
 
@@ -70,6 +73,16 @@ export function workspaces(host: WorkspaceHost): Workspaces {
         return { error: `git could not write the diff of ${range}: ${written.stderr.trim() || `exit code ${written.exitCode}`}` }
       }
       return { cwd: worktree, worktree, before: await fingerprint(worktree), diff: { path, files: changed } } satisfies Workspace
+    },
+    image: async id => {
+      const cwd = `${host.workDir}/${id}`
+      const made = await host.run(['mkdir', '-p', cwd], { timeoutMs: 10_000 })
+      if (made.exitCode !== 0) throw new Error(made.stderr.trim() || `mkdir exited with code ${made.exitCode}`)
+      return { cwd, workFolder: cwd }
+    },
+    // The path comes back from a stored job: only a folder under the work folder is ever deleted.
+    discard: async path => {
+      if (path !== host.workDir && within(path, host.workDir)) await host.run(['rm', '-rf', path], { timeoutMs: 30_000 })
     },
     changed: async workspace => {
       if (workspace.before === undefined) return undefined

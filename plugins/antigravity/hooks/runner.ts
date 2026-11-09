@@ -1,7 +1,7 @@
 import { argsOf } from './args'
 import { conversationOf, modelOf, readRun } from './events'
 import type { Job, JobStore, OutputDeps, Outcome, Request, RunFiles, RunResult, Workspaces } from './model'
-import { saveAnswer } from './output'
+import { imagesBefore, saveAnswer, saveImages } from './output'
 import { errorText, failure, jobMessage, jobsReport, movedToBackground } from './presentation'
 import { NO_REPO_NOTE } from './workspace'
 
@@ -59,7 +59,7 @@ const exitOf = (status: number) => (status > 128 ? { code: null, signal: SIGNALS
 const isJob = (value: unknown): value is Job =>
   typeof value === 'object' && value !== null && typeof (value as Job).id === 'string' && typeof (value as Job).dir === 'string'
 
-/** What a job keeps of its request: the files went to agy already, and the prompt is cut short. */
+/** What a job keeps of its request: the files went to agy already, and the prompt is cut short (an image's file name and record take it). */
 const kept = (request: Request): Request => ({ ...request, prompt: request.prompt.slice(0, PROMPT_KEPT), files: [] })
 
 const busyText = (conversation: string, what: string) =>
@@ -137,6 +137,10 @@ export function createRunner(limits: () => Limits) {
   const removeWorktree = (deps: RunnerDeps, job: Job) =>
     job.workspace.worktree ? deps.workspaces.remove(job.project, job.workspace.worktree).catch(() => undefined) : Promise.resolve()
 
+  // An image run's work folder goes when the run ends, with whatever agy left in it.
+  const discardWorkFolder = (deps: RunnerDeps, job: Job) =>
+    job.workspace.workFolder ? deps.workspaces.discard(job.workspace.workFolder).catch(() => undefined) : Promise.resolve()
+
   /**
    * Starts a run: its job is in the store before its workspace is made, so a session start meanwhile never sweeps a
    * review worktree that is still being built, and any failure on the way takes the job, its folder and its worktree
@@ -186,6 +190,11 @@ export function createRunner(limits: () => Limits) {
             return failure(made.error)
           }
           job.workspace = made
+        } else if (request.kind === 'image') {
+          // An image runs in an empty folder of the plugin's, never the project; a follow-up's artifacts folder holds
+          // the earlier images already, so only the new ones are this run's.
+          job.before = await imagesBefore(deps.output, conversation)
+          job.workspace = await deps.workspaces.image(id)
         } else {
           job.workspace = await deps.workspaces.ask(project)
           if (job.workspace.before === undefined) ran = withNote(request, NO_REPO_NOTE)
@@ -200,6 +209,7 @@ export function createRunner(limits: () => Limits) {
         await deps.store.delete(keyOf(id)).catch(() => undefined)
         await deps.files.remove(dir).catch(() => undefined)
         await removeWorktree(deps, job)
+        await discardWorkFolder(deps, job)
         return failure(`agy could not run: ${errorText(error)}`)
       }
     } finally {
@@ -207,15 +217,21 @@ export function createRunner(limits: () => Limits) {
     }
   }
 
-  /** Checks the workspace for edits, saves the run's answer, removes a review's worktree and records how it ended. */
+  /**
+   * Checks the workspace for edits, saves the run's answer (an image run's images), removes a review's worktree or an
+   * image's work folder and records how it ended.
+   */
   async function finish(deps: RunnerDeps, job: Job, ended: RunResult | 'lost'): Promise<Outcome> {
     const warning = await deps.workspaces.changed(job.workspace).catch(() => undefined)
     await removeWorktree(deps, job)
+    await discardWorkFolder(deps, job)
     const request = withNote(job.request, warning)
+    const save = (result: RunResult) =>
+      job.kind === 'image'
+        ? saveImages(deps.output, result, request, job.before ?? [], request.model ?? result.model)
+        : saveAnswer(deps.output, result, request, request.model ?? result.model)
     const outcome =
-      ended === 'lost'
-        ? failure(LOST, { conversationId: job.conversationId, note: request.note })
-        : await saveAnswer(deps.output, ended, request, request.model ?? ended.model).catch(error => failure(errorText(error)))
+      ended === 'lost' ? failure(LOST, { conversationId: job.conversationId, note: request.note }) : await save(ended).catch(error => failure(errorText(error)))
     job.status = ended === 'lost' ? 'lost' : outcome.ok ? 'done' : 'failed'
     job.endedAt = (ended !== 'lost' && ended.endedAt) || nowOf(deps)
     job.conversationId = outcome.conversationId ?? job.conversationId

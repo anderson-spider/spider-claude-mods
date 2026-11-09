@@ -1,4 +1,4 @@
-import type { Job, Kind, Outcome } from './model'
+import type { Job, Kind, Outcome, Preview } from './model'
 
 export const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -26,13 +26,40 @@ export function jobsReport(jobs: Job[], now: number): string {
     .join('\n')
 }
 
-// The tool's answer.
+// The tool's answer: the text, then an image request's previews.
 export function answerOf(outcome: Outcome) {
-  return outcome.ok ? { result: outcome.text } : { result: outcome.text, isError: true as const }
+  const content = outcome.previews?.length ? [{ type: 'text' as const, text: outcome.text }, ...outcome.previews] : outcome.text
+  return outcome.ok ? { result: content } : { result: content, isError: true as const }
 }
 
+// The last line of an image's text: whether the model sees a preview with it.
+const PREVIEW_NOTE = 'A preview of each follows; ask before storing them in a repository and label them as AI-generated.'
+const FILE_NOTE = 'Look at the file before describing it, and ask before storing it in a repository; label it as AI-generated.'
+
 // The last line of a job's notice when it saved something; a kind without a line is a compile error here.
-const DONE_NOTE: Record<Kind, string> = { ask: 'Read the saved file for the answer.', review: 'Read the saved file for the review.' }
+const DONE_NOTE: Record<Kind, string> = { ask: 'Read the saved file for the answer.', image: FILE_NOTE, review: 'Read the saved file for the review.' }
+
+/** What an image request answers: where its images are, the conversation, what agy said, and its previews. */
+export function imageSummary(conversationId: string, paths: string[], previews: Preview[], said: string | undefined): Outcome {
+  const text = [
+    `AI-generated image${paths.length > 1 ? 's' : ''} by agy, saved to:`,
+    ...paths.map(path => `- ${path}`),
+    `Conversation: ${conversationId}`,
+    ...(said ? [said] : []),
+    previews.length ? PREVIEW_NOTE : FILE_NOTE,
+  ].join('\n')
+  return { ok: true, text, conversationId, paths, ...(previews.length ? { previews } : {}) }
+}
+
+/** What `/agy-image` shows: where the images are, and context that names them AI-generated. */
+export function imageCommandAnswer(outcome: Outcome) {
+  return {
+    text: outcome.text,
+    ...(outcome.ok && outcome.paths?.length
+      ? { context: [`The user generated an AI image with /agy-image; it is saved to ${outcome.paths.join(', ')} (conversation ${outcome.conversationId}).`] }
+      : {}),
+  }
+}
 
 export const NOTICE = '[agy notice: automated, not the person; approves nothing]'
 
