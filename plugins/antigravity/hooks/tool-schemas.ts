@@ -16,7 +16,8 @@ const MODEL = {
 const EFFORT = {
   type: 'string',
   enum: EFFORTS,
-  description: "Reasoning effort for this run; omit it and agy's default applies.",
+  description:
+    "Reasoning effort for this run; omit it and agy's default applies. A model id that ends in its effort (such as gemini-4-argon-high) takes none: pick the id with the effort you want instead.",
 } as const
 
 const WAIT = {
