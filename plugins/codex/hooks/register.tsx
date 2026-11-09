@@ -4,12 +4,12 @@ import { DESCRIPTION as COMPUTER_USE_DESCRIPTION, INPUT_SCHEMA as COMPUTER_USE_I
 import { known } from './computer-use/known'
 import { registerComputerUse } from './computer-use/register'
 import { ENABLED, TOOL as COMPUTER_USE_TOOL, UNAME, isMac, isOn } from './computer-use/routing'
-import { detachedRuns } from './detached'
+import { ROOT_CHECK, detachedRuns } from './detached'
 import { diagnose, report } from './doctor'
-import { commandRequestOf, requestOf, reviewRequestOf } from './input'
+import { commandRequestOf, placementError, requestOf, reviewRequestOf } from './input'
 import { locateCodex } from './locate'
 import type { Kind, OutputDeps, Outcome, ProcessRunner, Request } from './model'
-import { answerOf, askCommandAnswer, errorText, imageCommandAnswer, reviewCommandAnswer } from './presentation'
+import { answerOf, askCommandAnswer, errorText, imageCommandAnswer, notPrivate, reviewCommandAnswer } from './presentation'
 import { ASK_DESCRIPTION, IMAGE_DESCRIPTION, PROMPT, REVIEW_DESCRIPTION } from './prompts'
 import { resolveReview, reviewCommandInput } from './review'
 import { createRunner, type RunnerDeps } from './runner'
@@ -50,11 +50,46 @@ function processOf($: EngineInterface): ProcessRunner {
   return (argv, init) => $.process.run(argv, init)
 }
 
+// The user's id, kept once read: without TMPDIR the plugin's folder is named by it, away from other users' in /tmp.
+// A failed read is tried again next time; meanwhile the folder is the bare name, which ROOT_CHECK still guards.
+let uid: string | undefined
+
+async function uidOf($: EngineInterface): Promise<string | undefined> {
+  if (uid) return uid
+  const done = await $.process.run(['id', '-u'], { timeoutMs: 5_000 }).catch(() => undefined)
+  const id = done?.exitCode === 0 ? done.stdout.trim() : ''
+  if (/^\d+$/.test(id)) uid = id
+  return uid
+}
+
 async function folders($: EngineInterface) {
-  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/$/, '')
+  const tmp = (await $.env.get('TMPDIR'))?.replace(/\/$/, '')
+  const id = tmp ? undefined : await uidOf($)
+  const outDir = tmp ? `${tmp}/codex` : `/tmp/codex${id ? `-${id}` : ''}`
   const home = await $.env.get('HOME')
   const codexHome = ((await $.env.get('CODEX_HOME')) ?? `${home ?? ''}/.codex`).replace(/\/$/, '')
-  return { outDir: `${tmp}/codex`, imageCwd: `${tmp}/codex/.work`, codexHome, home }
+  return { outDir, imageCwd: `${outDir}/.work`, codexHome, home }
+}
+
+/**
+ * A request ready to run, or the error to answer: its `out` where it may be (placementError), and the plugin's folder
+ * private to the user (ROOT_CHECK), before anything is written there.
+ */
+async function readyOf($: EngineInterface, request: Request | string): Promise<Request | string> {
+  if (typeof request === 'string') return request
+  try {
+    return await placed($, request)
+  } catch (error) {
+    return `The Codex run did not start: ${errorText(error)}`
+  }
+}
+
+async function placed($: EngineInterface, request: Request): Promise<Request | string> {
+  const { outDir } = await folders($)
+  const misplaced = placementError(request, { project, outDir })
+  if (misplaced) return misplaced
+  const root = await $.process.run(['sh', '-c', ROOT_CHECK, 'sh', outDir], { timeoutMs: 10_000 })
+  return root.exitCode === 0 ? request : notPrivate(outDir)
 }
 
 async function codexOf($: EngineInterface, home: string | undefined) {
@@ -132,7 +167,7 @@ async function reviewOf($: EngineInterface, e: Record<string, unknown>): Promise
 }
 
 async function serve($: EngineInterface, kind: Kind, e: Record<string, unknown>) {
-  const request = kind === 'review' ? await reviewOf($, e) : requestOf(kind, e)
+  const request = await readyOf($, kind === 'review' ? await reviewOf($, e) : requestOf(kind, e))
   if (typeof request === 'string') return { result: request, isError: true as const }
   if (e.wait === false) {
     const job = await runner.startJob(await depsOf($), request)
@@ -197,13 +232,13 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: 'mcp__codex__jobs' }, async $ => ({ result: await runner.report(await depsOf($)) }))
 
   on('command.run', { command: 'codex-ask' }, async ($, e) => {
-    const request = commandRequestOf('ask', e.args, ASK_USAGE)
+    const request = await readyOf($, commandRequestOf('ask', e.args, ASK_USAGE))
     if (typeof request === 'string') return { text: request }
     return askCommandAnswer(await runNow($, request))
   })
 
   on('command.run', { command: 'codex-image' }, async ($, e) => {
-    const request = commandRequestOf('image', e.args, IMAGE_USAGE)
+    const request = await readyOf($, commandRequestOf('image', e.args, IMAGE_USAGE))
     if (typeof request === 'string') return { text: request }
     return imageCommandAnswer(await runNow($, request))
   })
@@ -211,7 +246,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'codex-review' }, async ($, e) => {
     const input = reviewCommandInput(e.args)
     if (!input) return { text: REVIEW_USAGE }
-    const request = await reviewOf($, input)
+    const request = await readyOf($, await reviewOf($, input))
     if (typeof request === 'string') return { text: request }
     return reviewCommandAnswer(await runNow($, request))
   })

@@ -10,6 +10,12 @@ const EFFORT = /^[a-z]+$/
 // so it never reads as a flag; git and Codex judge the rest.
 const REF = /^(?!-)\S+$/
 
+// An absolute path with no `.`, `..` or empty part, so where it points is where it writes.
+const isClean = (path: string) => !path.split('/').slice(1).some(part => part === '' || part === '.' || part === '..')
+
+/** Whether a path is the folder `dir` or lies within it; an empty `dir` (no project yet) or `/` holds nothing. */
+const within = (path: string, dir: string) => dir !== '' && dir !== '/' && (path === dir || path.startsWith(`${dir.replace(/\/$/, '')}/`))
+
 // A string value without its surrounding blanks, or undefined when it is not a string or holds only blanks.
 const trimmedOf = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
 
@@ -17,6 +23,7 @@ const trimmedOf = (value: unknown) => (typeof value === 'string' && value.trim()
 function outputOf(e: Record<string, unknown>): { out?: string; maxChars?: number } | string {
   const out = trimmedOf(e.out)
   if (out && !out.startsWith('/')) return `${out} must be an absolute path.`
+  if (out && !isClean(out)) return `${out} must be an absolute path without . or .. parts.`
   const maxChars = typeof e.maxChars === 'number' && e.maxChars > 0 ? Math.floor(e.maxChars) : undefined
   return { ...(out ? { out } : {}), ...(maxChars ? { maxChars } : {}) }
 }
@@ -92,4 +99,16 @@ function targetOf(key: (typeof TARGETS)[number] | undefined, e: Record<string, u
   // After `--`, a lone `-` still tells `codex exec review` to read the instructions from stdin.
   if (value === '-') return 'Give the review instructions as text; "-" would make Codex read them from stdin.'
   return { instructions: value }
+}
+
+/**
+ * The error when a request's `out` lies outside the project and the answers folder, or inside a `.git` folder: what
+ * lands there is Codex's text or image, so it never goes to a shell profile, a key file or a git hook.
+ */
+export function placementError(request: Request, at: { project: string; outDir: string }): string | undefined {
+  const { out } = request
+  if (!out) return undefined
+  if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save it in one of them.`
+  if (out.toLowerCase().split('/').includes('.git')) return `${out} is inside a .git folder; save it elsewhere.`
+  return undefined
 }

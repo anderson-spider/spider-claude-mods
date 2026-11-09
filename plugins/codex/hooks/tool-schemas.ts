@@ -33,7 +33,7 @@ export const ASK_INPUT_SCHEMA = {
   properties: {
     prompt: { type: 'string', description: 'The question, with its goal and the output wanted.' },
     ...COMMON_PROPERTIES,
-    out: { type: 'string', description: 'Absolute Markdown output path.' },
+    out: { type: 'string', description: 'Absolute Markdown output path, inside the project or the answers folder and outside .git.' },
     maxChars: {
       type: 'number',
       description: 'Inline excerpt length; default 3000. The file keeps the full answer.',
@@ -51,7 +51,7 @@ export const IMAGE_INPUT_SCHEMA = {
       description: 'Absolute PNG/JPEG/WebP/GIF reference path to edit from.',
     },
     ...COMMON_PROPERTIES,
-    out: { type: 'string', description: 'Absolute image output path; variants add -1, -2.' },
+    out: { type: 'string', description: 'Absolute image output path, inside the project or the answers folder and outside .git; variants add -1, -2.' },
   },
   required: ['prompt'],
 } satisfies SchemaFor<McpToolInputs['mcp__codex__image']>
@@ -66,7 +66,7 @@ export const REVIEW_INPUT_SCHEMA = {
     model: COMMON_PROPERTIES.model,
     effort: COMMON_PROPERTIES.effort,
     wait: COMMON_PROPERTIES.wait,
-    out: { type: 'string', description: 'Absolute Markdown output path.' },
+    out: { type: 'string', description: 'Absolute Markdown output path, inside the project or the answers folder and outside .git.' },
     maxChars: { type: 'number', description: 'Inline excerpt length; default 3000. The file keeps the full review.' },
   },
 } satisfies SchemaFor<McpToolInputs['mcp__codex__review']>
