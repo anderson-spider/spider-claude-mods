@@ -195,6 +195,7 @@ test('an ask refuses a file whose folder would open the home folder or above, an
   }
   expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/../h/.zshrc' })).result).toBe('/proj/../h/.zshrc must be an absolute path without . or .. parts.')
   expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.git/hooks/pre-commit' })).result).toBe('/proj/.git/hooks/pre-commit is inside a .git folder; save the answer elsewhere.')
+  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.GIT/hooks/pre-commit' })).result).toBe('/proj/.GIT/hooks/pre-commit is inside a .git folder; save the answer elsewhere.')
   expect(host.launched).toEqual([])
 
   await call($, 'ask', { prompt: 'Hi', out: '/proj/docs/agy.md' })
@@ -220,10 +221,10 @@ test('a plugin folder the user does not own alone stops the run before agy start
   await started($, host.tools)
 
   expect(await call($, 'ask', { prompt: 'Hi' })).toEqual({
-    result: '/tmp/t/agy is not a private folder of yours (a symlink, or another user owns it), so agy did not run. Remove it or set TMPDIR.',
+    result: '/tmp/t/agy could not be made a private folder of yours (it is a symlink, another user owns it, or it cannot be made), so agy did not run. Remove it or set TMPDIR.',
     isError: true,
   })
-  expect((await command($, 'agy-ask', 'Hi')).text).toMatch(/^\/tmp\/t\/agy is not a private folder of yours/)
+  expect((await command($, 'agy-ask', 'Hi')).text).toMatch(/^\/tmp\/t\/agy could not be made a private folder of yours/)
   expect(host.launched).toEqual([])
 })
 

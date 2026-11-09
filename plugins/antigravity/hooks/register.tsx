@@ -47,13 +47,22 @@ function processOf($: EngineInterface): ProcessRunner {
   return (argv, init) => $.process.run(argv, init)
 }
 
-// The user's id, read once: without TMPDIR the plugin's folder is named by it, away from other users' in /tmp.
-let uid: Promise<string> | undefined
+// The user's id, kept once read: without TMPDIR the plugin's folder is named by it, away from other users' in /tmp.
+// A failed read is tried again next time; meanwhile the folder is the bare name, which ROOT_CHECK still guards.
+let uid: string | undefined
+
+async function uidOf($: EngineInterface): Promise<string | undefined> {
+  if (uid) return uid
+  const done = await $.process.run(['id', '-u'], { timeoutMs: 5_000 }).catch(() => undefined)
+  const id = done?.exitCode === 0 ? done.stdout.trim() : ''
+  if (/^\d+$/.test(id)) uid = id
+  return uid
+}
 
 async function folders($: EngineInterface) {
   const tmp = (await $.env.get('TMPDIR'))?.replace(/\/$/, '')
-  uid ??= $.process.run(['id', '-u'], { timeoutMs: 5_000 }).then(done => (done.exitCode === 0 ? done.stdout.trim() : ''), () => '')
-  const outDir = tmp ? `${tmp}/agy` : `/tmp/agy-${await uid}`
+  const id = tmp ? undefined : await uidOf($)
+  const outDir = tmp ? `${tmp}/agy` : `/tmp/agy${id ? `-${id}` : ''}`
   return { outDir, home: await $.env.get('HOME') }
 }
 
@@ -112,6 +121,14 @@ async function checkedModel($: EngineInterface, request: Request): Promise<Reque
  */
 async function readyOf($: EngineInterface, request: Request | string): Promise<Request | string> {
   if (typeof request === 'string') return request
+  try {
+    return await placed($, request)
+  } catch (error) {
+    return `The agy run did not start: ${errorText(error)}`
+  }
+}
+
+async function placed($: EngineInterface, request: Request): Promise<Request | string> {
   const { outDir, home } = await folders($)
   const misplaced = placementError(request, { project, outDir, home })
   if (misplaced) return misplaced

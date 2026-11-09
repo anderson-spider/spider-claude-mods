@@ -101,6 +101,6 @@ export function placementError(request: Request, at: { project: string; outDir: 
   const { out } = request
   if (!out) return undefined
   if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save the answer in one of them.`
-  if (out.split('/').includes('.git')) return `${out} is inside a .git folder; save the answer elsewhere.`
+  if (out.toLowerCase().split('/').includes('.git')) return `${out} is inside a .git folder; save the answer elsewhere.`
   return undefined
 }

@@ -34,7 +34,7 @@ export const ASK_INPUT_SCHEMA = {
     effort: EFFORT,
     files: { type: 'array', items: { type: 'string' }, description: 'Absolute paths agy should read.' },
     wait: WAIT,
-    out: { type: 'string', description: 'Absolute Markdown output path.' },
+    out: { type: 'string', description: 'Absolute Markdown output path, inside the project or the answers folder and outside .git.' },
     maxChars: { type: 'number', description: 'Inline excerpt length; default 3000. The file keeps the full answer.' },
   },
   required: ['prompt'],
@@ -49,7 +49,7 @@ export const REVIEW_INPUT_SCHEMA = {
     model: MODEL,
     effort: EFFORT,
     wait: WAIT,
-    out: { type: 'string', description: 'Absolute Markdown output path.' },
+    out: { type: 'string', description: 'Absolute Markdown output path, inside the project or the answers folder and outside .git.' },
     maxChars: { type: 'number', description: 'Inline excerpt length; default 3000. The file keeps the full review.' },
   },
 } satisfies SchemaFor<McpToolInputs['mcp__antigravity__review']>

@@ -6,8 +6,8 @@ const TIMEOUT_MARGIN_MS = 30_000
 /** What every prompt ends with: agy has no read-only mode, so the sandbox, this line and the edit check stand for one. */
 export const NO_EDIT = 'Do not edit, create or delete any file and do not run commands that change anything; answer in text only.'
 
-/** Whether a path is the folder `dir` or lies within it. */
-export const within = (path: string, dir: string) => path === dir || path.startsWith(`${dir.replace(/\/$/, '')}/`)
+/** Whether a path is the folder `dir` or lies within it; an empty `dir` (no project yet) or `/` holds nothing. */
+export const within = (path: string, dir: string) => dir !== '' && dir !== '/' && (path === dir || path.startsWith(`${dir.replace(/\/$/, '')}/`))
 
 /** The folder a file is in. */
 export const folderOf = (path: string) => path.slice(0, path.lastIndexOf('/')) || '/'
