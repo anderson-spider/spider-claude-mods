@@ -9,6 +9,14 @@ export const ASK_DESCRIPTION =
   'Returns a Markdown file, the conversation id and the answer; past the foreground wait it is an error naming the background job that saves the answer. ' +
   BOUNDARIES
 
+export const IMAGE_DESCRIPTION =
+  "Generate or edit an image with the user's Antigravity CLI (agy) only when they ask for an image in this conversation; this spends their Gemini quota. " +
+  "agy hands it to its image-generator subagent in an empty folder of the plugin's, never the project. Describe the scene and what to keep from a reference in the user's language. " +
+  'Use original scenes without real people, text or copies of games or brands. Attach only references the user requested or you produced for this task. ' +
+  'Returns the saved files, the conversation id (follow up on it to refine the image) and previews. Relay a refusal or question verbatim. ' +
+  'Label every result as AI-generated, never evidence of a real state. ' +
+  BOUNDARIES
+
 export const REVIEW_DESCRIPTION =
   "Have the user's Antigravity CLI (agy) review the changes of the session's git repository, when the user asks for an agy review or a second opinion on a diff, or before opening a PR. " +
   'Give one target at most: base (a branch) or commit (a sha); with none it reviews the branch against the default branch. ' +
@@ -17,6 +25,7 @@ export const REVIEW_DESCRIPTION =
   BOUNDARIES
 
 const ASK_TOOL = 'mcp__antigravity__ask'
+const IMAGE_TOOL = 'mcp__antigravity__image'
 const REVIEW_TOOL = 'mcp__antigravity__review'
 
 // Discovery for deferred tools; send boundaries belong to their descriptions.
@@ -24,6 +33,7 @@ export const PROMPT = [
   '# Antigravity (agy)',
   `Use \`${ASK_TOOL}\` yourself for a second opinion from another model family on code or a plan, or a hard question.`,
   `- Before opening a PR, or when the user asks for an agy review, load \`${REVIEW_TOOL}\`.`,
+  `- When the user asks for an image from agy, load \`${IMAGE_TOOL}\`; never start one on your own.`,
   '- Announce the request in one line; load a deferred tool by name first.',
   '- Follow up with the returned `conversationId`.',
   '- A run past the foreground wait goes on as a job on its own; a message arrives when it ends.',

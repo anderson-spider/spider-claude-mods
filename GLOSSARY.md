@@ -53,3 +53,11 @@ _Avoid_: Thread, session
 **Review worktree**:
 The throwaway git worktree an agy review runs in, at the reviewed commit, holding the diff; it is removed when the review ends.
 _Avoid_: Sandbox, checkout
+
+**Image request**:
+A request that has agy generate or edit an image, in an empty work folder of the plugin's, and saves the images the run added.
+_Avoid_: Image job, generation
+
+**Artifacts folder**:
+agy's own folder for one Conversation (`~/.gemini/antigravity-cli/brain/<conversation>/`), where its image-generator subagent saves images.
+_Avoid_: Brain, output folder

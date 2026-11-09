@@ -1,11 +1,11 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { ROOT_CHECK, detachedRuns } from './detached'
 import { diagnose, report } from './doctor'
-import { askRequestOf, commandRequestOf, placementError, reviewRequestOf } from './input'
+import { askRequestOf, commandRequestOf, imageRequestOf, placementError, reviewRequestOf } from './input'
 import { locateAgy } from './locate'
 import type { Outcome, ProcessRunner, Request } from './model'
-import { answerOf, askCommandAnswer, errorText, failure, notPrivate, reviewCommandAnswer } from './presentation'
-import { ASK_DESCRIPTION, PROMPT, REVIEW_DESCRIPTION } from './prompts'
+import { answerOf, askCommandAnswer, errorText, failure, imageCommandAnswer, notPrivate, reviewCommandAnswer } from './presentation'
+import { ASK_DESCRIPTION, IMAGE_DESCRIPTION, PROMPT, REVIEW_DESCRIPTION } from './prompts'
 import { resolveReview, reviewCommandInput } from './review'
 import { createRunner, type RunnerDeps } from './runner'
 import { limitMs } from './settings'
@@ -14,6 +14,9 @@ import {
   ASK_INPUT_SCHEMA,
   ASK_USAGE,
   DOCTOR_COMMAND_DESCRIPTION,
+  IMAGE_COMMAND_DESCRIPTION,
+  IMAGE_INPUT_SCHEMA,
+  IMAGE_USAGE,
   JOBS_DESCRIPTION,
   JOBS_INPUT_SCHEMA,
   REVIEW_COMMAND_DESCRIPTION,
@@ -63,7 +66,9 @@ async function folders($: EngineInterface) {
   const tmp = (await $.env.get('TMPDIR'))?.replace(/\/$/, '')
   const id = tmp ? undefined : await uidOf($)
   const outDir = tmp ? `${tmp}/agy` : `/tmp/agy${id ? `-${id}` : ''}`
-  return { outDir, home: await $.env.get('HOME') }
+  const home = await $.env.get('HOME')
+  // Where agy keeps each conversation's artifacts, the images its image-generator subagent makes among them.
+  return { outDir, home, brainDir: `${home ?? ''}/.gemini/antigravity-cli/brain` }
 }
 
 async function agyOf($: EngineInterface, home: string | undefined) {
@@ -72,7 +77,7 @@ async function agyOf($: EngineInterface, home: string | undefined) {
 
 async function depsOf($: EngineInterface): Promise<RunnerDeps> {
   const run = processOf($)
-  const { outDir, home } = await folders($)
+  const { outDir, home, brainDir } = await folders($)
   return {
     files: detachedRuns({ run, read: path => $.fs.read(path).catch(() => undefined), exists: path => $.fs.exists(path) }),
     store: {
@@ -81,13 +86,20 @@ async function depsOf($: EngineInterface): Promise<RunnerDeps> {
       delete: key => $.store.delete(key),
       keys: () => $.store.keys(),
     },
-    workspaces: workspaces({ run, list: async path => (await $.fs.list(path)).map(entry => entry.name), dir: `${outDir}/worktrees` }),
+    workspaces: workspaces({ run, list: async path => (await $.fs.list(path)).map(entry => entry.name), dir: `${outDir}/worktrees`, workDir: `${outDir}/.work` }),
     sessionId: () => $.session.id(),
     project: async () => project,
     runsDir: `${outDir}/runs`,
     // Waits go through a host process, which does not use up the hook's clock budget as a timer would.
     sleep: ms => $.process.run(['sleep', String(Math.ceil(ms / 1000))], { timeoutMs: ms + 10_000 }),
-    output: { write: (path, text) => $.fs.write(path, text), outDir },
+    output: {
+      write: (path, text) => $.fs.write(path, text),
+      outDir,
+      brainDir,
+      list: path => $.fs.list(path),
+      run,
+      readBytes: path => $.fs.read(path, { as: 'bytes' }),
+    },
     agy: () => agyOf($, home),
     toast: text => $.ui.toast(text),
     submit: text => $.prompt.submit({ text }),
@@ -186,9 +198,11 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     project = e.cwd
     await $.tool.register({ name: 'ask', description: ASK_DESCRIPTION, inputSchema: ASK_INPUT_SCHEMA })
+    await $.tool.register({ name: 'image', description: IMAGE_DESCRIPTION, inputSchema: IMAGE_INPUT_SCHEMA })
     await $.tool.register({ name: 'review', description: REVIEW_DESCRIPTION, inputSchema: REVIEW_INPUT_SCHEMA })
     await $.tool.register({ name: 'jobs', description: JOBS_DESCRIPTION, inputSchema: JOBS_INPUT_SCHEMA })
     await $.command.register({ name: 'agy-ask', description: ASK_COMMAND_DESCRIPTION })
+    await $.command.register({ name: 'agy-image', description: IMAGE_COMMAND_DESCRIPTION })
     await $.command.register({ name: 'agy-review', description: REVIEW_COMMAND_DESCRIPTION })
     await $.command.register({ name: 'agy-doctor', description: DOCTOR_COMMAND_DESCRIPTION })
     // Jobs outlive a reload and the session: watch this session's again and finish what others left, without holding
@@ -201,6 +215,8 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'mcp__antigravity__ask' }, ($, e) => serve($, askRequestOf(e, defaultModel), e.wait))
 
+  on('tool.call', { tool: 'mcp__antigravity__image' }, ($, e) => serve($, imageRequestOf(e, defaultModel), e.wait))
+
   on('tool.call', { tool: 'mcp__antigravity__review' }, async ($, e) => serve($, await reviewOf($, e), e.wait))
 
   on('tool.call', { tool: 'mcp__antigravity__jobs' }, async $ => ({ result: await runner.report(await depsOf($)) }))
@@ -210,6 +226,12 @@ export const register: Register = (on, options) => {
     const checked = await readyOf($, request)
     if (typeof checked === 'string') return { text: checked }
     return askCommandAnswer(await runNow($, checked))
+  })
+
+  on('command.run', { command: 'agy-image' }, async ($, e) => {
+    const checked = await readyOf($, commandRequestOf(e.args, IMAGE_USAGE, defaultModel, 'image'))
+    if (typeof checked === 'string') return { text: checked }
+    return imageCommandAnswer(await runNow($, checked))
   })
 
   on('command.run', { command: 'agy-review' }, async ($, e) => {
@@ -222,7 +244,9 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'agy-doctor' }, async $ => {
-    const checks = await diagnose({ agy: await agyOf($, (await folders($)).home), run: processOf($), models: agy => modelsOf($, agy) })
+    const { home, brainDir } = await folders($)
+    const artifacts = { path: brainDir, exists: await $.fs.exists(brainDir) }
+    const checks = await diagnose({ agy: await agyOf($, home), run: processOf($), models: agy => modelsOf($, agy), artifacts })
     return { text: report(checks) }
   })
 }

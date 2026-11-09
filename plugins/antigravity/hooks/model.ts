@@ -1,5 +1,5 @@
-/** What a request asks for: an answer (`ask`) or a review of the repository's changes (`review`). */
-export type Kind = 'ask' | 'review'
+/** What a request asks for: an answer (`ask`), an image (`image`) or a review of the repository's changes (`review`). */
+export type Kind = 'ask' | 'image' | 'review'
 
 /** The changes a review covers: the branch against a base, or one commit. */
 export type ReviewTarget = { base: string } | { commit: string }
@@ -15,6 +15,8 @@ export type Request = {
   model?: string
   effort?: string
   files: string[]
+  /** An image request's picture to edit from. */
+  reference?: string
   out?: string
   maxChars?: number
   /** A review's target; absent on an ask. */
@@ -49,6 +51,12 @@ export type ProcessRunner = (
   init?: { timeoutMs?: number; cwd?: string; env?: Record<string, string> },
 ) => Promise<{ exitCode: number; stdout: string; stderr: string }>
 
+/** A small copy of a saved image, handed back with the tool result so the model sees it. */
+export type Preview = { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+
+/** A folder entry as `$.fs.list` gives it. */
+export type Entry = { name: string; kind: 'file' | 'dir' | 'symlink' | 'other'; mtimeMs: number }
+
 /** What a request came to; `error` holds only plugin error text, never agy's answer. */
 export type Outcome = {
   ok: boolean
@@ -58,12 +66,19 @@ export type Outcome = {
   paths?: string[]
   timedOut?: boolean
   markdown?: string
+  previews?: Preview[]
 }
 
 export type OutputDeps = {
   write(path: string, text: string): Promise<void>
   /** The folder results go to: `$TMPDIR/agy`. */
   outDir: string
+  /** Where agy keeps each conversation's artifacts folder, its images among them: `~/.gemini/antigravity-cli/brain`. */
+  brainDir: string
+  /** A folder's entries; rejects when it is missing. */
+  list(path: string): Promise<Entry[]>
+  run: ProcessRunner
+  readBytes(path: string): Promise<{ base64: string }>
 }
 
 /** Where a run works and what it was handed: an ask's folder, or a review's worktree with its diff file. */
@@ -76,6 +91,8 @@ export type Workspace = {
   worktree?: string
   /** A review's diff file and the files it changes, named in its prompt. */
   diff?: { path: string; files: string[] }
+  /** An image run's work folder, deleted when the run ends. */
+  scratch?: string
 }
 
 /**
@@ -112,6 +129,8 @@ export type Job = {
   request: Request
   /** Where it runs: checked for edits and, for a review, removed when it ends. */
   workspace: Workspace
+  /** An image job's names already in its conversation's artifacts folder, so only the run's own images are saved. */
+  before?: string[]
 }
 
 /** What a detached run's folder says now: the start of its events, and once it ended its exit status, time and ends. */
@@ -137,6 +156,10 @@ export type Workspaces = {
   ask(project: string): Promise<Workspace>
   /** A review's worktree for `id`, with its diff file written, or why it could not be made. */
   review(project: string, id: string, target: ReviewTarget): Promise<Workspace | { error: string }>
+  /** An image run's work folder for `id`, made empty, away from any repository. */
+  image(id: string): Promise<Workspace>
+  /** Deletes an image run's work folder. */
+  discard(path: string): Promise<void>
   /** Whether the workspace changed since `before`: a warning line, or undefined when it did not (or cannot tell). */
   changed(workspace: Workspace): Promise<string | undefined>
   /** Removes a review's worktree. */

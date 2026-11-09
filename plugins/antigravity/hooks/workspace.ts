@@ -29,9 +29,11 @@ export type WorkspaceHost = {
   list(path: string): Promise<string[]>
   /** Where review worktrees go: `$TMPDIR/agy/worktrees`. */
   dir: string
+  /** Where image runs get their work folders: `$TMPDIR/agy/.work`. */
+  workDir: string
 }
 
-/** The git side of the runs: an ask's edit check and a review's throwaway worktree. */
+/** The folders the runs work in: an ask's edit check, a review's throwaway worktree and an image's work folder. */
 export function workspaces(host: WorkspaceHost): Workspaces {
   const git = (cwd: string, args: string[]) => host.run(['git', '-C', cwd, ...args], { timeoutMs: 60_000 })
 
@@ -71,6 +73,13 @@ export function workspaces(host: WorkspaceHost): Workspaces {
       }
       return { cwd: worktree, worktree, before: await fingerprint(worktree), diff: { path, files: changed } } satisfies Workspace
     },
+    image: async id => {
+      const cwd = `${host.workDir}/${id}`
+      const made = await host.run(['mkdir', '-p', cwd], { timeoutMs: 10_000 })
+      if (made.exitCode !== 0) throw new Error(made.stderr.trim() || `mkdir exited with code ${made.exitCode}`)
+      return { cwd, scratch: cwd }
+    },
+    discard: async path => void (await host.run(['rm', '-rf', path], { timeoutMs: 30_000 })),
     changed: async workspace => {
       if (workspace.before === undefined) return undefined
       const now = await fingerprint(workspace.cwd)

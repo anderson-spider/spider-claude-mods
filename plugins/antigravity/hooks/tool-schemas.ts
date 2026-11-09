@@ -40,6 +40,20 @@ export const ASK_INPUT_SCHEMA = {
   required: ['prompt'],
 } satisfies SchemaFor<McpToolInputs['mcp__antigravity__ask']>
 
+export const IMAGE_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    prompt: { type: 'string', description: 'Self-contained image request: the scene, its style and what to keep from the reference.' },
+    reference: { type: 'string', description: 'Absolute PNG/JPEG/WebP/GIF path to edit from.' },
+    conversationId: { type: 'string', description: 'Continue the agy conversation an earlier image call returned, to refine its image; omit for a new one.' },
+    model: MODEL,
+    effort: EFFORT,
+    wait: WAIT,
+    out: { type: 'string', description: 'Absolute image output path, inside the project or the answers folder and outside .git; several images add -1, -2.' },
+  },
+  required: ['prompt'],
+} satisfies SchemaFor<McpToolInputs['mcp__antigravity__image']>
+
 export const REVIEW_INPUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -60,8 +74,10 @@ export const JOBS_DESCRIPTION =
 export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<McpToolInputs['mcp__antigravity__jobs']>
 
 export const ASK_COMMAND_DESCRIPTION = 'Ask Antigravity (agy): /agy-ask <question>'
+export const IMAGE_COMMAND_DESCRIPTION = 'Generate and save an image with agy: /agy-image <prompt>'
 export const REVIEW_COMMAND_DESCRIPTION = 'Have agy review the branch: /agy-review [--base <branch> | --commit <ref>] [focus]'
 export const DOCTOR_COMMAND_DESCRIPTION = 'Check the agy CLI, its version, sign-in, models and quota: /agy-doctor'
 
 export const ASK_USAGE = 'Usage: /agy-ask <question>'
+export const IMAGE_USAGE = 'Usage: /agy-image <prompt>'
 export const REVIEW_USAGE = 'Usage: /agy-review [--base <branch> | --commit <ref>] [focus], one target at most'

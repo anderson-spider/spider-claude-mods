@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
-import { NO_EDIT } from '../hooks/args'
+import { IMAGE_CLOSE, NO_EDIT } from '../hooks/args'
 import { ROOT_CHECK } from '../hooks/detached'
-import { REVIEW_USAGE } from '../hooks/tool-schemas'
-import { CONVERSATION, agyError, answered, failed, init } from './fakes'
+import { IMAGE_USAGE, REVIEW_USAGE } from '../hooks/tool-schemas'
+import { CONVERSATION, agyError, answered, failed, imaged, init } from './fakes'
 import { id, started, world } from './host'
 
 const call = ($: { tool: { call: (input: never) => Promise<unknown> } }, tool: string, input: Record<string, unknown> = {}) =>
@@ -11,13 +11,102 @@ const call = ($: { tool: { call: (input: never) => Promise<unknown> } }, tool: s
 const command = ($: { command: { run: (input: never) => Promise<unknown> } }, name: string, args = '') =>
   $.command.run({ command: name, args } as never) as Promise<{ text?: string; context?: string[] }>
 
-test('session start registers the ask, review and jobs tools and the three commands', async ($, on) => {
+test('session start registers the ask, image, review and jobs tools and the four commands', async ($, on) => {
   const { tools, commands } = world(on)
 
-  expect(await started($, tools)).toEqual(['ask', 'review', 'jobs'])
-  expect(commands).toEqual(['agy-ask', 'agy-review', 'agy-doctor'])
+  expect(await started($, tools)).toEqual(['ask', 'image', 'review', 'jobs'])
+  expect(commands).toEqual(['agy-ask', 'agy-image', 'agy-review', 'agy-doctor'])
   expect(Object.keys(tools[0]!.inputSchema.properties)).toEqual(['prompt', 'conversationId', 'model', 'effort', 'files', 'wait', 'out', 'maxChars'])
-  expect(Object.keys(tools[1]!.inputSchema.properties)).toEqual(['base', 'commit', 'focus', 'model', 'effort', 'wait', 'out', 'maxChars'])
+  expect(Object.keys(tools[1]!.inputSchema.properties)).toEqual(['prompt', 'reference', 'conversationId', 'model', 'effort', 'wait', 'out'])
+  expect(Object.keys(tools[2]!.inputSchema.properties)).toEqual(['base', 'commit', 'focus', 'model', 'effort', 'wait', 'out', 'maxChars'])
+})
+
+// Where agy's image-generator subagent saves a conversation's images.
+const ARTIFACTS = `/h/.gemini/antigravity-cli/brain/${CONVERSATION}`
+const file = (name: string, mtimeMs: number) => ({ name, kind: 'file' as const, mtimeMs })
+
+test('an image runs agy sandboxed in an empty work folder of the plugin’s, never skipping permissions, and copies the image it added to its artifacts folder, with a preview', async ($, on) => {
+  const host = world(on, {
+    agy: [{ stdout: imaged('Done.'), onEnd: () => (host.state.dirs[ARTIFACTS] = ['.system_generated', 'scratch', file('rocket_1794245350918.jpg', 2)]) }],
+  })
+  await started($, host.tools)
+
+  const result = await call($, 'image', { prompt: 'A small rocket', model: 'gemini-4-argon-high' })
+
+  expect(result.isError).toBe(undefined)
+  const { argv, cwd } = host.launched[0]!
+  expect(cwd).toMatch(/^\/tmp\/t\/agy\/\.work\/\w+$/)
+  expect(argv).toEqual([
+    '/h/.local/bin/agy',
+    '--output-format=stream-json',
+    '--disable-slash-commands',
+    '--sandbox',
+    '--print-timeout=1770s',
+    '--model=gemini-4-argon-high',
+    `--print=A small rocket\n\n${IMAGE_CLOSE}`,
+  ])
+  expect(argv.join(' ')).not.toMatch(/dangerously/)
+  const copy = host.processes.find(p => p.argv[0] === 'cp')!.argv
+  expect(copy).toEqual(['cp', `${ARTIFACTS}/rocket_1794245350918.jpg`, expect.stringMatching(/^\/tmp\/t\/agy\/\d{8}-\d{6}-a-small-rocket\.jpg$/)])
+  expect(host.processes.map(p => p.argv)).toContainEqual(['rm', '-rf', cwd])
+  const [text, preview] = result.result as [{ type: string; text: string }, unknown]
+  expect(text.text).toBe(
+    [`AI-generated image by agy, saved to:`, `- ${copy[2]}`, `Conversation: ${CONVERSATION}`, 'agy said: Done.', 'A preview of each follows; ask before storing them in a repository and label them as AI-generated.'].join('\n'),
+  )
+  expect(preview).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'SlBH' } })
+  expect(host.written[0]?.path).toBe(copy[2]!.replace(/\.jpg$/, '.md'))
+  expect(host.written[0]?.text).toBe(`<!-- agy conversation ${CONVERSATION} · model gemini-4-argon-high · image -->\n\nA small rocket\n\n- ${copy[2]}\n\nDone.\n`)
+})
+
+test('an image follow-up edits from a reference and saves only the images it added, numbered beside its out', async ($, on) => {
+  const host = world(on, {
+    agy: [
+      {
+        stdout: imaged('Two blue rockets.'),
+        onEnd: () => (host.state.dirs[ARTIFACTS] = [file('first_1.jpg', 1), file('blue_3.png', 3), file('blue_2.png', 2)]),
+      },
+    ],
+  })
+  host.state.dirs[ARTIFACTS] = [file('first_1.jpg', 1)]
+  await started($, host.tools)
+
+  await call($, 'image', { prompt: 'Make it blue', conversationId: CONVERSATION, reference: '/proj/art/rocket.jpg', out: '/proj/art/blue.png' })
+
+  const { argv } = host.launched[0]!
+  expect(argv).toEqual(expect.arrayContaining([`--conversation=${CONVERSATION}`, '--add-dir=/proj/art']))
+  expect(argv.at(-1)).toBe(`--print=Make it blue\n\nReference image to edit from: /proj/art/rocket.jpg\n\n${IMAGE_CLOSE}`)
+  expect(host.processes.filter(p => p.argv[0] === 'cp').map(p => p.argv)).toEqual([
+    ['cp', `${ARTIFACTS}/blue_2.png`, '/proj/art/blue-1.png'],
+    ['cp', `${ARTIFACTS}/blue_3.png`, '/proj/art/blue-2.png'],
+  ])
+})
+
+test('an image run that added no image says so with agy’s text, and bad image inputs are refused before agy runs', async ($, on) => {
+  const host = world(on, { agy: [{ stdout: answered('I cannot draw that.') }] })
+  await started($, host.tools)
+
+  const none = await call($, 'image', { prompt: 'Something' })
+  expect(none.isError).toBe(true)
+  expect(String(none.result)).toBe(`agy generated no image.\n\nagy said: I cannot draw that.\n\nConversation: ${CONVERSATION}`)
+  expect(host.processes.some(p => p.argv[0] === 'cp')).toBe(false)
+
+  expect((await call($, 'image', { prompt: ' ' })).result).toBe('Give a non-empty prompt.')
+  expect((await call($, 'image', { prompt: 'A', reference: 'rocket.png' })).result).toBe('rocket.png must be an absolute path.')
+  expect((await call($, 'image', { prompt: 'A', reference: '/proj/notes.md' })).result).toBe('/proj/notes.md is not a PNG, JPEG, WebP or GIF image.')
+  expect((await call($, 'image', { prompt: 'A', reference: '/h/rocket.png' })).result).toBe('/h/rocket.png is in /h, and agy would get that whole folder; copy the file into a narrower folder first.')
+  expect((await call($, 'image', { prompt: 'A', out: '/h/.zshrc' })).result).toBe('/h/.zshrc is outside the project and /tmp/t/agy; save the answer in one of them.')
+  expect(host.launched).toHaveLength(1)
+})
+
+test('/agy-image takes a prompt, shows where the images are, and tells Claude they are AI-generated', async ($, on) => {
+  const host = world(on, { agy: [{ stdout: imaged('Done.'), onEnd: () => (host.state.dirs[ARTIFACTS] = [file('rocket_1.png', 1)]) }] })
+  await started($, host.tools)
+
+  const shown = await command($, 'agy-image', 'A rocket')
+
+  expect(shown.text).toMatch(/^AI-generated image by agy, saved to:\n- \/tmp\/t\/agy\/\d{8}-\d{6}-a-rocket\.png\n/)
+  expect(shown.context?.[0]).toMatch(new RegExp(`^The user generated an AI image with /agy-image; it is saved to /tmp/t/agy/.*\\.png \\(conversation ${CONVERSATION}\\)\\.$`))
+  expect((await command($, 'agy-image', '  ')).text).toBe(IMAGE_USAGE)
 })
 
 test('an ask runs agy sandboxed in the session folder, never skipping permissions, saves the answer and returns it', async ($, on) => {
@@ -314,9 +403,10 @@ test('/agy-ask shows the answer and tells Claude where it is saved', async ($, o
   expect((await command($, 'agy-ask', '  ')).text).toBe('Usage: /agy-ask <question>')
 })
 
-test('/agy-doctor reports the executable, version, sign-in, models and quota, spending none', async ($, on) => {
+test('/agy-doctor reports the executable, version, sign-in, models, quota and image artifacts folder, spending none', async ($, on) => {
   const usage = { conversation_id: '', status: 'SUCCESS', response: 'Gemini Models\tWeekly Limit Remaining\t99%\t2026-11-16T14:14:59Z\nGemini Models\tFive Hour Limit Remaining\t3%\t2026-11-09T19:14:59Z\n' }
   const host = world(on)
+  host.state.files.add('/h/.gemini/antigravity-cli/brain')
   host.state.runs['--version'] = { exitCode: 0, stdout: '1.5.3\n' }
   host.state.runs['--output-format=json -p=/usage'] = { exitCode: 0, stdout: JSON.stringify(usage) }
   await started($, host.tools)
@@ -329,13 +419,15 @@ test('/agy-doctor reports the executable, version, sign-in, models and quota, sp
       '✓ version: 1.5.3',
       '✓ sign-in and models: gemini-4-argon-high, gemini-3.8-flash-low',
       '✓ quota: Gemini Models Weekly Limit Remaining 99% (resets 2026-11-16T14:14:59Z); Gemini Models Five Hour Limit Remaining 3% (resets 2026-11-09T19:14:59Z)',
+      '✓ image artifacts: /h/.gemini/antigravity-cli/brain',
     ].join('\n'),
   )
   expect(host.processes.map(p => p.argv.join(' '))).not.toContain(expect.stringMatching(/disable-slash-commands/))
 
   host.state.runs['--version'] = { exitCode: 0, stdout: '1.4.9\n' }
   host.state.runs.models = { exitCode: 1, stderr: 'Error: authentication required. Run \'agy\' to log in.\n' }
+  host.state.files.delete('/h/.gemini/antigravity-cli/brain')
   expect((await command($, 'agy-doctor')).text).toMatch(
-    /✗ version: 1\.4\.9; the plugin needs agy 1\.5 or later \(agy update\)\n✗ sign-in and models: Error: authentication required\. Run 'agy' to log in\.\n.*\nSign in once by running `! agy`\.$/,
+    /✗ version: 1\.4\.9; the plugin needs agy 1\.5 or later \(agy update\)\n✗ sign-in and models: Error: authentication required\. Run 'agy' to log in\.\n.*\n✗ image artifacts: \/h\/\.gemini\/antigravity-cli\/brain not found; image requests will find no images\nSign in once by running `! agy`\.$/,
   )
 })

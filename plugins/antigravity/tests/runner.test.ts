@@ -2,11 +2,12 @@ import { expect, test } from 'claude-code/testing'
 import type { Job, Request } from '../hooks/model'
 import { NOTICE } from '../hooks/presentation'
 import { createRunner, type RunnerDeps } from '../hooks/runner'
-import { CONVERSATION, answered, init } from './fakes'
+import { CONVERSATION, answered, imaged, init } from './fakes'
 import { fakeRuns, fakeWorkspaces, memoryStore, type Run } from './runs'
 
 const ask: Request = { kind: 'ask', prompt: 'Review the plan', files: [] }
 const review: Request = { kind: 'review', prompt: 'review against main', files: [], review: { base: 'main' } }
+const image: Request = { kind: 'image', prompt: 'A rocket', files: [] }
 const DAY = 24 * 60 * 60_000
 
 /** Lets the other pending tasks run first, as the time a real sleep takes would. */
@@ -32,6 +33,9 @@ function deps(scripts: Run[], { session, memory: shared, left, ...more }: Partia
   const time = clock()
   const memory = shared ?? memoryStore()
   const written: { path: string; text: string }[] = []
+  // agy's artifacts folders by path, and the commands the output ran (cp, sips, mkdir).
+  const listings: Record<string, { name: string; kind: 'file' | 'dir'; mtimeMs: number }[]> = {}
+  const ran: string[][] = []
   const toasts: string[] = []
   const submitted: string[] = []
   const waiting: (() => void)[] = []
@@ -46,7 +50,14 @@ function deps(scripts: Run[], { session, memory: shared, left, ...more }: Partia
     runsDir: '/tmp/agy/runs',
     sleep: time.sleep,
     now: time.now,
-    output: { write: async (path, text) => void written.push({ path, text }), outDir: '/tmp/agy' },
+    output: {
+      write: async (path, text) => void written.push({ path, text }),
+      outDir: '/tmp/agy',
+      brainDir: '/h/.gemini/antigravity-cli/brain',
+      list: async path => listings[path] ?? [],
+      run: async argv => (ran.push(argv), { exitCode: argv[0] === 'sips' ? 1 : 0, stdout: '', stderr: '' }),
+      readBytes: async () => ({ base64: '' }),
+    },
     agy: async () => '/bin/agy',
     toast: text => void toasts.push(text),
     submit: async text => {
@@ -58,7 +69,7 @@ function deps(scripts: Run[], { session, memory: shared, left, ...more }: Partia
   // Resolves once a background job has sent its notice.
   const submission = () => new Promise<void>(resolve => (submitted.length ? resolve() : waiting.push(resolve)))
   const job = async (id: string) => (await memory.store.get(`job:${id}`)) as Job | undefined
-  return { d, runs, spaces, time, memory, written, toasts, submitted, submission, job }
+  return { d, runs, spaces, time, memory, written, listings, ran, toasts, submitted, submission, job }
 }
 
 const limits = () => ({ foregroundMs: 60_000, backgroundMs: 600_000 })
@@ -229,4 +240,23 @@ test('a review worktree being made is already held by its job, so a session star
   await run
 
   expect(sweeper.spaces.removed).toEqual([])
+})
+
+test('past the foreground wait an image goes on as a job, whose end copies the image its run added, names it in the notice and removes the work folder', async () => {
+  const { gate, release } = gated()
+  const { d, runs, spaces, listings, ran, submitted, submission } = deps([{ stdout: imaged('Done.'), gate }])
+
+  const moved = await createRunner(limits).runNow(d, image)
+
+  expect(moved).toMatchObject({ ok: false, text: expect.stringMatching(/^agy is still working after 1 min: job #j1 goes on/) })
+  expect(runs.launched[0]!.cwd).toBe('/tmp/agy/.work/j1')
+  listings[`/h/.gemini/antigravity-cli/brain/${CONVERSATION}`] = [{ name: 'rocket_1.png', kind: 'file', mtimeMs: 1 }]
+  release()
+  await submission()
+
+  expect(ran).toContainEqual(['cp', `/h/.gemini/antigravity-cli/brain/${CONVERSATION}/rocket_1.png`, expect.stringMatching(/^\/tmp\/agy\/\d{8}-\d{6}-a-rocket\.png$/)])
+  expect(submitted[0]).toMatch(
+    new RegExp(`^${NOTICE.replace(/[[\]]/g, '\\$&')}\\njob #j1 done: image "A rocket"\\nSaved to: /tmp/agy/\\d{8}-\\d{6}-a-rocket\\.png\\nConversation: ${CONVERSATION}\\nLook at the file before describing it`),
+  )
+  expect(spaces.discarded).toEqual(['/tmp/agy/.work/j1'])
 })
