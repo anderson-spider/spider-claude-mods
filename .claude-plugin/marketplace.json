@@ -8,6 +8,11 @@
   },
   "plugins": [
     {
+      "name": "antigravity",
+      "source": "./plugins/antigravity",
+      "description": "Ask Google's Antigravity CLI (agy) for a second opinion or a review of the branch's changes from another model family, read-only, and save the result locally."
+    },
+    {
       "name": "codex",
       "source": "./plugins/codex",
       "description": "Ask Codex for a second opinion, a review of the branch's changes or requested images and, on macOS, control native Mac apps through Codex computer use; save results locally."
