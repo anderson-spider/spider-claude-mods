@@ -74,7 +74,7 @@ export function fakeWorkspaces(init: { left?: string[] } = {}) {
     image: async id => {
       const cwd = `/tmp/agy/.work/${id}`
       made.push(cwd)
-      return { cwd, scratch: cwd }
+      return { cwd, workFolder: cwd }
     },
     discard: async path => void discarded.push(path),
     changed: async () => undefined,

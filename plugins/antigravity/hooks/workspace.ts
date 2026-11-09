@@ -77,7 +77,7 @@ export function workspaces(host: WorkspaceHost): Workspaces {
       const cwd = `${host.workDir}/${id}`
       const made = await host.run(['mkdir', '-p', cwd], { timeoutMs: 10_000 })
       if (made.exitCode !== 0) throw new Error(made.stderr.trim() || `mkdir exited with code ${made.exitCode}`)
-      return { cwd, scratch: cwd }
+      return { cwd, workFolder: cwd }
     },
     discard: async path => void (await host.run(['rm', '-rf', path], { timeoutMs: 30_000 })),
     changed: async workspace => {

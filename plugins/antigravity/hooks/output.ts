@@ -1,11 +1,9 @@
 import type { Entry, OutputDeps, Outcome, Preview, Request, RunResult } from './model'
+import { IMAGE_FILE } from './args'
 import { askOutcome, failure, imageSummary } from './presentation'
 
 // The longest side of the preview an image request hands back with its files.
 const PREVIEW_SIDE = 768
-
-// The images agy's image-generator subagent saves, by extension.
-const IMAGE = /\.(png|jpe?g|webp|gif)$/i
 
 /** A file name for an answer or an image: timestamp plus a slug of the prompt. */
 export function fileName(prompt: string, now: Date, extension = 'md'): string {
@@ -22,16 +20,16 @@ export function fileName(prompt: string, now: Date, extension = 'md'): string {
 }
 
 /** A conversation's artifacts folder, where agy's image-generator subagent saves its images. */
-export const artifactsOf = (deps: Pick<OutputDeps, 'brainDir'>, conversationId: string) => `${deps.brainDir}/${conversationId}`
+export const artifactsOf = (deps: Pick<OutputDeps, 'artifactsRoot'>, conversationId: string) => `${deps.artifactsRoot}/${conversationId}`
 
 // The images in a conversation's artifacts folder (its top level only), oldest first; none when it is missing.
 async function imagesIn(deps: Pick<OutputDeps, 'list'>, dir: string): Promise<Entry[]> {
   const entries = await deps.list(dir).catch(() => [])
-  return entries.filter(entry => entry.kind === 'file' && IMAGE.test(entry.name)).sort((a, b) => a.mtimeMs - b.mtimeMs)
+  return entries.filter(entry => entry.kind === 'file' && IMAGE_FILE.test(entry.name)).sort((a, b) => a.mtimeMs - b.mtimeMs)
 }
 
 /** The image names already in a conversation's artifacts folder, so a follow-up saves only the images it adds. */
-export async function imagesBefore(deps: Pick<OutputDeps, 'list' | 'brainDir'>, conversationId: string | undefined): Promise<string[]> {
+export async function imagesBefore(deps: Pick<OutputDeps, 'list' | 'artifactsRoot'>, conversationId: string | undefined): Promise<string[]> {
   return conversationId ? (await imagesIn(deps, artifactsOf(deps, conversationId))).map(entry => entry.name) : []
 }
 
@@ -58,7 +56,7 @@ async function previewOf(deps: Pick<OutputDeps, 'run' | 'readBytes'>, path: stri
 /**
  * Copies the images the run added to its conversation's artifacts folder (the names in `before` were there already)
  * to the request's `out`, numbered when there are several, else to the answers folder, oldest first, with previews,
- * and saves a Markdown record of the request beside the first. agy's stream names no image, so the folder decides.
+ * and saves a Markdown record of the request in the answers folder, never beside an `out` in the project. agy's stream names no image, so the folder decides.
  */
 export async function saveImages(deps: OutputDeps, result: RunResult, request: Request, before: string[], model: string | undefined): Promise<Outcome> {
   const { conversationId, message } = result
@@ -82,7 +80,7 @@ export async function saveImages(deps: OutputDeps, result: RunResult, request: R
     if (preview) previews.push(preview)
   }
   const head = [`agy conversation ${conversationId}`, `model ${model ?? "agy's default"}`, 'image'].join(' · ')
-  const record = paths[0]!.replace(/(\.\w+)?$/, '.md')
+  const record = `${deps.outDir}/${fileName(request.prompt, now)}`
   await deps.write(record, `<!-- ${head} -->\n\n${request.prompt}\n\n${paths.map(path => `- ${path}`).join('\n')}\n${message?.trim() ? `\n${message.trim()}\n` : ''}`)
   return imageSummary(conversationId, paths, previews, said)
 }

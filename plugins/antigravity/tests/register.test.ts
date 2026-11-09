@@ -79,6 +79,7 @@ test('an image follow-up edits from a reference and saves only the images it add
     ['cp', `${ARTIFACTS}/blue_2.png`, '/proj/art/blue-1.png'],
     ['cp', `${ARTIFACTS}/blue_3.png`, '/proj/art/blue-2.png'],
   ])
+  expect(host.written.map(w => w.path)).toEqual([expect.stringMatching(/^\/tmp\/t\/agy\/\d{8}-\d{6}-make-it-blue\.md$/)])
 })
 
 test('an image run that added no image says so with agy’s text, and bad image inputs are refused before agy runs', async ($, on) => {
@@ -94,8 +95,25 @@ test('an image run that added no image says so with agy’s text, and bad image 
   expect((await call($, 'image', { prompt: 'A', reference: 'rocket.png' })).result).toBe('rocket.png must be an absolute path.')
   expect((await call($, 'image', { prompt: 'A', reference: '/proj/notes.md' })).result).toBe('/proj/notes.md is not a PNG, JPEG, WebP or GIF image.')
   expect((await call($, 'image', { prompt: 'A', reference: '/h/rocket.png' })).result).toBe('/h/rocket.png is in /h, and agy would get that whole folder; copy the file into a narrower folder first.')
-  expect((await call($, 'image', { prompt: 'A', out: '/h/.zshrc' })).result).toBe('/h/.zshrc is outside the project and /tmp/t/agy; save the answer in one of them.')
+  expect((await call($, 'image', { prompt: 'A', out: '/h/.zshrc' })).result).toBe('/h/.zshrc is outside the project and /tmp/t/agy; save it in one of them.')
+  expect((await call($, 'image', { prompt: 'A', out: '/proj/.git/hooks/pre-commit' })).result).toBe('/proj/.git/hooks/pre-commit is inside a .git folder; save it elsewhere.')
+  expect((await call($, 'image', { prompt: 'A', model: 'gemini-9' })).result).toBe('gemini-9 is not an agy model id. agy models lists: gemini-4-argon-high, gemini-3.8-flash-low.')
   expect(host.launched).toHaveLength(1)
+})
+
+test('a failed image run says why in the closed set of reasons, never shows the Google Cloud project or region, and saves nothing', async ($, on) => {
+  const host = world(on, {
+    agy: [{ stdout: failed('Quota exhausted for projects/acme-prod-42/locations/us-central1'), stderr: agyError('RESOURCE_EXHAUSTED', 'quota for acme-prod-42'), code: 3 }],
+  })
+  await started($, host.tools)
+
+  const quota = await call($, 'image', { prompt: 'A rocket' })
+
+  expect(quota.isError).toBe(true)
+  expect(String(quota.result)).toMatch(/^agy failed \(quota exhausted\): Quota exhausted for projects\/…\/locations\/…\n/)
+  expect(String(quota.result)).not.toMatch(/acme-prod-42|us-central1/)
+  expect(host.processes.some(p => p.argv[0] === 'cp')).toBe(false)
+  expect(host.written).toEqual([])
 })
 
 test('/agy-image takes a prompt, shows where the images are, and tells Claude they are AI-generated', async ($, on) => {
@@ -280,11 +298,11 @@ test('an ask refuses a file whose folder would open the home folder or above, an
   expect((await call($, 'ask', { prompt: 'Hi', files: ['/hosts'] })).result).toBe(wide('/hosts', '/'))
   expect((await call($, 'ask', { prompt: 'Hi', files: ['/proj/../h/.ssh/id_ed25519'] })).result).toBe('/proj/../h/.ssh/id_ed25519 must be an absolute path without . or .. parts.')
   for (const out of ['/h/.zshrc', '/h/.ssh/authorized_keys', '/tmp/t/agy-other/a.md']) {
-    expect(await call($, 'ask', { prompt: 'Hi', out })).toEqual({ result: `${out} is outside the project and /tmp/t/agy; save the answer in one of them.`, isError: true })
+    expect(await call($, 'ask', { prompt: 'Hi', out })).toEqual({ result: `${out} is outside the project and /tmp/t/agy; save it in one of them.`, isError: true })
   }
   expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/../h/.zshrc' })).result).toBe('/proj/../h/.zshrc must be an absolute path without . or .. parts.')
-  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.git/hooks/pre-commit' })).result).toBe('/proj/.git/hooks/pre-commit is inside a .git folder; save the answer elsewhere.')
-  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.GIT/hooks/pre-commit' })).result).toBe('/proj/.GIT/hooks/pre-commit is inside a .git folder; save the answer elsewhere.')
+  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.git/hooks/pre-commit' })).result).toBe('/proj/.git/hooks/pre-commit is inside a .git folder; save it elsewhere.')
+  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.GIT/hooks/pre-commit' })).result).toBe('/proj/.GIT/hooks/pre-commit is inside a .git folder; save it elsewhere.')
   expect(host.launched).toEqual([])
 
   await call($, 'ask', { prompt: 'Hi', out: '/proj/docs/agy.md' })

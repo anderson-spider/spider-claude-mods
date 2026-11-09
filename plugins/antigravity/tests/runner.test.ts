@@ -53,7 +53,7 @@ function deps(scripts: Run[], { session, memory: shared, left, ...more }: Partia
     output: {
       write: async (path, text) => void written.push({ path, text }),
       outDir: '/tmp/agy',
-      brainDir: '/h/.gemini/antigravity-cli/brain',
+      artifactsRoot: '/h/.gemini/antigravity-cli/brain',
       list: async path => listings[path] ?? [],
       run: async argv => (ran.push(argv), { exitCode: argv[0] === 'sips' ? 1 : 0, stdout: '', stderr: '' }),
       readBytes: async () => ({ base64: '' }),
@@ -259,4 +259,17 @@ test('past the foreground wait an image goes on as a job, whose end copies the i
     new RegExp(`^${NOTICE.replace(/[[\]]/g, '\\$&')}\\njob #j1 done: image "A rocket"\\nSaved to: /tmp/agy/\\d{8}-\\d{6}-a-rocket\\.png\\nConversation: ${CONVERSATION}\\nLook at the file before describing it`),
   )
   expect(spaces.discarded).toEqual(['/tmp/agy/.work/j1'])
+})
+
+test('a follow-up image on a conversation that is still running is refused, naming its job', async () => {
+  const { gate, release } = gated()
+  const { d, runs } = deps([{ stdout: imaged('Done.'), gate }])
+  const runner = createRunner(limits)
+
+  await runner.startJob(d, { ...image, conversationId: CONVERSATION })
+  const busy = await runner.runNow(d, { ...image, prompt: 'Make it blue', conversationId: CONVERSATION })
+
+  expect(busy).toMatchObject({ ok: false, text: `Conversation ${CONVERSATION} is still running as job #j1; ask on it again once that ends (the jobs tool shows it).` })
+  expect(runs.launched).toHaveLength(1)
+  release()
 })

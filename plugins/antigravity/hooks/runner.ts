@@ -138,8 +138,8 @@ export function createRunner(limits: () => Limits) {
     job.workspace.worktree ? deps.workspaces.remove(job.project, job.workspace.worktree).catch(() => undefined) : Promise.resolve()
 
   // An image run's work folder goes when the run ends, with whatever agy left in it.
-  const discardScratch = (deps: RunnerDeps, job: Job) =>
-    job.workspace.scratch ? deps.workspaces.discard(job.workspace.scratch).catch(() => undefined) : Promise.resolve()
+  const discardWorkFolder = (deps: RunnerDeps, job: Job) =>
+    job.workspace.workFolder ? deps.workspaces.discard(job.workspace.workFolder).catch(() => undefined) : Promise.resolve()
 
   /**
    * Starts a run: its job is in the store before its workspace is made, so a session start meanwhile never sweeps a
@@ -209,7 +209,7 @@ export function createRunner(limits: () => Limits) {
         await deps.store.delete(keyOf(id)).catch(() => undefined)
         await deps.files.remove(dir).catch(() => undefined)
         await removeWorktree(deps, job)
-        await discardScratch(deps, job)
+        await discardWorkFolder(deps, job)
         return failure(`agy could not run: ${errorText(error)}`)
       }
     } finally {
@@ -224,7 +224,7 @@ export function createRunner(limits: () => Limits) {
   async function finish(deps: RunnerDeps, job: Job, ended: RunResult | 'lost'): Promise<Outcome> {
     const warning = await deps.workspaces.changed(job.workspace).catch(() => undefined)
     await removeWorktree(deps, job)
-    await discardScratch(deps, job)
+    await discardWorkFolder(deps, job)
     const request = withNote(job.request, warning)
     const save = (result: RunResult) =>
       job.kind === 'image'

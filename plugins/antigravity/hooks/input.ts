@@ -1,4 +1,4 @@
-import { folderOf, within } from './args'
+import { IMAGE_FILE, folderOf, readsOf, within } from './args'
 import type { Kind, Request, ReviewTarget } from './model'
 import { EFFORTS } from './tool-schemas'
 
@@ -56,9 +56,6 @@ export function askRequestOf(e: Record<string, unknown>, defaultModel?: string):
   return { kind: 'ask', prompt, ...(conversationId ? { conversationId } : {}), ...tuning, files, ...output }
 }
 
-// The images agy can take as a reference, by extension.
-const IMAGE = /\.(png|jpe?g|webp|gif)$/i
-
 /** Reads an image tool call's input into a request, or the error to answer. */
 export function imageRequestOf(e: Record<string, unknown>, defaultModel?: string): Request | string {
   const asked = askRequestOf({ ...e, files: [], maxChars: undefined }, defaultModel)
@@ -67,7 +64,7 @@ export function imageRequestOf(e: Record<string, unknown>, defaultModel?: string
   if (reference) {
     const bad = pathError(reference)
     if (bad) return bad
-    if (!IMAGE.test(reference)) return `${reference} is not a PNG, JPEG, WebP or GIF image.`
+    if (!IMAGE_FILE.test(reference)) return `${reference} is not a PNG, JPEG, WebP or GIF image.`
   }
   return { ...asked, kind: 'image', ...(reference ? { reference } : {}) }
 }
@@ -109,14 +106,14 @@ export function reviewRequestOf(e: Record<string, unknown>, defaultModel?: strin
  * or a key file.
  */
 export function placementError(request: Request, at: { project: string; outDir: string; home?: string }): string | undefined {
-  for (const path of request.reference ? [...request.files, request.reference] : request.files) {
+  for (const path of readsOf(request)) {
     if (within(path, at.project)) continue
     const dir = folderOf(path)
     if (dir === '/' || (at.home && within(at.home, dir))) return `${path} is in ${dir}, and agy would get that whole folder; copy the file into a narrower folder first.`
   }
   const { out } = request
   if (!out) return undefined
-  if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save the answer in one of them.`
-  if (out.toLowerCase().split('/').includes('.git')) return `${out} is inside a .git folder; save the answer elsewhere.`
+  if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save it in one of them.`
+  if (out.toLowerCase().split('/').includes('.git')) return `${out} is inside a .git folder; save it elsewhere.`
   return undefined
 }

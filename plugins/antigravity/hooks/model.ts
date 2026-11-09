@@ -73,8 +73,8 @@ export type OutputDeps = {
   write(path: string, text: string): Promise<void>
   /** The folder results go to: `$TMPDIR/agy`. */
   outDir: string
-  /** Where agy keeps each conversation's artifacts folder, its images among them: `~/.gemini/antigravity-cli/brain`. */
-  brainDir: string
+  /** The folder of agy's artifacts folders, one per conversation: `~/.gemini/antigravity-cli/brain`. */
+  artifactsRoot: string
   /** A folder's entries; rejects when it is missing. */
   list(path: string): Promise<Entry[]>
   run: ProcessRunner
@@ -92,7 +92,7 @@ export type Workspace = {
   /** A review's diff file and the files it changes, named in its prompt. */
   diff?: { path: string; files: string[] }
   /** An image run's work folder, deleted when the run ends. */
-  scratch?: string
+  workFolder?: string
 }
 
 /**
@@ -129,7 +129,7 @@ export type Job = {
   request: Request
   /** Where it runs: checked for edits and, for a review, removed when it ends. */
   workspace: Workspace
-  /** An image job's names already in its conversation's artifacts folder, so only the run's own images are saved. */
+  /** For an image request, the image names its conversation's artifacts folder held before the run: only the run's own are saved. */
   before?: string[]
 }
 

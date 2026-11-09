@@ -13,6 +13,9 @@ export const NO_EDIT = 'Do not edit, create or delete any file and do not run co
 export const IMAGE_CLOSE =
   "Generate the image with your image-generator subagent and leave it in this conversation's artifacts. Do not copy, move or write any file yourself and do not run commands; answer in text only."
 
+/** The images agy makes and takes as a reference (PNG, JPEG, WebP, GIF), by extension. */
+export const IMAGE_FILE = /\.(png|jpe?g|webp|gif)$/i
+
 /** Whether a path is the folder `dir` or lies within it; an empty `dir` (no project yet) or `/` holds nothing. */
 export const within = (path: string, dir: string) => dir !== '' && dir !== '/' && (path === dir || path.startsWith(`${dir.replace(/\/$/, '')}/`))
 
@@ -42,7 +45,7 @@ export function reviewPrompt(request: Request, workspace: Workspace): string {
 }
 
 /** The paths agy reads: the listed files and an image's reference. */
-const readsOf = (request: Request) => (request.reference ? [...request.files, request.reference] : request.files)
+export const readsOf = (request: Request) => (request.reference ? [...request.files, request.reference] : request.files)
 
 /**
  * The prompt agy gets: the request (or the review's instructions), the files to read, then the no-edit line; an

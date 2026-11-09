@@ -67,8 +67,9 @@ async function folders($: EngineInterface) {
   const id = tmp ? undefined : await uidOf($)
   const outDir = tmp ? `${tmp}/agy` : `/tmp/agy${id ? `-${id}` : ''}`
   const home = await $.env.get('HOME')
-  // Where agy keeps each conversation's artifacts, the images its image-generator subagent makes among them.
-  return { outDir, home, brainDir: `${home ?? ''}/.gemini/antigravity-cli/brain` }
+  // Where agy keeps each conversation's artifacts folder, the images its image-generator subagent makes among them;
+  // without HOME there is none to find, and an image run says it found no image.
+  return { outDir, home, artifactsRoot: home ? `${home}/.gemini/antigravity-cli/brain` : '' }
 }
 
 async function agyOf($: EngineInterface, home: string | undefined) {
@@ -77,7 +78,7 @@ async function agyOf($: EngineInterface, home: string | undefined) {
 
 async function depsOf($: EngineInterface): Promise<RunnerDeps> {
   const run = processOf($)
-  const { outDir, home, brainDir } = await folders($)
+  const { outDir, home, artifactsRoot } = await folders($)
   return {
     files: detachedRuns({ run, read: path => $.fs.read(path).catch(() => undefined), exists: path => $.fs.exists(path) }),
     store: {
@@ -95,7 +96,7 @@ async function depsOf($: EngineInterface): Promise<RunnerDeps> {
     output: {
       write: (path, text) => $.fs.write(path, text),
       outDir,
-      brainDir,
+      artifactsRoot,
       list: path => $.fs.list(path),
       run,
       readBytes: path => $.fs.read(path, { as: 'bytes' }),
@@ -244,8 +245,8 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'agy-doctor' }, async $ => {
-    const { home, brainDir } = await folders($)
-    const artifacts = { path: brainDir, exists: await $.fs.exists(brainDir) }
+    const { home, artifactsRoot } = await folders($)
+    const artifacts = artifactsRoot ? { path: artifactsRoot, exists: await $.fs.exists(artifactsRoot) } : { path: 'HOME is not set, so agy’s artifacts folder', exists: false }
     const checks = await diagnose({ agy: await agyOf($, home), run: processOf($), models: agy => modelsOf($, agy), artifacts })
     return { text: report(checks) }
   })
