@@ -19,7 +19,7 @@ set -eu
 MARKET=spider-claude-mods
 REPO=${BOOTSTRAP_SOURCE:-anderson-spider/claude-mods}
 # Every plugin of the marketplace; check-consistency keeps this list equal to marketplace.json.
-ALL="codex comfyui-local coolify file-explorer gitlab image-preview session-hud sonarqube subagent-effort tailscale"
+ALL="antigravity codex comfyui-local coolify file-explorer gitlab image-preview session-hud sonarqube subagent-effort tailscale"
 NODE=${BOOTSTRAP_NODE:-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node}
 ONLY=
 CHECK=

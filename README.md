@@ -6,6 +6,7 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 
 | Plugin | What it does |
 | --- | --- |
+| [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, or have it review the branch's changes in a throwaway worktree before a PR, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. |
 | [codex](plugins/codex/README.md) | Lets Claude ask your Codex CLI for a second opinion (it reads the repository read-only and can search the web), have it review the branch's changes, or generate an image, and saves the result locally. On macOS it can also route native Mac app control through Codex computer use from the ChatGPT app instead of Claude's own computer use, asking before each new app. |
 | [comfyui-local](plugins/comfyui-local/README.md) | Lets Claude generate images, video, audio and 3D on your self-hosted ComfyUI, search its nodes, models and templates, keep workflows in your library, and manage node packs through ComfyUI-Manager and restart the server to load them, with the server in the `url` option. Unofficial; its slash commands are ported from Comfy-Org/comfy-skills. |
 | [coolify](plugins/coolify/README.md) | Lets Claude read your Coolify instance and create, deploy or delete projects and resources through its API, with the instance in the `url` option and the token in the sensitive `apiKey` option. |
@@ -25,6 +26,7 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.303 
 
 ```
 /plugin marketplace add anderson-spider/claude-mods
+/plugin install antigravity@spider-claude-mods
 /plugin install codex@spider-claude-mods
 /plugin install comfyui-local@spider-claude-mods
 /plugin install coolify@spider-claude-mods

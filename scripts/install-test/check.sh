@@ -59,6 +59,10 @@ grep -q '$.tool.register (codex): mcp__codex__jobs' "$log" || fail "codex did no
 if grep -q '$.tool.register (codex): mcp__codex__computer_use' "$log"; then fail "codex registered its computer use tool on Linux"; fi
 say "codex without computer use"
 
+# The image has no agy: antigravity still registers its tools, and a call would answer how to install it.
+grep -q '$.tool.register (antigravity): mcp__antigravity__jobs' "$log" || fail "antigravity did not register its tools without agy installed"
+say "antigravity without agy"
+
 cd "$HOME"
 say "bootstrap (second run)"
 BOOTSTRAP_SOURCE=$SRC sh "$SRC/scripts/bootstrap.sh" >/dev/null || fail "a second bootstrap run failed"

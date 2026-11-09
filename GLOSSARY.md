@@ -43,3 +43,14 @@ _Avoid_: Daemon, bridge, server
 **App approval**:
 The person's yes to letting computer use drive one named app, which expires.
 _Avoid_: Permission, grant
+
+## Antigravity
+
+**Conversation**:
+One agy conversation, named by its id; a follow-up ask continues it. The Codex counterpart is the thread.
+_Avoid_: Thread, session
+
+**Review worktree**:
+The throwaway git worktree an agy review runs in, at the reviewed commit, holding the diff; it is removed when the review ends.
+_Avoid_: Sandbox, checkout
+
