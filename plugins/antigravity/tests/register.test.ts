@@ -206,7 +206,7 @@ const REPO = {
   '-C /proj worktree prune': { exitCode: 0 },
 }
 
-test('a review without a target covers the branch against origin/HEAD in a throwaway worktree holding the diff, then removes it', async ($, on) => {
+test('a review without a target covers the branch against origin/HEAD in a throwaway worktree holding the diff, tells agy to run nothing of the project, then removes it', async ($, on) => {
   const host = world(on, { agy: [{ stdout: answered('[P1] Off by one — src/a.ts:3') }], git: REPO, fingerprints: ['w1', 'w1'] })
   await started($, host.tools)
 
@@ -221,6 +221,8 @@ test('a review without a target covers the branch against origin/HEAD in a throw
   expect(prompt).toMatch(/\[P0\|P1\|P2\|P3\] short title — path:line/)
   expect(prompt).toMatch(/If you find nothing, say "No findings\." and stop/)
   expect(prompt).toMatch(/\n\nAlso look closely at: the retry loop\n\nDo not edit, create or delete any file/)
+  expect(prompt.endsWith(NO_EDIT)).toBe(true)
+  expect(prompt).toMatch(/Do not run builds, tests, installers, package scripts or the project's own scripts/)
   expect(host.processes.map(p => p.argv.join(' '))).toContain(`git -C /proj worktree remove --force ${cwd}`)
   expect(host.written[0]?.path).toMatch(/^\/tmp\/t\/agy\/\d{8}-\d{6}-review-against-origin-main\.md$/)
   expect(host.written[0]?.text).toBe(
