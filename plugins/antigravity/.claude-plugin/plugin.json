@@ -1,0 +1,35 @@
+{
+  "name": "antigravity",
+  "version": "0.1.0",
+  "description": "Ask Google's Antigravity CLI (agy) for a second opinion or a review of the branch's changes from another model family, read-only, and save the result locally.",
+  "author": {
+    "name": "anderson-spider"
+  },
+  "license": "MIT",
+  "userConfig": {
+    "foregroundMinutes": {
+      "type": "number",
+      "title": "Foreground wait (minutes)",
+      "description": "How long a request waits for agy before it keeps going as a background job.",
+      "default": 6
+    },
+    "backgroundMinutes": {
+      "type": "number",
+      "title": "Background job limit (minutes)",
+      "description": "How long a request may run in all before it is stopped; agy's own --print-timeout is set to it.",
+      "default": 30
+    },
+    "agyPath": {
+      "type": "string",
+      "title": "agy CLI path",
+      "description": "Absolute path of the agy executable; leave empty to look on PATH, then in ~/.local/bin, /opt/homebrew/bin and /usr/local/bin.",
+      "default": ""
+    },
+    "defaultModel": {
+      "type": "string",
+      "title": "Default model",
+      "description": "agy model id a request uses when it names none (see /agy-doctor or agy models); leave empty for agy's own default.",
+      "default": ""
+    }
+  }
+}
