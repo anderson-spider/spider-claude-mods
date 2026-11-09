@@ -1,5 +1,9 @@
 import type { Job, Kind, Outcome, Preview } from './model'
 
+/** Why nothing ran when the plugin's folder is not the user's alone. */
+export const notPrivate = (dir: string) =>
+  `${dir} could not be made a private folder of yours (it is a symlink, another user owns it, or it cannot be made), so Codex did not run. Remove it or set TMPDIR.`
+
 export const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 /** What the model reads: where the answer is, the thread to follow up in, and as much of it as fits. */
