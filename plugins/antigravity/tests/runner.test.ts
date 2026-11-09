@@ -68,7 +68,7 @@ test('an ask that ends in the foreground answers and leaves no job behind', asyn
 
   const outcome = await createRunner(limits).runNow(d, ask)
 
-  expect(runs.launched).toEqual([{ dir: '/tmp/agy/runs/j1', argv: expect.arrayContaining(['/bin/agy', '--print-timeout=600s']), cwd: '/proj' }])
+  expect(runs.launched).toEqual([{ dir: '/tmp/agy/runs/j1', argv: expect.arrayContaining(['/bin/agy', '--print-timeout=570s']), cwd: '/proj' }])
   expect(outcome).toMatchObject({ ok: true, conversationId: CONVERSATION, markdown: 'Looks fine.' })
   expect(written).toHaveLength(1)
   expect(runs.removed).toEqual(['/tmp/agy/runs/j1'])
@@ -161,7 +161,7 @@ test('another session’s job no watcher has seen for a minute is taken over and
   const other = deps([{ stdout: answered('Theirs.'), gate: new Promise(() => undefined) }], { memory, session: 'sess-0' })
   await createRunner(limits).startJob(other.d, ask)
   const mine = deps([], { memory, session: 'sess-b' })
-  mine.runs.states.set('/tmp/agy/runs/j1', { head: answered('Theirs.').split('\n')[0]!, tail: answered('Theirs.'), exit: 0 })
+  mine.runs.states.set('/tmp/agy/runs/j1', { head: answered('Theirs.').split('\n')[0]!, tail: answered('Theirs.'), exit: 0, endedAt: 30_000 })
 
   await createRunner(limits).resume(mine.d)
   await settle()
@@ -171,6 +171,8 @@ test('another session’s job no watcher has seen for a minute is taken over and
   await createRunner(limits).resume(mine.d)
   await mine.submission()
   expect(mine.submitted[0]).toMatch(/job #j1 done: ask "Review the plan"/)
+  // It ended while nobody watched: the time its exit file says, not the time it was found.
+  expect(((await mine.memory.store.get('job:j1')) as Job).endedAt).toBe(30_000)
 })
 
 test('session start prunes finished jobs past 7 days or the 50 newest, and removes worktrees no running job holds', async () => {

@@ -36,6 +36,8 @@ export type RunResult = {
   /** Why it failed, redacted; absent on success. */
   error?: string
   reason?: Reason
+  /** When the run ended, from its exit file: a job found ended later keeps the time it really ended. */
+  endedAt?: number
   /** The model agy says it used, from its `init` event. */
   model?: string
   /** The run outlived its time limit and was stopped. */

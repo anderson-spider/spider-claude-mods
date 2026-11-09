@@ -5,12 +5,13 @@ export const DIFF_FILE = '.agy-review.diff'
 
 export const NO_REPO_NOTE = 'Not a git repository: edits by agy could not be checked.'
 
-// The working tree's fingerprint: every file, tracked or not (ignored ones aside), hashed into a tree through a copy
-// of the index, so the real index and the person's staging stay as they were. `git add` writes the file objects into
-// the repository, where git's own garbage collection drops them.
+// The working tree's fingerprint: `git status` (which files differ from HEAD and how, untracked ones included, ignored
+// ones not) and the content hash of each modified or untracked file, so a second edit to an already changed file
+// shows too. `git hash-object` without `-w` writes nothing, so the repository, its index and the person's staging stay
+// as they were. `xargs -r` runs nothing when no file differs (GNU needs the flag; BSD accepts it).
 export const FINGERPRINT =
-  't=$(mktemp) || exit 1; cp "$(git rev-parse --git-path index)" "$t" 2>/dev/null; ' +
-  'GIT_INDEX_FILE="$t" git add -A >/dev/null 2>&1 && GIT_INDEX_FILE="$t" git write-tree; s=$?; rm -f "$t"; exit $s'
+  'git status --porcelain -uall || exit 1; ' +
+  'git ls-files -z --modified --others --exclude-standard | xargs -0 -r git hash-object --'
 
 // Writes the diff of a range ($2) in the repository ($1) to a file ($3) without passing it through the host's output,
 // which a large diff could pass.

@@ -90,7 +90,9 @@ export function createRunner(limits: () => Limits) {
     if (state.exit === undefined) return { running: conversationId }
     const result = readRun(state.tail ?? '', state.stderr ?? '', exitOf(state.exit))
     const model = modelOf(state.head)
-    return { ended: { ...result, conversationId: result.conversationId ?? conversationId, ...(model ? { model } : {}) } }
+    return {
+      ended: { ...result, conversationId: result.conversationId ?? conversationId, ...(model ? { model } : {}), ...(state.endedAt ? { endedAt: state.endedAt } : {}) },
+    }
   }
 
   /**
@@ -191,7 +193,7 @@ export function createRunner(limits: () => Limits) {
         ? failure(LOST, { conversationId: job.conversationId, note: request.note })
         : await saveAnswer(deps.output, ended, request, request.model ?? ended.model).catch(error => failure(errorText(error)))
     job.status = ended === 'lost' ? 'lost' : outcome.ok ? 'done' : 'failed'
-    job.endedAt = nowOf(deps)
+    job.endedAt = (ended !== 'lost' && ended.endedAt) || nowOf(deps)
     job.conversationId = outcome.conversationId ?? job.conversationId
     job.paths = outcome.paths
     job.error = outcome.error

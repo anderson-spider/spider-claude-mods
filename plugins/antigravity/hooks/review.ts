@@ -16,13 +16,14 @@ export function reviewName(target: ReviewTarget): string {
   return 'base' in target ? `review against ${target.base}` : `review of commit ${target.commit}`
 }
 
-/** What a review leaves out: it runs in a worktree at a commit, so files git does not track never reach it. */
+/** What a branch review leaves out: it runs in a worktree at HEAD, so files git does not track never reach it. */
 export const untrackedNote = (count: number) =>
   `${count} untracked ${count === 1 ? 'file was' : 'files were'} not reviewed; commit ${count === 1 ? 'it' : 'them'} to include ${count === 1 ? 'it' : 'them'}.`
 
 /**
  * Makes a review request runnable in the session's repository: refuses outside one, gives a request without a target
- * the branch against the base origin/HEAD names (else `main` or `master`), and notes the untracked files it leaves out.
+ * the branch against the base origin/HEAD names (else `main` or `master`), and notes the untracked files a branch
+ * review leaves out.
  */
 export async function resolveReview(request: Request, git: Git): Promise<Request | string> {
   try {
@@ -30,9 +31,12 @@ export async function resolveReview(request: Request, git: Git): Promise<Request
     if (inside.exitCode !== 0 || inside.stdout.trim() !== 'true') return NOT_A_REPOSITORY
     const target = request.review ?? (await defaultBase(git))
     if (!target) return NO_BASE
-    // One line per file, a new folder's files included, whatever status.showUntrackedFiles says.
-    const listed = await git(['ls-files', '--others', '--exclude-standard'])
-    const untracked = listed.exitCode === 0 ? listed.stdout.split('\n').filter(Boolean).length : 0
+    let untracked = 0
+    if ('base' in target) {
+      // One line per file, a new folder's files included, whatever status.showUntrackedFiles says.
+      const listed = await git(['ls-files', '--others', '--exclude-standard'])
+      untracked = listed.exitCode === 0 ? listed.stdout.split('\n').filter(Boolean).length : 0
+    }
     return { ...request, review: target, prompt: reviewName(target), ...(untracked ? { note: untrackedNote(untracked) } : {}) }
   } catch (error) {
     return `git could not run (${errorText(error)}), so the review did not start.`

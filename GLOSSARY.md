@@ -53,4 +53,3 @@ _Avoid_: Thread, session
 **Review worktree**:
 The throwaway git worktree an agy review runs in, at the reviewed commit, holding the diff; it is removed when the review ends.
 _Avoid_: Sandbox, checkout
-

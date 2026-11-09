@@ -60,7 +60,7 @@ export const JOBS_DESCRIPTION =
 export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<McpToolInputs['mcp__antigravity__jobs']>
 
 export const ASK_COMMAND_DESCRIPTION = 'Ask Antigravity (agy): /agy-ask <question>'
-export const REVIEW_COMMAND_DESCRIPTION = 'Have agy review the branch: /agy-review [--base <branch> | --commit <sha>] [focus]'
+export const REVIEW_COMMAND_DESCRIPTION = 'Have agy review the branch: /agy-review [--base <branch> | --commit <ref>] [focus]'
 export const DOCTOR_COMMAND_DESCRIPTION = 'Check the agy CLI, its version, sign-in, models and quota: /agy-doctor'
 
 export const ASK_USAGE = 'Usage: /agy-ask <question>'

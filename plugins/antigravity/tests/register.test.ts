@@ -34,7 +34,7 @@ test('an ask runs agy sandboxed in the session folder, never skipping permission
         '--output-format=stream-json',
         '--disable-slash-commands',
         '--sandbox',
-        '--print-timeout=1800s',
+        '--print-timeout=1770s',
         '--model=gemini-4-argon-high',
         '--effort=low',
         '--add-dir=/etc/app',
@@ -171,7 +171,7 @@ test('/agy-review takes one target and a focus, says it was a review, and refuse
 
   const shown = await command($, 'agy-review', '--commit abc1234 focus on the parser')
   expect(host.launched[0]!.argv.at(-1)).toMatch(/\(review of commit abc1234\)[\s\S]*Also look closely at: focus on the parser/)
-  expect(shown.text).toMatch(/\n\nFine\.\n\n— agy, conversation /)
+  expect(shown.text).toMatch(/^Fine\.\n\n— agy, conversation /)
   expect(shown.context?.[0]).toMatch(/^The user asked agy for a review through \/agy-review; it is saved to /)
 
   await command($, 'agy-review', 'only the runner')
@@ -246,6 +246,14 @@ test('the system prompt tells Claude to reach for ask on its own and for review 
   expect(section).toMatch(/^# Antigravity \(agy\)\nUse `mcp__antigravity__ask` yourself for a second opinion from another model family/)
   expect(section).toMatch(/Before opening a PR, or when the user asks for an agy review, load `mcp__antigravity__review`/)
   expect(section).not.toMatch(/codex/i)
+})
+
+test('/agy-ask checks the defaultModel against agy models like the tools do', { options: { defaultModel: 'gemini-9' } }, async ($, on) => {
+  const host = world(on)
+  await started($, host.tools)
+
+  expect((await command($, 'agy-ask', 'Hi')).text).toBe('gemini-9 is not an agy model id. agy models lists: gemini-4-argon-high, gemini-3.8-flash-low.')
+  expect(host.launched).toEqual([])
 })
 
 test('/agy-ask shows the answer and tells Claude where it is saved', async ($, on) => {

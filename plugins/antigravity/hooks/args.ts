@@ -1,5 +1,8 @@
 import type { Request, Workspace } from './model'
 
+// How much sooner than the plugin's limit agy's own print timeout ends a run.
+const TIMEOUT_MARGIN_MS = 30_000
+
 /** What every prompt ends with: agy has no read-only mode, so the sandbox, this line and the edit check stand for one. */
 export const NO_EDIT = 'Do not edit, create or delete any file and do not run commands that change anything; answer in text only.'
 
@@ -38,15 +41,15 @@ export function promptOf(request: Request, workspace: Workspace): string {
  * `--dangerously-skip-permissions`: reads pass without it (measured on agy 1.5.3), and an edit stays behind the
  * sandbox's prompts. Never `--mode plan` either: agy ignores it under `--disable-slash-commands`, which keeps a prompt
  * that starts with `/` from running as a command. Every value is fused to its flag (`--flag=value`), so a value that
- * starts with `-` is never read as a flag. `--print-timeout` is the background limit, so agy usually ends on its own
- * before the plugin has to stop it.
+ * starts with `-` is never read as a flag. `--print-timeout` is the background limit less a margin, so agy ends on its
+ * own, with its own reason, before the plugin's deadline (counted from just before the launch) stops it.
  */
 export function argsOf(request: Request, workspace: Workspace, timeoutMs: number): string[] {
   return [
     '--output-format=stream-json',
     '--disable-slash-commands',
     '--sandbox',
-    `--print-timeout=${Math.ceil(timeoutMs / 1000)}s`,
+    `--print-timeout=${Math.max(1, Math.floor((timeoutMs - TIMEOUT_MARGIN_MS) / 1000))}s`,
     ...(request.model ? [`--model=${request.model}`] : []),
     ...(request.effort ? [`--effort=${request.effort}`] : []),
     ...(request.conversationId ? [`--conversation=${request.conversationId}`] : []),

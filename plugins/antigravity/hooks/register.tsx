@@ -171,8 +171,9 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'agy-ask' }, async ($, e) => {
     const request = commandRequestOf(e.args, ASK_USAGE, defaultModel)
-    if (typeof request === 'string') return { text: request }
-    return askCommandAnswer(await runNow($, request))
+    const checked = typeof request === 'string' ? request : await checkedModel($, request)
+    if (typeof checked === 'string') return { text: checked }
+    return askCommandAnswer(await runNow($, checked))
   })
 
   on('command.run', { command: 'agy-review' }, async ($, e) => {
