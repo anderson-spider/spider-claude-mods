@@ -129,7 +129,7 @@ export type Job = {
   request: Request
   /** Where it runs: checked for edits and, for a review, removed when it ends. */
   workspace: Workspace
-  /** For an image request, the image names its conversation's artifacts folder held before the run: only the run's own are saved. */
+  /** For an image request, the images (name and time) its conversation's artifacts folder held before the run: only the run's own are saved. */
   before?: string[]
 }
 

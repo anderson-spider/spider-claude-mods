@@ -28,9 +28,12 @@ async function imagesIn(deps: Pick<OutputDeps, 'list'>, dir: string): Promise<En
   return entries.filter(entry => entry.kind === 'file' && IMAGE_FILE.test(entry.name)).sort((a, b) => a.mtimeMs - b.mtimeMs)
 }
 
-/** The image names already in a conversation's artifacts folder, so a follow-up saves only the images it adds. */
+// An image as the before and after listings compare it: its name and when it last changed, so one agy rewrote counts.
+const stampOf = (entry: Entry) => `${entry.name}@${entry.mtimeMs}`
+
+/** The images already in a conversation's artifacts folder, so a follow-up saves only the images it adds or rewrites. */
 export async function imagesBefore(deps: Pick<OutputDeps, 'list' | 'artifactsRoot'>, conversationId: string | undefined): Promise<string[]> {
-  return conversationId ? (await imagesIn(deps, artifactsOf(deps, conversationId))).map(entry => entry.name) : []
+  return conversationId ? (await imagesIn(deps, artifactsOf(deps, conversationId))).map(stampOf) : []
 }
 
 /** Adds a number to a path only when the run saved more than one image. */
@@ -38,9 +41,13 @@ export const variantPath = (base: string, index: number, count: number) => (coun
 
 const extensionOf = (name: string) => name.slice(name.lastIndexOf('.') + 1).toLowerCase()
 
-// A small JPEG of a saved image (sips, on macOS), so the model sees it at once; none elsewhere.
-async function previewOf(deps: Pick<OutputDeps, 'run' | 'readBytes'>, path: string): Promise<Preview | undefined> {
-  const small = `${path}.preview.jpg`
+// A path with the extension of the image it holds: an `out` named .png that agy filled with a JPEG becomes .jpg.
+const withExtension = (path: string, extension: string) => `${path.replace(/\.\w+$/, '')}.${extension}`
+
+// A small JPEG of a saved image (sips, on macOS), so the model sees it at once; none elsewhere. It is made in the
+// answers folder, never beside an `out` in the project, where a file of that name could be.
+async function previewOf(deps: Pick<OutputDeps, 'run' | 'readBytes' | 'outDir'>, path: string): Promise<Preview | undefined> {
+  const small = `${deps.outDir}/.preview-${path.split('/').pop()}.jpg`
   try {
     const done = await deps.run(['sips', '-Z', String(PREVIEW_SIDE), '-s', 'format', 'jpeg', path, '--out', small], { timeoutMs: 30_000 })
     if (done.exitCode !== 0) return undefined
@@ -64,14 +71,15 @@ export async function saveImages(deps: OutputDeps, result: RunResult, request: R
     return failure(result.error ?? 'agy ended without a conversation.', { conversationId, timedOut: result.timedOut, hint: !result.timedOut })
   }
   const dir = artifactsOf(deps, conversationId)
-  const added = (await imagesIn(deps, dir)).filter(entry => !before.includes(entry.name))
+  const added = (await imagesIn(deps, dir)).filter(entry => !before.includes(stampOf(entry)))
   const said = message?.trim() ? `agy said: ${message.trim()}` : undefined
   if (!added.length) return failure('agy generated no image.', { conversationId, note: said })
   const now = new Date()
   const paths: string[] = []
   const previews: Preview[] = []
   for (const [i, entry] of added.entries()) {
-    const path = variantPath(request.out ?? `${deps.outDir}/${fileName(request.prompt, now, extensionOf(entry.name))}`, i, added.length)
+    const extension = extensionOf(entry.name)
+    const path = variantPath(request.out ? withExtension(request.out, extension) : `${deps.outDir}/${fileName(request.prompt, now, extension)}`, i, added.length)
     await deps.run(['mkdir', '-p', path.slice(0, path.lastIndexOf('/')) || '/'])
     const copied = await deps.run(['cp', `${dir}/${entry.name}`, path], { timeoutMs: 60_000 })
     if (copied.exitCode !== 0) return { ...failure(`Could not copy ${dir}/${entry.name} to ${path}: ${copied.stderr.trim()}`, { conversationId }), paths }

@@ -58,16 +58,16 @@ test('an image runs agy sandboxed in an empty work folder of the plugin’s, nev
   expect(host.written[0]?.text).toBe(`<!-- agy conversation ${CONVERSATION} · model gemini-4-argon-high · image -->\n\nA small rocket\n\n- ${copy[2]}\n\nDone.\n`)
 })
 
-test('an image follow-up edits from a reference and saves only the images it added, numbered beside its out', async ($, on) => {
+test('an image follow-up edits from a reference and saves only the images it added or rewrote, numbered beside its out with their own extension', async ($, on) => {
   const host = world(on, {
     agy: [
       {
         stdout: imaged('Two blue rockets.'),
-        onEnd: () => (host.state.dirs[ARTIFACTS] = [file('first_1.jpg', 1), file('blue_3.png', 3), file('blue_2.png', 2)]),
+        onEnd: () => (host.state.dirs[ARTIFACTS] = [file('first_1.jpg', 1), file('blue_3.png', 3), file('blue_2.png', 2), file('edited.jpg', 4)]),
       },
     ],
   })
-  host.state.dirs[ARTIFACTS] = [file('first_1.jpg', 1)]
+  host.state.dirs[ARTIFACTS] = [file('first_1.jpg', 1), file('edited.jpg', 1)]
   await started($, host.tools)
 
   await call($, 'image', { prompt: 'Make it blue', conversationId: CONVERSATION, reference: '/proj/art/rocket.jpg', out: '/proj/art/blue.png' })
@@ -78,7 +78,9 @@ test('an image follow-up edits from a reference and saves only the images it add
   expect(host.processes.filter(p => p.argv[0] === 'cp').map(p => p.argv)).toEqual([
     ['cp', `${ARTIFACTS}/blue_2.png`, '/proj/art/blue-1.png'],
     ['cp', `${ARTIFACTS}/blue_3.png`, '/proj/art/blue-2.png'],
+    ['cp', `${ARTIFACTS}/edited.jpg`, '/proj/art/blue-3.jpg'],
   ])
+  expect(host.processes.filter(p => p.argv[0] === 'sips').map(p => p.argv.at(-1))).toEqual(['/tmp/t/agy/.preview-blue-1.png.jpg', '/tmp/t/agy/.preview-blue-2.png.jpg', '/tmp/t/agy/.preview-blue-3.jpg.jpg'])
   expect(host.written.map(w => w.path)).toEqual([expect.stringMatching(/^\/tmp\/t\/agy\/\d{8}-\d{6}-make-it-blue\.md$/)])
 })
 

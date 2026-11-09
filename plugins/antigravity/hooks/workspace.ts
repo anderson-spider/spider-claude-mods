@@ -1,3 +1,4 @@
+import { within } from './args'
 import type { ProcessRunner, ReviewTarget, Workspace, Workspaces } from './model'
 
 /** The diff file a review's worktree holds, named in the review prompt. */
@@ -79,7 +80,10 @@ export function workspaces(host: WorkspaceHost): Workspaces {
       if (made.exitCode !== 0) throw new Error(made.stderr.trim() || `mkdir exited with code ${made.exitCode}`)
       return { cwd, workFolder: cwd }
     },
-    discard: async path => void (await host.run(['rm', '-rf', path], { timeoutMs: 30_000 })),
+    // The path comes back from a stored job: only a folder under the work folder is ever deleted.
+    discard: async path => {
+      if (path !== host.workDir && within(path, host.workDir)) await host.run(['rm', '-rf', path], { timeoutMs: 30_000 })
+    },
     changed: async workspace => {
       if (workspace.before === undefined) return undefined
       const now = await fingerprint(workspace.cwd)
