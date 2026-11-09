@@ -242,6 +242,22 @@ test('a review worktree being made is already held by its job, so a session star
   expect(sweeper.spaces.removed).toEqual([])
 })
 
+test('a foreground wait that fails says how long agy really ran, not the configured wait', async () => {
+  const { gate, release } = gated()
+  const { d } = deps([{ stdout: answered('Late.'), gate }], {
+    sleep: async () => {
+      throw new Error('aborted')
+    },
+  })
+
+  const moved = await createRunner(limits).runNow(d, ask)
+
+  expect(moved.text).toBe(
+    'The wait for agy failed (aborted). agy is still working after less than a minute: job #j1 goes on in the background and a message arrives when it ends (the jobs tool shows it meanwhile).',
+  )
+  release()
+})
+
 test('past the foreground wait an image goes on as a job, whose end copies the image its run added, names it in the notice and removes the work folder', async () => {
   const { gate, release } = gated()
   const { d, runs, spaces, listings, ran, submitted, submission } = deps([{ stdout: imaged('Done.'), gate }])

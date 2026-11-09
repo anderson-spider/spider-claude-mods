@@ -95,8 +95,9 @@ export function jobMessage(job: Job, outcome: Outcome): string {
 }
 
 /** The foreground wait ran out: the run goes on as a job, and the call answers as an error (no answer yet). */
-export function movedToBackground(job: Job, minutes: number): Outcome {
-  const text = `agy is still working after ${minutes} min: job #${job.id} goes on in the background and a message arrives when it ends (the jobs tool shows it meanwhile).`
+export function movedToBackground(job: Job, elapsedMs: number): Outcome {
+  const elapsed = elapsedMs < 60_000 ? 'less than a minute' : `${Math.round(elapsedMs / 60_000)} min`
+  const text = `agy is still working after ${elapsed}: job #${job.id} goes on in the background and a message arrives when it ends (the jobs tool shows it meanwhile).`
   return { ok: false, text, conversationId: job.conversationId }
 }
 
@@ -109,5 +110,6 @@ export function askCommandAnswer(outcome: Outcome, asked = 'The user asked agy t
   }
 }
 
-/** What `/agy-review` shows: the review as agy wrote it, and context that names it a review. */
-export const reviewCommandAnswer = (outcome: Outcome) => askCommandAnswer(outcome, 'The user asked agy for a review through /agy-review; it is')
+/** What a request started as a background job answers at once. */
+export const startedJob = (job: Job) =>
+  `Started job #${job.id}. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile.`

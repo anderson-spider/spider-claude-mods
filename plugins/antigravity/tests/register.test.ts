@@ -273,7 +273,7 @@ test('without origin/HEAD the review falls back to main, else master, else asks 
   expect(host.launched).toHaveLength(2)
 })
 
-test('/agy-review takes one target and a focus, says it was a review, and refuses what it cannot read', async ($, on) => {
+test('/agy-review takes one target and a focus, starts the review as a background job at once, and refuses what it cannot read', async ($, on) => {
   const host = world(on, {
     agy: [{ stdout: answered('Fine.') }, { stdout: answered('Fine.') }],
     git: { ...REPO, '-C /proj diff --name-only abc1234^!': { exitCode: 0, stdout: 'a\n' }, '-C /proj worktree add --detach <wt> abc1234': { exitCode: 0 } },
@@ -282,8 +282,10 @@ test('/agy-review takes one target and a focus, says it was a review, and refuse
 
   const shown = await command($, 'agy-review', '--commit abc1234 focus on the parser')
   expect(host.launched[0]!.argv.at(-1)).toMatch(/\(review of commit abc1234\)[\s\S]*Also look closely at: focus on the parser/)
-  expect(shown.text).toMatch(/^Fine\.\n\n— agy, conversation /)
-  expect(shown.context?.[0]).toMatch(/^The user asked agy for a review through \/agy-review; it is saved to /)
+  expect(shown.text).toMatch(/^Started job #\w+\. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile\.$/)
+  expect(host.statuses).toEqual([])
+  await host.submission()
+  expect(host.submitted[0]).toMatch(/\njob #\w+ done: review "review of commit abc1234"\nSaved to: \/tmp\/t\/agy\/.*\nConversation: [\w-]+\nRead the saved file for the review\.$/)
 
   await command($, 'agy-review', 'only the runner')
   expect(host.launched[1]!.argv.at(-1)).toMatch(/\(review against origin\/main\)[\s\S]*Also look closely at: only the runner/)
