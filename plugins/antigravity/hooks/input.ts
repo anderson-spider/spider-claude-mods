@@ -29,13 +29,31 @@ function outputOf(e: Record<string, unknown>): { out?: string; maxChars?: number
   return { ...(out ? { out } : {}), ...(maxChars ? { maxChars } : {}) }
 }
 
-/** The run's model and effort, or the error to answer; a model with no `model` given is the plugin's default. */
+// The effort a model id names at its end (`gemini-4-argon-high`): agy refuses `--effort` with such a model. Its ids
+// come in these efforts only.
+const NAMED_EFFORT = /-(low|medium|high|xhigh|max)$/i
+const MODEL_EFFORTS = ['low', 'medium', 'high']
+
+/**
+ * The run's model and effort, or the error to answer; a model with no `model` given is the plugin's default. agy
+ * rejects `--effort` with a model id that names its own effort: an effort equal to the named one is dropped, another
+ * one with an explicit model is refused, and with the default model it picks the default's variant of that effort
+ * (checkedModel then makes sure agy lists it).
+ */
 function tuningOf(e: Record<string, unknown>, defaultModel: string | undefined): { model?: string; effort?: string } | string {
-  const model = trimmedOf(e.model) ?? defaultModel
+  const given = trimmedOf(e.model)
+  const model = given ?? defaultModel
   if (model && !MODEL.test(model)) return `${model} is not a model id.`
   const effort = trimmedOf(e.effort)?.toLowerCase()
   if (effort && !(EFFORTS as readonly string[]).includes(effort)) return `${effort} is not an effort level (${EFFORTS.join(', ')}).`
-  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+  const named = model && NAMED_EFFORT.exec(model)?.[1]?.toLowerCase()
+  if (!effort || !model || !named) return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+  if (effort === named) return { model }
+  const which = given ? model : `The defaultModel ${model}`
+  if (!MODEL_EFFORTS.includes(effort)) return `${which} names its effort, and agy model ids come in ${MODEL_EFFORTS.join(', ')} only; leave effort out or pass a model id.`
+  const variant = model.replace(NAMED_EFFORT, `-${effort}`)
+  if (given) return `${model} already names its effort; pass the model id with the effort you want (such as ${variant}) and leave effort out.`
+  return { model: variant }
 }
 
 /** Reads an ask tool call's input into a request, or the error to answer. */

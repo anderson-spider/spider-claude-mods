@@ -133,7 +133,7 @@ test('an ask runs agy sandboxed in the session folder, never skipping permission
   const host = world(on, { agy: [{ stdout: answered('Looks fine.') }] })
   await started($, host.tools)
 
-  const result = await call($, 'ask', { prompt: 'Review the plan', effort: 'low', model: 'gemini-4-argon-high', files: ['/proj/plan.md', '/etc/app/conf.yml'] })
+  const result = await call($, 'ask', { prompt: 'Review the plan', model: 'gemini-4-argon-high', files: ['/proj/plan.md', '/etc/app/conf.yml'] })
 
   expect(result.isError).toBe(undefined)
   expect(host.launched).toEqual([
@@ -146,7 +146,6 @@ test('an ask runs agy sandboxed in the session folder, never skipping permission
         '--sandbox',
         '--print-timeout=1770s',
         '--model=gemini-4-argon-high',
-        '--effort=low',
         '--add-dir=/etc/app',
         `--print=Review the plan\n\nFiles to read (absolute paths):\n- /proj/plan.md\n- /etc/app/conf.yml\n\n${NO_EDIT}`,
       ],
@@ -404,6 +403,51 @@ test('the system prompt tells Claude to reach for ask on its own and for review 
   expect(section).toMatch(/^# Antigravity \(agy\)\nUse `mcp__antigravity__ask` yourself for a second opinion from another model family/)
   expect(section).toMatch(/Before opening a PR, or when the user asks for an agy review, load `mcp__antigravity__review`/)
   expect(section).not.toMatch(/codex/i)
+})
+
+test('an effort with a model id that already names another effort is refused before agy runs; the same effort is dropped, and alone it passes as --effort', async ($, on) => {
+  const host = world(on, { agy: [{ stdout: answered('Quick.') }, { stdout: answered('Quick.') }] })
+  await started($, host.tools)
+
+  expect(await call($, 'ask', { prompt: 'Hi', model: 'gemini-4-argon-high', effort: 'low' })).toEqual({
+    result: 'gemini-4-argon-high already names its effort; pass the model id with the effort you want (such as gemini-4-argon-low) and leave effort out.',
+    isError: true,
+  })
+  expect(host.launched).toEqual([])
+
+  expect((await call($, 'ask', { prompt: 'Hi', model: 'Gemini-4-Argon-HIGH', effort: 'max' })).result).toBe(
+    'Gemini-4-Argon-HIGH names its effort, and agy model ids come in low, medium, high only; leave effort out or pass a model id.',
+  )
+  expect(host.launched).toEqual([])
+
+  await call($, 'ask', { prompt: 'Hi', model: 'gemini-4-argon-high', effort: 'HIGH' })
+  expect(host.launched[0]!.argv.filter(arg => /^--(model|effort)/.test(arg))).toEqual(['--model=gemini-4-argon-high'])
+  await call($, 'ask', { prompt: 'Hi', effort: 'low' })
+  expect(host.launched[1]!.argv).toContain('--effort=low')
+})
+
+test('an effort with the defaultModel picks that model’s variant of the effort, checked against agy models', { options: { defaultModel: 'gemini-3.8-flash-high' } }, async ($, on) => {
+  const host = world(on, { agy: [{ stdout: answered('Quick.') }] })
+  await started($, host.tools)
+
+  await call($, 'ask', { prompt: 'Hi', effort: 'low' })
+
+  const { argv } = host.launched[0]!
+  expect(argv).toContain('--model=gemini-3.8-flash-low')
+  expect(argv.some(arg => arg.startsWith('--effort'))).toBe(false)
+  expect((await call($, 'ask', { prompt: 'Hi', effort: 'max' })).result).toBe(
+    'The defaultModel gemini-3.8-flash-high names its effort, and agy model ids come in low, medium, high only; leave effort out or pass a model id.',
+  )
+})
+
+test('an effort with a defaultModel that names no effort passes as --effort', { options: { defaultModel: 'gemini-auto' } }, async ($, on) => {
+  const host = world(on, { agy: [{ stdout: answered('Quick.') }] })
+  host.state.runs.models = { exitCode: 0, stdout: 'gemini-auto\tGemini (auto)\n' }
+  await started($, host.tools)
+
+  await call($, 'ask', { prompt: 'Hi', effort: 'low' })
+
+  expect(host.launched[0]!.argv).toEqual(expect.arrayContaining(['--model=gemini-auto', '--effort=low']))
 })
 
 test('/agy-ask checks the defaultModel against agy models like the tools do', { options: { defaultModel: 'gemini-9' } }, async ($, on) => {
