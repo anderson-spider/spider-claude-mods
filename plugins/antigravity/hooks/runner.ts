@@ -304,7 +304,7 @@ export function createRunner(limits: () => Limits) {
       return outcome
     }
     adopt(deps, job)
-    const moved = movedToBackground(job, minutesOf(waitMs))
+    const moved = movedToBackground(job, nowOf(deps) - job.startedAt)
     return failed === undefined ? moved : { ...moved, text: `The wait for agy failed (${failed}). ${moved.text}` }
   }
 

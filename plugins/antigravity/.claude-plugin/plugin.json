@@ -1,6 +1,6 @@
 {
   "name": "antigravity",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Ask Google's Antigravity CLI (agy) for a second opinion or a review of the branch's changes from another model family, read-only, or an image, and save the result locally.",
   "author": {
     "name": "anderson-spider"
@@ -11,7 +11,7 @@
       "type": "number",
       "title": "Foreground wait (minutes)",
       "description": "How long a request waits for agy before it keeps going as a background job.",
-      "default": 6
+      "default": 2
     },
     "backgroundMinutes": {
       "type": "number",

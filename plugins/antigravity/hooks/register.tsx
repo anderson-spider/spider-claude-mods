@@ -4,7 +4,7 @@ import { diagnose, report } from './doctor'
 import { askRequestOf, commandRequestOf, imageRequestOf, placementError, reviewRequestOf } from './input'
 import { locateAgy } from './locate'
 import type { Outcome, ProcessRunner, Request } from './model'
-import { answerOf, askCommandAnswer, errorText, failure, imageCommandAnswer, notPrivate, reviewCommandAnswer } from './presentation'
+import { answerOf, askCommandAnswer, errorText, failure, imageCommandAnswer, notPrivate, startedJob } from './presentation'
 import { ASK_DESCRIPTION, IMAGE_DESCRIPTION, PROMPT, REVIEW_DESCRIPTION } from './prompts'
 import { resolveReview, reviewCommandInput } from './review'
 import { createRunner, type RunnerDeps } from './runner'
@@ -26,7 +26,7 @@ import {
 import { workspaces } from './workspace'
 
 // The defaults of the `foregroundMinutes` and `backgroundMinutes` settings, as plugin.json declares them.
-const FOREGROUND_MINUTES = 6
+const FOREGROUND_MINUTES = 2
 const BACKGROUND_MINUTES = 30
 
 // The settings, refreshed by each register.
@@ -179,7 +179,7 @@ async function serve($: EngineInterface, request: Request | string, wait: unknow
   if (wait === false) {
     const job = await runner.startJob(await depsOf($), checked)
     if ('ok' in job) return answerOf(job)
-    return { result: `Started job #${job.id}. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile.` }
+    return { result: startedJob(job) }
   }
   return answerOf(await runNow($, checked))
 }
@@ -241,7 +241,8 @@ export const register: Register = (on, options) => {
     const request = await reviewOf($, input)
     const checked = await readyOf($, request)
     if (typeof checked === 'string') return { text: checked }
-    return reviewCommandAnswer(await runNow($, checked))
+    const job = await runner.startJob(await depsOf($), checked)
+    return { text: 'ok' in job ? job.text : startedJob(job) }
   })
 
   on('command.run', { command: 'agy-doctor' }, async $ => {
