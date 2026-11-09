@@ -131,7 +131,7 @@ test('a follow-up on a conversation that is still running is refused, naming its
 
   const refused = await runner.runNow(d, { ...ask, conversationId: CONVERSATION })
 
-  expect(refused).toMatchObject({ ok: false, error: `Conversation ${CONVERSATION} is still running as job #j1; ask on it again once that job ends (the jobs tool shows it).` })
+  expect(refused).toMatchObject({ ok: false, error: `Conversation ${CONVERSATION} is still running as job #j1; ask on it again once that ends (the jobs tool shows it).` })
   expect(runs.launched).toHaveLength(1)
   release()
   await submission()
@@ -193,4 +193,40 @@ test('session start prunes finished jobs past 7 days or the 50 newest, and remov
   expect(kept).not.toContain('job:k0')
   expect(runs.removed).toEqual(expect.arrayContaining(['/tmp/agy/runs/old', '/tmp/agy/runs/k0', '/tmp/agy/runs/k1']))
   expect(spaces.removed.map(r => r.worktree).sort()).toEqual(['/tmp/agy/worktrees/old', '/tmp/agy/worktrees/stray'])
+})
+
+test('two follow-ups started at once on one conversation: one runs, the other is refused', async () => {
+  const { gate, release } = gated()
+  const { d, runs, submission } = deps([{ stdout: answered('Slow.'), gate }])
+  const runner = createRunner(limits)
+
+  const [a, b] = await Promise.all([runner.startJob(d, { ...ask, conversationId: CONVERSATION }), runner.startJob(d, { ...ask, conversationId: CONVERSATION })])
+
+  expect([a, b].filter(job => 'dir' in job)).toHaveLength(1)
+  expect([a, b].find(job => !('dir' in job))).toMatchObject({ ok: false, error: expect.stringMatching(/^Conversation .* is still running/) })
+  expect(runs.launched).toHaveLength(1)
+  release()
+  await submission()
+})
+
+test('a review worktree being made is already held by its job, so a session start meanwhile leaves it alone', async () => {
+  const { gate, release } = gated()
+  const memory = memoryStore()
+  const starting = deps([{ stdout: answered('Fine.') }], { memory })
+  const sweeper = deps([], { memory, session: 'sess-b' })
+  const made = starting.spaces.workspaces.review
+  starting.spaces.workspaces.review = async (project, id, target) => {
+    const workspace = await made(project, id, target)
+    sweeper.spaces.left.add(id)
+    await gate
+    return workspace
+  }
+
+  const run = createRunner(limits).runNow(starting.d, review)
+  await settle()
+  await createRunner(limits).resume(sweeper.d)
+  release()
+  await run
+
+  expect(sweeper.spaces.removed).toEqual([])
 })

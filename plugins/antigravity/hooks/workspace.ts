@@ -5,13 +5,14 @@ export const DIFF_FILE = '.agy-review.diff'
 
 export const NO_REPO_NOTE = 'Not a git repository: edits by agy could not be checked.'
 
-// The working tree's fingerprint: `git status` (which files differ from HEAD and how, untracked ones included, ignored
-// ones not) and the content hash of each modified or untracked file, so a second edit to an already changed file
-// shows too. `git hash-object` without `-w` writes nothing, so the repository, its index and the person's staging stay
-// as they were. `xargs -r` runs nothing when no file differs (GNU needs the flag; BSD accepts it).
+// The working tree's fingerprint, one hash: of `git status` (which files differ from HEAD and how, deleted and untracked
+// ones included, ignored ones not) and of the content of each modified or untracked file that still exists, so a
+// second edit to an already changed file shows too. A deleted file is in the status, and has no content to hash.
+// `git hash-object` without `-w` writes nothing, so the repository, its index and the person's staging stay as they were.
 export const FINGERPRINT =
-  'git status --porcelain -uall || exit 1; ' +
-  'git ls-files -z --modified --others --exclude-standard | xargs -0 -r git hash-object --'
+  's=$(git status --porcelain -uall) || exit 1; ' +
+  "{ printf '%s\\n' \"$s\"; git ls-files --modified --others --exclude-standard | " +
+  "while IFS= read -r f; do [ -f \"$f\" ] && printf '%s\\n' \"$f\"; done | git hash-object --stdin-paths; } | git hash-object --stdin"
 
 // Writes the diff of a range ($2) in the repository ($1) to a file ($3) without passing it through the host's output,
 // which a large diff could pass.

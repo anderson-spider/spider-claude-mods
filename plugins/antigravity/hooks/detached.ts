@@ -16,6 +16,8 @@ export const LAUNCH =
 // the `result` event is the last line, and holds the whole answer however long the run's output grew.
 const HEAD_BYTES = 8_192
 const TAIL_LINES = 3
+// The end of stderr read: enough to keep the AGY_ERROR line when agy logs more after it.
+const STDERR_BYTES = 32_768
 
 /** What the runs need from the host: processes and text files. */
 export type DetachedHost = {
@@ -42,7 +44,8 @@ export function parseExit(text: string | undefined): { exit: number; endedAt?: n
 
 /** The runs as files on this machine. */
 export function detachedRuns(host: DetachedHost): RunFiles {
-  const pidOf = async (dir: string) => (await host.read(`${dir}/pid`))?.trim() || undefined
+  // Only a number counts as the run's pid: the file sits in a folder under TMPDIR.
+  const pidOf = async (dir: string) => /^\d+$/.exec((await host.read(`${dir}/pid`))?.trim() ?? '')?.[0]
   const output = async (args: string[]) => {
     const done = await host.run(args, { timeoutMs: 10_000 }).catch(() => undefined)
     return done?.exitCode === 0 ? done.stdout : ''
@@ -67,7 +70,7 @@ export function detachedRuns(host: DetachedHost): RunFiles {
       const head = await output(['head', '-c', String(HEAD_BYTES), events])
       const ended = parseExit(await host.read(`${dir}/exit`))
       if (!ended) return { head }
-      const [tail, stderr] = await Promise.all([output(['tail', '-n', String(TAIL_LINES), events]), output(['tail', '-c', '4096', `${dir}/stderr.txt`])])
+      const [tail, stderr] = await Promise.all([output(['tail', '-n', String(TAIL_LINES), events]), output(['tail', '-c', String(STDERR_BYTES), `${dir}/stderr.txt`])])
       return { head, tail, stderr, ...ended }
     },
     alive,

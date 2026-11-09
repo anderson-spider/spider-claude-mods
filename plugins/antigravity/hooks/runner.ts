@@ -1,6 +1,6 @@
 import { argsOf } from './args'
 import { conversationOf, modelOf, readRun } from './events'
-import type { Job, JobStore, OutputDeps, Outcome, Request, RunFiles, RunResult, Workspace, Workspaces } from './model'
+import type { Job, JobStore, OutputDeps, Outcome, Request, RunFiles, RunResult, Workspaces } from './model'
 import { saveAnswer } from './output'
 import { errorText, failure, jobMessage, jobsReport, movedToBackground } from './presentation'
 import { NO_REPO_NOTE } from './workspace'
@@ -62,6 +62,9 @@ const isJob = (value: unknown): value is Job =>
 /** What a job keeps of its request: the files went to agy already, and the prompt is cut short. */
 const kept = (request: Request): Request => ({ ...request, prompt: request.prompt.slice(0, PROMPT_KEPT), files: [] })
 
+const busyText = (conversation: string, what: string) =>
+  `Conversation ${conversation} is still running as ${what}; ask on it again once that ends (the jobs tool shows it).`
+
 const withNote = (request: Request, line: string | undefined): Request =>
   line ? { ...request, note: request.note ? `${request.note}\n\n${line}` : line } : request
 
@@ -76,6 +79,7 @@ type Released = 'released'
  * session's watch on them starts again in `resume`) and the session (the next one to start takes them over).
  */
 export function createRunner(limits: () => Limits) {
+  const starting = new Set<string>()
   const nowOf = (deps: RunnerDeps) => (deps.now ?? Date.now)()
   const save = (deps: RunnerDeps, job: Job) => deps.store.set(keyOf(job.id), job)
   const stored = async (deps: RunnerDeps, id: string) => {
@@ -133,54 +137,74 @@ export function createRunner(limits: () => Limits) {
   const removeWorktree = (deps: RunnerDeps, job: Job) =>
     job.workspace.worktree ? deps.workspaces.remove(job.project, job.workspace.worktree).catch(() => undefined) : Promise.resolve()
 
+  /**
+   * Starts a run: its job is in the store before its workspace is made, so a session start meanwhile never sweeps a
+   * review worktree that is still being built, and any failure on the way takes the job, its folder and its worktree
+   * back out. The deadlines count from just before the launch, after the git work.
+   */
   async function start(deps: RunnerDeps, request: Request, background: boolean): Promise<Job | Outcome> {
     const agy = await deps.agy()
     if (typeof agy !== 'string') return failure(agy.error)
-    // Two turns at once on one conversation hang agy: a follow-up waits for the run before it.
-    if (request.conversationId) {
-      const busy = (await jobs(deps)).find(job => job.status === 'running' && job.conversationId === request.conversationId)
-      if (busy) return failure(`Conversation ${request.conversationId} is still running as job #${busy.id}; ask on it again once that job ends (the jobs tool shows it).`)
+    const conversation = request.conversationId
+    // Two turns at once on one conversation hang agy: a follow-up waits for the run before it. `starting` holds the
+    // conversations this module is starting, reserved before any wait, which the store shows only once their job is saved.
+    if (conversation) {
+      if (starting.has(conversation)) return failure(busyText(conversation, 'a run that is starting'))
+      starting.add(conversation)
     }
-    const project = await deps.project()
-    const startedAt = nowOf(deps)
-    const id = deps.newId?.() ?? freshId(startedAt)
-    let workspace: Workspace
-    let ran = request
-    if (request.kind === 'review') {
-      // resolveReview (review.ts) gives every review its target before it gets here.
-      const made = await deps.workspaces.review(project, id, request.review!)
-      if ('error' in made) return failure(made.error)
-      workspace = made
-    } else {
-      workspace = await deps.workspaces.ask(project)
-      if (workspace.before === undefined) ran = withNote(request, NO_REPO_NOTE)
-    }
-    const dir = `${deps.runsDir}/${id}`
-    const job: Job = {
-      id,
-      kind: ran.kind,
-      prompt: ran.prompt.slice(0, PROMPT_KEPT),
-      status: 'running',
-      startedAt,
-      ...(ran.conversationId ? { conversationId: ran.conversationId } : {}),
-      sessionId: await deps.sessionId(),
-      project,
-      seenAt: startedAt,
-      dir,
-      background,
-      request: kept(ran),
-      workspace,
-    }
-    await save(deps, job)
     try {
-      await deps.files.launch(dir, [agy, ...argsOf(ran, workspace, limits().backgroundMs)], workspace.cwd)
-    } catch (error) {
-      await deps.store.delete(keyOf(id))
-      await deps.files.remove(dir).catch(() => undefined)
-      await removeWorktree(deps, job)
-      return failure(`agy could not run: ${errorText(error)}`)
+      if (conversation) {
+        const busy = (await jobs(deps)).find(job => job.status === 'running' && job.conversationId === conversation)
+        if (busy) return failure(busyText(conversation, `job #${busy.id}`))
+      }
+      const project = await deps.project()
+      const id = deps.newId?.() ?? freshId(nowOf(deps))
+      const dir = `${deps.runsDir}/${id}`
+      const job: Job = {
+        id,
+        kind: request.kind,
+        prompt: request.prompt.slice(0, PROMPT_KEPT),
+        status: 'running',
+        startedAt: nowOf(deps),
+        ...(conversation ? { conversationId: conversation } : {}),
+        sessionId: await deps.sessionId(),
+        project,
+        seenAt: nowOf(deps),
+        dir,
+        background,
+        request: kept(request),
+        workspace: request.kind === 'review' ? { cwd: deps.workspaces.pathOf(id), worktree: deps.workspaces.pathOf(id) } : { cwd: project },
+      }
+      await save(deps, job)
+      try {
+        let ran = request
+        if (request.kind === 'review') {
+          // resolveReview (review.ts) gives every review its target before it gets here.
+          const made = await deps.workspaces.review(project, id, request.review!)
+          if ('error' in made) {
+            await deps.store.delete(keyOf(id))
+            return failure(made.error)
+          }
+          job.workspace = made
+        } else {
+          job.workspace = await deps.workspaces.ask(project)
+          if (job.workspace.before === undefined) ran = withNote(request, NO_REPO_NOTE)
+        }
+        job.request = kept(ran)
+        job.startedAt = nowOf(deps)
+        job.seenAt = job.startedAt
+        await save(deps, job)
+        await deps.files.launch(dir, [agy, ...argsOf(ran, job.workspace, limits().backgroundMs)], job.workspace.cwd)
+        return job
+      } catch (error) {
+        await deps.store.delete(keyOf(id)).catch(() => undefined)
+        await deps.files.remove(dir).catch(() => undefined)
+        await removeWorktree(deps, job)
+        return failure(`agy could not run: ${errorText(error)}`)
+      }
+    } finally {
+      if (conversation) starting.delete(conversation)
     }
-    return job
   }
 
   /** Checks the workspace for edits, saves the run's answer, removes a review's worktree and records how it ended. */
