@@ -3,8 +3,13 @@ import type { Request, Workspace } from './model'
 // How much sooner than the plugin's limit agy's own print timeout ends a run.
 const TIMEOUT_MARGIN_MS = 30_000
 
-/** What every prompt ends with: agy has no read-only mode, so the sandbox, this line and the edit check stand for one. */
-export const NO_EDIT = 'Do not edit, create or delete any file and do not run commands that change anything; answer in text only.'
+/**
+ * What every ask and review prompt ends with: agy has no read-only mode, so the sandbox, this line and the edit check
+ * stand for one. It also keeps agy off the project's builds, tests and scripts, which it otherwise takes for reads: a
+ * check suite it starts in the background can hold the run idle until its time limit.
+ */
+export const NO_EDIT =
+  "Do not edit, create or delete any file and do not run commands that change anything. Do not run builds, tests, installers, package scripts or the project's own scripts: only read files and run read-only git commands (git status, git log, git diff, git show, git grep). Answer in text only."
 
 /**
  * What an image prompt ends with instead: agy's image-generator subagent saves the image in the conversation's
