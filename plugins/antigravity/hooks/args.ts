@@ -6,10 +6,15 @@ const TIMEOUT_MARGIN_MS = 30_000
 /** What every prompt ends with: agy has no read-only mode, so the sandbox, this line and the edit check stand for one. */
 export const NO_EDIT = 'Do not edit, create or delete any file and do not run commands that change anything; answer in text only.'
 
+/** Whether a path is the folder `dir` or lies within it. */
+export const within = (path: string, dir: string) => path === dir || path.startsWith(`${dir.replace(/\/$/, '')}/`)
+
+/** The folder a file is in. */
+export const folderOf = (path: string) => path.slice(0, path.lastIndexOf('/')) || '/'
+
 /** The folders of the listed files that lie outside `cwd`, each once: agy reads only its working folder and these. */
 function outsideDirs(files: string[], cwd: string): string[] {
-  const inside = (path: string) => path === cwd || path.startsWith(`${cwd.replace(/\/$/, '')}/`)
-  return [...new Set(files.filter(path => !inside(path)).map(path => path.slice(0, path.lastIndexOf('/')) || '/'))]
+  return [...new Set(files.filter(path => !within(path, cwd)).map(folderOf))]
 }
 
 /** The review's instructions: the diff file and its files, the severity scale, and the person's focus when given. */

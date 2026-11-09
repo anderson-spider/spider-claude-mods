@@ -9,14 +9,16 @@ export const NO_REPO_NOTE = 'Not a git repository: edits by agy could not be che
 // ones included, ignored ones not) and of the content of each modified or untracked file that still exists, so a
 // second edit to an already changed file shows too. A deleted file is in the status, and has no content to hash.
 // `git hash-object` without `-w` writes nothing, so the repository, its index and the person's staging stay as they were.
+// The host turns repo hooks off for git, not the commands a repository's config names: `core.fsmonitor` is off here,
+// and the diff below runs no external diff or textconv.
 export const FINGERPRINT =
-  's=$(git status --porcelain -uall) || exit 1; ' +
-  "{ printf '%s\\n' \"$s\"; git ls-files --modified --others --exclude-standard | " +
+  's=$(git -c core.fsmonitor=false status --porcelain -uall) || exit 1; ' +
+  "{ printf '%s\\n' \"$s\"; git -c core.fsmonitor=false ls-files --modified --others --exclude-standard | " +
   "while IFS= read -r f; do [ -f \"$f\" ] && printf '%s\\n' \"$f\"; done | git hash-object --stdin-paths; } | git hash-object --stdin"
 
 // Writes the diff of a range ($2) in the repository ($1) to a file ($3) without passing it through the host's output,
 // which a large diff could pass.
-const WRITE_DIFF = 'git -C "$1" diff "$2" >"$3"'
+const WRITE_DIFF = 'umask 077; git -C "$1" -c core.fsmonitor=false diff --no-ext-diff --no-textconv "$2" >"$3"'
 
 /** The git range a review target covers: the branch since its merge base with the base, or one commit. */
 const rangeOf = (target: ReviewTarget) => ('base' in target ? `${target.base}...HEAD` : `${target.commit}^!`)

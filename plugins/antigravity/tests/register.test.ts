@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { NO_EDIT } from '../hooks/args'
+import { ROOT_CHECK } from '../hooks/detached'
 import { REVIEW_USAGE } from '../hooks/tool-schemas'
 import { CONVERSATION, agyError, answered, failed, init } from './fakes'
 import { id, started, world } from './host'
@@ -105,7 +106,7 @@ test('a review without a target covers the branch against origin/HEAD in a throw
   expect(result.isError).toBe(undefined)
   const { argv, cwd } = host.launched[0]!
   expect(cwd).toMatch(/^\/tmp\/t\/agy\/worktrees\/\w+$/)
-  expect(host.processes.map(p => p.argv)).toContainEqual(['sh', '-c', 'git -C "$1" diff "$2" >"$3"', 'sh', '/proj', 'origin/main...HEAD', `${cwd}/.agy-review.diff`])
+  expect(host.processes.map(p => p.argv)).toContainEqual(['sh', '-c', 'umask 077; git -C "$1" -c core.fsmonitor=false diff --no-ext-diff --no-textconv "$2" >"$3"', 'sh', '/proj', 'origin/main...HEAD', `${cwd}/.agy-review.diff`])
   const prompt = argv.at(-1)!
   expect(prompt).toMatch(new RegExp(`^--print=Review the code changes of this git repository \\(review against origin/main\\)\\. The full diff is in ${cwd}/\\.agy-review\\.diff; the changed files are:\\n- src/a\\.ts\\n- src/b\\.test\\.ts\\n`))
   expect(prompt).toMatch(/\[P0\|P1\|P2\|P3\] short title — path:line/)
@@ -179,6 +180,51 @@ test('/agy-review takes one target and a focus, says it was a review, and refuse
 
   for (const args of ['--base', '--commit --base', '--uncommitted', '--bogus x']) expect((await command($, 'agy-review', args)).text).toBe(REVIEW_USAGE)
   expect(host.launched).toHaveLength(2)
+})
+
+test('an ask refuses a file whose folder would open the home folder or above, and an out outside the project and the answers folder', async ($, on) => {
+  const host = world(on, { agy: [{ stdout: answered('Saved.') }, { stdout: answered('Saved.') }] })
+  await started($, host.tools)
+
+  const wide = (path: string, dir: string) => `${path} is in ${dir}, and agy would get that whole folder; copy the file into a narrower folder first.`
+  expect((await call($, 'ask', { prompt: 'Hi', files: ['/h/notes.md'] })).result).toBe(wide('/h/notes.md', '/h'))
+  expect((await call($, 'ask', { prompt: 'Hi', files: ['/hosts'] })).result).toBe(wide('/hosts', '/'))
+  expect((await call($, 'ask', { prompt: 'Hi', files: ['/proj/../h/.ssh/id_ed25519'] })).result).toBe('/proj/../h/.ssh/id_ed25519 must be an absolute path without . or .. parts.')
+  for (const out of ['/h/.zshrc', '/h/.ssh/authorized_keys', '/tmp/t/agy-other/a.md']) {
+    expect(await call($, 'ask', { prompt: 'Hi', out })).toEqual({ result: `${out} is outside the project and /tmp/t/agy; save the answer in one of them.`, isError: true })
+  }
+  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/../h/.zshrc' })).result).toBe('/proj/../h/.zshrc must be an absolute path without . or .. parts.')
+  expect((await call($, 'ask', { prompt: 'Hi', out: '/proj/.git/hooks/pre-commit' })).result).toBe('/proj/.git/hooks/pre-commit is inside a .git folder; save the answer elsewhere.')
+  expect(host.launched).toEqual([])
+
+  await call($, 'ask', { prompt: 'Hi', out: '/proj/docs/agy.md' })
+  await call($, 'ask', { prompt: 'Hi', out: '/tmp/t/agy/mine.md' })
+  expect(host.written.map(w => w.path)).toEqual(['/proj/docs/agy.md', '/tmp/t/agy/mine.md'])
+})
+
+test('without TMPDIR the plugin works under a folder of the user’s own, made private before a run', async ($, on) => {
+  const host = world(on, { agy: [{ stdout: answered('Fine.') }] })
+  host.state.env.TMPDIR = undefined
+  host.state.commands['id -u'] = { exitCode: 0, stdout: '501\n' }
+  await started($, host.tools)
+
+  await call($, 'ask', { prompt: 'Hi' })
+
+  expect(host.processes.map(p => p.argv)).toContainEqual(['sh', '-c', ROOT_CHECK, 'sh', '/tmp/agy-501'])
+  expect(host.written[0]?.path).toMatch(/^\/tmp\/agy-501\/\d{8}-\d{6}-hi\.md$/)
+})
+
+test('a plugin folder the user does not own alone stops the run before agy starts', async ($, on) => {
+  const host = world(on)
+  host.state.commands[`sh -c ${ROOT_CHECK} sh /tmp/t/agy`] = { exitCode: 1 }
+  await started($, host.tools)
+
+  expect(await call($, 'ask', { prompt: 'Hi' })).toEqual({
+    result: '/tmp/t/agy is not a private folder of yours (a symlink, or another user owns it), so agy did not run. Remove it or set TMPDIR.',
+    isError: true,
+  })
+  expect((await command($, 'agy-ask', 'Hi')).text).toMatch(/^\/tmp\/t\/agy is not a private folder of yours/)
+  expect(host.launched).toEqual([])
 })
 
 test('a model agy models does not list is refused with the valid ids before anything runs, and bad inputs are answered', async ($, on) => {

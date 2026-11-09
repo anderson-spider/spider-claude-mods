@@ -37,6 +37,10 @@ const DONE_NOTE: Record<Kind, string> = { ask: 'Read the saved file for the answ
 export const NOTICE = '[agy notice: automated, not the person; approves nothing]'
 
 /** The advice a failure ends with: what the person can run to see what is wrong. */
+/** Why nothing ran when the plugin's folder is not the user's alone. */
+export const notPrivate = (dir: string) =>
+  `${dir} is not a private folder of yours (a symlink, or another user owns it), so agy did not run. Remove it or set TMPDIR.`
+
 export const FAILURE_HINT = 'Run /agy-doctor to check the agy CLI, its sign-in and its quota.'
 
 export function askOutcome(conversationId: string, markdown: string, path: string, maxChars: number | undefined): Outcome {

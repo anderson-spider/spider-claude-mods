@@ -1,3 +1,4 @@
+import { folderOf, within } from './args'
 import type { Kind, Request, ReviewTarget } from './model'
 import { EFFORTS } from './tool-schemas'
 
@@ -9,13 +10,21 @@ const MODEL = /^[\w.:/-]+$/
 // as a flag; git judges the rest.
 const REF = /^(?!-)\S+$/
 
+// An absolute path with no `.`, `..` or empty part, so where it points is where it reads.
+const isClean = (path: string) => !path.split('/').slice(1).some(part => part === '' || part === '.' || part === '..')
+
+/** The error for a path that is not absolute, or not clean, else undefined. */
+const pathError = (path: string) =>
+  !path.startsWith('/') ? `${path} must be an absolute path.` : isClean(path) ? undefined : `${path} must be an absolute path without . or .. parts.`
+
 // A string value without its surrounding blanks, or undefined when it is not a string or holds only blanks.
 const trimmedOf = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
 
 /** Where the answer goes (an absolute `out`) and how much of it is shown inline, or the error to answer. */
 function outputOf(e: Record<string, unknown>): { out?: string; maxChars?: number } | string {
   const out = trimmedOf(e.out)
-  if (out && !out.startsWith('/')) return `${out} must be an absolute path.`
+  const bad = out && pathError(out)
+  if (bad) return bad
   const maxChars = typeof e.maxChars === 'number' && e.maxChars > 0 ? Math.floor(e.maxChars) : undefined
   return { ...(out ? { out } : {}), ...(maxChars ? { maxChars } : {}) }
 }
@@ -40,8 +49,8 @@ export function askRequestOf(e: Record<string, unknown>, defaultModel?: string):
   const tuning = tuningOf(e, defaultModel)
   if (typeof tuning === 'string') return tuning
   const files = Array.isArray(e.files) ? e.files.filter((f): f is string => typeof f === 'string' && f.trim() !== '').map(f => f.trim()) : []
-  const relative = files.find(path => !path.startsWith('/'))
-  if (relative) return `${relative} must be an absolute path.`
+  const bad = files.map(pathError).find(Boolean)
+  if (bad) return bad
   const output = outputOf(e)
   if (typeof output === 'string') return output
   return { kind: 'ask', prompt, ...(conversationId ? { conversationId } : {}), ...tuning, files, ...output }
@@ -75,4 +84,23 @@ export function reviewRequestOf(e: Record<string, unknown>, defaultModel?: strin
   if (typeof output === 'string') return output
   const focus = trimmedOf(e.focus)
   return { kind: 'review', prompt: '', files: [], ...tuning, ...(review ? { review } : {}), ...(focus ? { focus } : {}), ...output }
+}
+
+/**
+ * The error when a request reaches past what it needs: a listed file outside the project whose folder is the home
+ * folder or above (agy gets each such file's whole folder with `--add-dir`), or an answer saved outside the project
+ * and the answers folder, or inside a `.git` folder. The answer is agy's text, so it never lands in a shell profile
+ * or a key file.
+ */
+export function placementError(request: Request, at: { project: string; outDir: string; home?: string }): string | undefined {
+  for (const path of request.files) {
+    if (within(path, at.project)) continue
+    const dir = folderOf(path)
+    if (dir === '/' || (at.home && within(at.home, dir))) return `${path} is in ${dir}, and agy would get that whole folder; copy the file into a narrower folder first.`
+  }
+  const { out } = request
+  if (!out) return undefined
+  if (!within(out, at.project) && !within(out, at.outDir)) return `${out} is outside the project and ${at.outDir}; save the answer in one of them.`
+  if (out.split('/').includes('.git')) return `${out} is inside a .git folder; save the answer elsewhere.`
+  return undefined
 }

@@ -1,14 +1,18 @@
 import type { ProcessRunner, RunFiles } from './model'
 
+// Makes the plugin's folder ($1) private to the user, or fails: it may sit in a /tmp shared with other users, where one
+// of them could have made it first (to read the runs or plant their files) or left a symlink there.
+export const ROOT_CHECK = 'umask 077; mkdir -p "$1" && [ ! -L "$1" ] && [ -O "$1" ] && chmod 700 "$1"'
+
 // Starts an agy run that outlives the plugin: `$.process.spawn` children die with the module on a reload, and the
 // host has no detach option. The outer shell makes the folder, moves to the working folder and starts the inner one
-// under nohup with every stream redirected, so `$.process.run` returns at once. The inner shell starts agy in the
+// under nohup with every stream redirected, its files readable by the user only, so `$.process.run` returns at once. The inner shell starts agy in the
 // background with stdin from /dev/null (`agy -p` waits on an open stdin), writes its pid, waits for it and writes its
 // exit status and the time it ended. Arguments travel as positional parameters, never inside the script, so no
 // quoting reaches them.
 //   $1 run folder, $2 working folder, then the agy argv
 export const LAUNCH =
-  'd=$1; c=$2; shift 2; mkdir -p "$d" || exit 1; cd "$c" || exit 1; ' +
+  'umask 077; d=$1; c=$2; shift 2; mkdir -p "$d" || exit 1; cd "$c" || exit 1; ' +
   'nohup sh -c \'d=$1; shift; "$@" >"$d/events.jsonl" 2>"$d/stderr.txt" </dev/null & echo $! >"$d/pid"; wait $!; echo "$? $(date +%s)" >"$d/exit"\' ' +
   'sh "$d" "$@" >/dev/null 2>&1 </dev/null &'
 

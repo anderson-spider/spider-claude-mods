@@ -1,10 +1,10 @@
 import type { EngineInterface, Register } from 'claude-code'
-import { detachedRuns } from './detached'
+import { ROOT_CHECK, detachedRuns } from './detached'
 import { diagnose, report } from './doctor'
-import { askRequestOf, commandRequestOf, reviewRequestOf } from './input'
+import { askRequestOf, commandRequestOf, placementError, reviewRequestOf } from './input'
 import { locateAgy } from './locate'
 import type { Outcome, ProcessRunner, Request } from './model'
-import { answerOf, askCommandAnswer, errorText, failure, reviewCommandAnswer } from './presentation'
+import { answerOf, askCommandAnswer, errorText, failure, notPrivate, reviewCommandAnswer } from './presentation'
 import { ASK_DESCRIPTION, PROMPT, REVIEW_DESCRIPTION } from './prompts'
 import { resolveReview, reviewCommandInput } from './review'
 import { createRunner, type RunnerDeps } from './runner'
@@ -47,9 +47,14 @@ function processOf($: EngineInterface): ProcessRunner {
   return (argv, init) => $.process.run(argv, init)
 }
 
+// The user's id, read once: without TMPDIR the plugin's folder is named by it, away from other users' in /tmp.
+let uid: Promise<string> | undefined
+
 async function folders($: EngineInterface) {
-  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp').replace(/\/$/, '')
-  return { outDir: `${tmp}/agy`, home: await $.env.get('HOME') }
+  const tmp = (await $.env.get('TMPDIR'))?.replace(/\/$/, '')
+  uid ??= $.process.run(['id', '-u'], { timeoutMs: 5_000 }).then(done => (done.exitCode === 0 ? done.stdout.trim() : ''), () => '')
+  const outDir = tmp ? `${tmp}/agy` : `/tmp/agy-${await uid}`
+  return { outDir, home: await $.env.get('HOME') }
 }
 
 async function agyOf($: EngineInterface, home: string | undefined) {
@@ -101,6 +106,20 @@ async function checkedModel($: EngineInterface, request: Request): Promise<Reque
   return models.includes(request.model) ? request : `${request.model} is not an agy model id. agy models lists: ${models.join(', ')}.`
 }
 
+/**
+ * A request ready to run, or the error to answer: its files and answer where they may be (placementError), the
+ * plugin's folder private to the user (ROOT_CHECK, before anything is written there), and its model one agy lists.
+ */
+async function readyOf($: EngineInterface, request: Request | string): Promise<Request | string> {
+  if (typeof request === 'string') return request
+  const { outDir, home } = await folders($)
+  const misplaced = placementError(request, { project, outDir, home })
+  if (misplaced) return misplaced
+  const root = await $.process.run(['sh', '-c', ROOT_CHECK, 'sh', outDir], { timeoutMs: 10_000 })
+  if (root.exitCode !== 0) return notPrivate(outDir)
+  return checkedModel($, request)
+}
+
 async function runNow($: EngineInterface, request: Request): Promise<Outcome> {
   active++
   $.ui.status('agy is working')
@@ -125,7 +144,7 @@ async function reviewOf($: EngineInterface, e: Record<string, unknown>): Promise
 }
 
 async function serve($: EngineInterface, request: Request | string, wait: unknown) {
-  const checked = typeof request === 'string' ? request : await checkedModel($, request)
+  const checked = await readyOf($, request)
   if (typeof checked === 'string') return { result: checked, isError: true as const }
   if (wait === false) {
     const job = await runner.startJob(await depsOf($), checked)
@@ -171,7 +190,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'agy-ask' }, async ($, e) => {
     const request = commandRequestOf(e.args, ASK_USAGE, defaultModel)
-    const checked = typeof request === 'string' ? request : await checkedModel($, request)
+    const checked = await readyOf($, request)
     if (typeof checked === 'string') return { text: checked }
     return askCommandAnswer(await runNow($, checked))
   })
@@ -180,7 +199,7 @@ export const register: Register = (on, options) => {
     const input = reviewCommandInput(e.args)
     if (!input) return { text: REVIEW_USAGE }
     const request = await reviewOf($, input)
-    const checked = typeof request === 'string' ? request : await checkedModel($, request)
+    const checked = await readyOf($, request)
     if (typeof checked === 'string') return { text: checked }
     return reviewCommandAnswer(await runNow($, checked))
   })
