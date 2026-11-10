@@ -39,7 +39,9 @@ function numberedWithin(lines: string[], from: number): string {
   return out.join('\n')
 }
 
-/** The lines from `from` to the end, numbered, within `room` characters: a tail is read for its end, so past the room the earlier lines go. */
+const CUT = '…(earlier lines cut; ask for fewer lines)'
+
+/** The lines from `from` to the end, numbered, within `room` characters before the note that says so: a tail is read for its end, so past the room the earlier lines go. */
 function numberedTail(lines: string[], from: number, room: number): string {
   const out: string[] = []
   let size = 0
@@ -50,7 +52,7 @@ function numberedTail(lines: string[], from: number, room: number): string {
     out.push(line)
     size += line.length + 1
   }
-  if (i >= from) out.push('…(earlier lines cut; ask for fewer lines)')
+  if (i >= from) out.push(CUT)
   return out.reverse().join('\n')
 }
 
@@ -117,7 +119,7 @@ export async function jobLog(ctx: Ctx, input: LogInput): Promise<string> {
   if (mode === 'tail') {
     const n = id(input.lines, 'lines') ?? DEFAULT_TAIL
     const from = Math.max(0, lines.length - n)
-    return `${head}\n${numberedTail(lines, from, MAX_CHARS - head.length)}`
+    return `${head}\n${numberedTail(lines, from, MAX_CHARS - head.length - CUT.length - 2)}`
   }
   const { text, matches } = errorExcerpt(lines, match)
   return clip(`${head}; ${matches} matching lines, then the last ${Math.min(TAIL_WITH_ERRORS, lines.length)}\n${text}`, 'pass pattern to narrow it')
