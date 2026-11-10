@@ -8,8 +8,6 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 | --- | --- |
 | [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, have it review the branch's changes in a throwaway worktree before a PR, or generate an image in a folder of its own, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. |
 | [codex](plugins/codex/README.md) | Lets Claude ask your Codex CLI for a second opinion (it reads the repository read-only and can search the web), have it review the branch's changes, or generate an image, and saves the result locally. On macOS it can also route native Mac app control through Codex computer use from the ChatGPT app instead of Claude's own computer use, asking before each new app. |
-| [comfyui-local](plugins/comfyui-local/README.md) | Lets Claude generate images, video, audio and 3D on your self-hosted ComfyUI, search its nodes, models and templates, keep workflows in your library, and manage node packs through ComfyUI-Manager and restart the server to load them, with the server in the `url` option. Unofficial; its slash commands are ported from Comfy-Org/comfy-skills. |
-| [coolify](plugins/coolify/README.md) | Lets Claude read your Coolify instance and create, deploy or delete projects and resources through its API, with the instance in the `url` option and the token in the sensitive `apiKey` option. |
 | [file-explorer](plugins/file-explorer/README.md) | A file tree pane beside the conversation: git status per file and folder, a mark on each file Claude reads, edits, creates, removes, finds or commits, search across unopened folders, preview, and `@path` into the prompt. |
 | [gitlab](plugins/gitlab/README.md) | Opens, edits, comments on (directly or as draft notes to publish later), reviews and (when asked, behind guards) merges GitLab merge requests, lists yours across projects, lists open review threads, lists and creates labels, runs, retries and cancels pipelines and jobs, waits for and reads pipelines, jobs and job errors, lists a job's artifacts with their URLs, picking the host and its token from the git remote or a host you name. |
 | [image-preview](plugins/image-preview/README.md) | Shows images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads under its row in the transcript, as the desktop app does. |
@@ -28,8 +26,6 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.303 
 /plugin marketplace add anderson-spider/claude-mods
 /plugin install antigravity@spider-claude-mods
 /plugin install codex@spider-claude-mods
-/plugin install comfyui-local@spider-claude-mods
-/plugin install coolify@spider-claude-mods
 /plugin install file-explorer@spider-claude-mods
 /plugin install gitlab@spider-claude-mods
 /plugin install image-preview@spider-claude-mods
@@ -51,7 +47,7 @@ Computer use in codex also needs a local helper on the Mac: follow [its install 
 curl -fsSL https://raw.githubusercontent.com/anderson-spider/claude-mods/main/scripts/bootstrap.sh | sh
 ```
 
-Add `-s -- --check` after `sh` for a dry run, or `-s -- --only tailscale,codex` to limit the plugins. It is safe to rerun, skips the helper when the ChatGPT app is missing and never sets secrets: use `claude plugin configure gitlab` for its `tokens` (or set `SPIDER_PLUGIN_OPTION_GITLAB_TOKENS`), `claude plugin configure tailscale` for its `apiKey` (or set `SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY`), `claude plugin configure coolify` for its `url` and `apiKey` (or set `SPIDER_PLUGIN_OPTION_COOLIFY_URL` and `SPIDER_PLUGIN_OPTION_COOLIFY_API_KEY`), `claude plugin configure comfyui-local` for its `url` (or set `SPIDER_PLUGIN_OPTION_COMFYUI_LOCAL_URL`), and `claude plugin configure subagent-effort` for its `apiKey` (or set `SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY`, or `JEV_API_KEY`), and `claude plugin configure sonarqube` for its `url` and `token` (or set `SPIDER_PLUGIN_OPTION_SONARQUBE_URL` and `SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN`).
+Add `-s -- --check` after `sh` for a dry run, or `-s -- --only tailscale,codex` to limit the plugins. It is safe to rerun, skips the helper when the ChatGPT app is missing and never sets secrets: use `claude plugin configure gitlab` for its `tokens` (or set `SPIDER_PLUGIN_OPTION_GITLAB_TOKENS`), `claude plugin configure tailscale` for its `apiKey` (or set `SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY`), and `claude plugin configure subagent-effort` for its `apiKey` (or set `SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY`, or `JEV_API_KEY`), and `claude plugin configure sonarqube` for its `url` and `token` (or set `SPIDER_PLUGIN_OPTION_SONARQUBE_URL` and `SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN`).
 
 ### Update
 

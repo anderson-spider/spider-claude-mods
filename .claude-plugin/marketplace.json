@@ -18,16 +18,6 @@
       "description": "Ask Codex for a second opinion, a review of the branch's changes or requested images and, on macOS, control native Mac apps through Codex computer use; save results locally."
     },
     {
-      "name": "comfyui-local",
-      "source": "./plugins/comfyui-local",
-      "description": "Generate images, video and audio, keep workflows in your library, and manage node packs and restart the server on your self-hosted ComfyUI (and ComfyUI-Manager) through its HTTP API, using the url plugin option; unofficial, with slash commands ported from Comfy-Org/comfy-skills."
-    },
-    {
-      "name": "coolify",
-      "source": "./plugins/coolify",
-      "description": "Read or change your Coolify instance (projects, applications, deployments) through its API, using the url and apiKey plugin options."
-    },
-    {
       "name": "file-explorer",
       "source": "./plugins/file-explorer",
       "description": "File tree pane that follows Claude's reads, edits and searches, with git status, search, preview and path references"
