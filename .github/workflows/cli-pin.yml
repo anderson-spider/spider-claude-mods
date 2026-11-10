@@ -1,0 +1,60 @@
+name: cli-pin
+
+# Once a day: when npm serves a Claude Code CLI newer than the one package.json pins, scripts/bump-cli.mjs moves the pin
+# (package.json, its lockfile and the README) and a pull request carries it, so the normal checks run on the new CLI and
+# show what it breaks in a pull request that changes nothing else. A person merges it: `plugins` is not a required
+# check, so nothing merges by itself here.
+# The GitHub App's token is what lets the pull request run the checks: one opened with GITHUB_TOKEN starts no workflow.
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency: cli-pin
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app.outputs.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Move the pin to the latest CLI
+        id: pin
+        run: |
+          version=$(node scripts/bump-cli.mjs)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # One branch per version, never rewritten, so fixes pushed to it stay. A newer CLI opens a new pull request and
+      # closes the older one, whose branch is kept. A version that already has a pull request, open or closed, is left
+      # alone; a branch a failed run left without one gets its pull request now.
+      - name: Open the pull request
+        if: steps.pin.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.pin.outputs.version }}
+          BOT: ${{ vars.RELEASE_BOT }}
+        run: |
+          branch="cli-pin/v$VERSION"
+          title="build: check the repository with Claude Code v$VERSION"
+          if [ "$(gh pr list --head "$branch" --state all --json number --jq length)" != 0 ]; then
+            echo "v$VERSION already has a pull request"
+            exit 0
+          fi
+          older=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("cli-pin/")) | .number')
+          if ! git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            git switch --quiet -c "$branch"
+            git -c user.name="$BOT" -c user.email="$BOT@users.noreply.github.com" commit --quiet -am "$title"
+            git push --quiet origin "$branch"
+          fi
+          gh pr create --head "$branch" --base main --title "$title" --body "Moves the Claude Code CLI pin to v$VERSION in \`package.json\`, its lockfile and the README (\`node scripts/bump-cli.mjs\`). The \`plugins\` job shows what the new CLI breaks; fix that here before merging."
+          for number in $older; do gh pr close "$number" --comment "Superseded by the pull request for v$VERSION."; done
