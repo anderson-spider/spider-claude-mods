@@ -301,6 +301,27 @@ test('a cwd change moves an unpinned root; /file-explorer <folder> pins one', as
   await ui.unmount()
 })
 
+test('/file-explorer unpin shows the working folder again, as it is by then, and a cwd change moves the tree once more', async ($, on) => {
+  world(on, FILES)
+  await start($)
+  const ui = await $.ui.mount(pane())
+  await $.command.run({ command: 'file-explorer', args: ROOT } as never)
+  await $.classic.CwdChanged({ old_cwd: ROOT, new_cwd: `${ROOT}/src` } as never)
+  expect(await rows(ui)).toEqual(TOP)
+  const result = await $.command.run({ command: 'file-explorer', args: 'unpin' } as never)
+  expect(result).toEqual({ text: 'File explorer follows the working folder again.' })
+  expect(await rows(ui)).toEqual(['  ▸ lib/', '  ◇ app.ts'])
+  await $.classic.CwdChanged({ old_cwd: `${ROOT}/src`, new_cwd: ROOT } as never)
+  expect(await rows(ui)).toEqual(TOP)
+  // Already unpinned: the open folder stays open.
+  await key(ui, 'l')
+  const open = await rows(ui)
+  expect(await $.command.run({ command: 'file-explorer', args: 'unpin' } as never)).toEqual({ text: 'File explorer already follows the working folder.' })
+  expect(await rows(ui)).toEqual(open)
+  expect(open).not.toEqual(TOP)
+  await ui.unmount()
+})
+
 test('git index changes reread the status once after a pause; the session end stops every timer', async ($, on) => {
   const w = world(on, FILES, { git: { top: ROOT, status: '## main\0' } })
   await start($)

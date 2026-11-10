@@ -45,6 +45,7 @@ In the terminal, the pane docks beside the transcript in the fullscreen layout (
 | --- | --- |
 | `/file-explorer` | Opens the pane and gives it the keyboard. |
 | `/file-explorer <folder>` | Pins the tree to that folder; a `cd` no longer moves it. A relative folder is read from the tree's current root, and a path that is not a folder is refused with a note. |
+| `/file-explorer unpin` | Lets go of a pinned folder, from `/file-explorer <folder>` or the `up` button: the tree shows the working folder again and follows a `cd`. |
 | `/file-explorer refresh` | Reads the shown folders and git again. |
 | `/file-explorer hidden` | Shows or hides dotfiles. |
 | `/file-explorer close` | Closes the pane. |
