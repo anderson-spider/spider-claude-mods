@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by the task scripts: which `claude` and `tsc` a task runs, and which plugins it runs them on.
 
 # The node_modules/.bin that holds the pinned tools: this checkout's, else the main checkout's, since a fresh worktree

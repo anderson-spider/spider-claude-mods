@@ -30,6 +30,12 @@ jobs:
           PR_HEAD: ${{ github.event.pull_request.head.ref }}
           RELEASE_BOT: ${{ vars.RELEASE_BOT }}
         run: node scripts/check-release.mjs "origin/${{ github.base_ref }}"
+      # Warnings and errors only: the notes are about quotes the scripts use on purpose.
+      - name: Shell scripts pass shellcheck
+        run: shellcheck -x -S warning scripts/*.sh scripts/tasks/*.sh scripts/install-test/*.sh
+      # The exceptions are in .github/actionlint.yaml.
+      - name: Workflows pass actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
       - name: Script and hook tests
         run: node --test scripts/*.test.mjs
       - name: codex computer use helper tests
