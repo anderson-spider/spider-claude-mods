@@ -18,6 +18,10 @@ let found: { sessionId: string; dir: string } | undefined
 // The image numbers last drawn, so an unchanged draft doesn't rewrite state; undefined
 // while a drawn image's file is still missing, so the next poll looks again.
 let shownKey: string | undefined
+// A paste's file lands within moments of its tag, so a missing one is looked for on this many polls (5 s) and then left
+// alone until the draft's images change: a tag typed by hand, or a format nothing converts, has no file to find.
+const MISSING_POLLS = 25
+let missing = { key: '', polls: 0 }
 // The list last written, so a poll that finds the same tiles doesn't redraw the band.
 let written: string | undefined
 let isChecking = false
@@ -129,7 +133,8 @@ async function show($: EngineInterface, draft: string) {
   const dir = numbers.length > 0 ? await imagesDir($) : undefined
   const list: PastedImage[] = []
   for (const n of numbers) list.push(await describe($, dir, n))
-  shownKey = list.every(image => image.path !== null) ? key : undefined
+  missing = { key, polls: missing.key === key ? missing.polls + 1 : 1 }
+  shownKey = list.every(image => image.path !== null) || missing.polls >= MISSING_POLLS ? key : undefined
   const json = JSON.stringify(list)
   if (json === written) return
   await update($, images, () => list)
