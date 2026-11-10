@@ -56,6 +56,8 @@ const AGES_MS = 60_000
 type Held = {
   config: Config
   height: number
+  /** The session's working folder, which an unpinned tree shows. */
+  cwd: string
   repo?: { root: string; top?: string; gitDir?: string }
   index?: { root: string; files: string[]; dirs: Set<string> }
   /** Moves on each time the index is dropped, so a build that started before is not kept. */
@@ -479,19 +481,20 @@ const KEYS_WIDTH = KEYS.reduce((sum, one) => sum + one.hotkey.length + 2 + one.l
 const RECENT = 2
 
 export const register: Register = (on, options) => {
-  const held: Held = { config: configOf(options as Record<string, unknown>), height: 20, gitBusy: false, gitAgain: false, indexGeneration: 0 }
+  const held: Held = { config: configOf(options as Record<string, unknown>), height: 20, cwd: '', gitBusy: false, gitAgain: false, indexGeneration: 0 }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'file-explorer',
-      description: 'Open the file explorer pane (args: a folder to pin, "close", "refresh", "hidden")',
-      argumentHint: '[folder|close|refresh|hidden]',
+      description: 'Open the file explorer pane (args: a folder to pin, "unpin", "close", "refresh", "hidden")',
+      argumentHint: '[folder|unpin|close|refresh|hidden]',
     })
+    held.cwd = normalize(e.cwd)
     await observe($, async () => {
       // A write that was running when the module reloaded ends unseen: its row must not shimmer on.
       await update($, editingAtom, () => [])
       const view = await read($, viewAtom)
-      const root = normalize(e.cwd)
+      const root = held.cwd
       // A reload keeps the view the host holds, its folders read again so a changed sort applies; a new session, or
       // one in another folder, starts afresh.
       if (view.root && (view.isPinned || view.root === root)) {
@@ -534,6 +537,12 @@ export const register: Register = (on, options) => {
       await press($, held, arg === 'refresh' ? 'r' : '.', 'terminal')
       return { text: arg === 'refresh' ? 'File explorer refreshed.' : 'Toggled hidden files.' }
     }
+    if (arg === 'unpin') {
+      // An unpinned tree is already there: setting the root again would close its folders.
+      if (!(await read($, viewAtom)).isPinned) return { text: 'File explorer already follows the working folder.' }
+      await setRoot($, held, held.cwd, false)
+      return { text: 'File explorer follows the working folder again.' }
+    }
     if (arg !== '') {
       const view = await read($, viewAtom)
       const root = resolve(view.root || '/', arg.replace(/^["']|["']$/g, ''))
@@ -570,8 +579,9 @@ export const register: Register = (on, options) => {
   on('classic.CwdChanged', async ($, e, next) => {
     const result = await next(e)
     await observe($, async () => {
+      held.cwd = normalize(e.new_cwd)
       const view = await read($, viewAtom)
-      if (!view.isPinned) await setRoot($, held, normalize(e.new_cwd), false)
+      if (!view.isPinned) await setRoot($, held, held.cwd, false)
     })
     return result
   }).catch((_$, e, next) => next(e))
