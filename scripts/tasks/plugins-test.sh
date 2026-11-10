@@ -7,13 +7,10 @@ set -euo pipefail
 use_pinned_tools
 name=${1:-}
 failed=()
-if [ -n "$name" ]; then
-  require_plugin "$name"
-  dirs=("plugins/$name/")
-else
+plugin_dirs ${name:+"$name"}
+if [ -z "$name" ]; then
   echo "==> scripts and hooks"
   node --test scripts/*.test.mjs || failed+=(scripts)
-  dirs=(plugins/*/)
 fi
 for p in "${dirs[@]}"; do
   n=$(basename "$p")
