@@ -1,0 +1,22 @@
+# Weekly pull requests for the actions the workflows use and for the npm tools package.json pins. The Claude Code CLI
+# is left out: .github/workflows/cli-pin.yml moves that pin, with the README sentence that must follow it.
+# The `build` prefix is a title type that opens no release (scripts/check-release.mjs).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    ignore:
+      - dependency-name: '@anthropic-ai/claude-code'
