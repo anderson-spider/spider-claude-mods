@@ -193,9 +193,13 @@ export function createRunner(limits: () => Limits) {
     await deps.submit(jobMessage(job, outcome)).catch(() => undefined)
   }
 
-  // A run past the background limit: stopped when its process is still that run, then reported as timed out.
+  // A run past the background limit: stopped when its process is still that run, then reported as timed out. With no
+  // process to stop it ended or died meanwhile, and is read as that.
   async function timeOut(deps: RunnerDeps, job: Job): Promise<Outcome> {
-    await deps.files.stop(job.dir).catch(() => false)
+    if (!(await deps.files.stop(job.dir).catch(() => false))) {
+      const now = await seen(deps, job)
+      return finish(deps, job, 'ended' in now ? now.ended : 'lost')
+    }
     const { backgroundMs } = limits()
     const error = `Codex did not finish within ${minutesOf(backgroundMs)} min; the run was stopped.`
     return finish(deps, job, { threadId: job.threadId, error, timedOut: true })
@@ -206,7 +210,7 @@ export function createRunner(limits: () => Limits) {
    * A watch whose wait fails lets go and leaves the run going: the module is likely going away, and the next
    * `resume` picks the job up. A watch another one took over stops without a word.
    */
-  async function watch(deps: RunnerDeps, job: Job) {
+  async function watch(deps: RunnerDeps, job: Job, quiet = false) {
     const token = freshId(nowOf(deps))
     job.watcher = token
     job.sessionId = await deps.sessionId()
@@ -220,10 +224,12 @@ export function createRunner(limits: () => Limits) {
     const now = await stored(deps, job.id)
     if (now?.watcher !== token || now.status !== 'running') return
     const outcome = ended === undefined ? await timeOut(deps, job) : await finish(deps, job, ended)
-    await notify(deps, job, outcome)
+    // Another project's job ends on the record alone: its notice would be a turn in a session that never asked for it.
+    if (quiet) await save(deps, job)
+    else await notify(deps, job, outcome)
   }
 
-  const adopt = (deps: RunnerDeps, job: Job) => void watch(deps, job).catch(() => undefined)
+  const adopt = (deps: RunnerDeps, job: Job, quiet = false) => void watch(deps, job, quiet).catch(() => undefined)
 
   /**
    * Runs a request in the foreground; past the foreground wait it goes on as a background job. The background limit
@@ -283,15 +289,32 @@ export function createRunner(limits: () => Limits) {
    * At session start (a reload, a new session): prunes, then watches again the running jobs of this project that are
    * this session's (its id survives a reload) or that no watcher has seen for a while (their session ended or changed
    * id). A watch finds at once a job that ended, lost its process or ran past the limit, and its notice comes here.
+   * A job another session still seemed to watch is looked at again a minute later. Another project's job is left to
+   * its own sessions, until it is unwatched and past its limit.
    */
   async function resume(deps: RunnerDeps): Promise<void> {
     const me = await deps.sessionId()
     const project = await deps.project()
     const now = nowOf(deps)
+    const { backgroundMs } = limits()
     for (const job of await prune(deps, await jobs(deps))) {
-      if (job.status !== 'running' || job.project !== project) continue
-      if (job.sessionId === me || now - job.seenAt > STALE_MS) adopt(deps, job)
+      if (job.status !== 'running') continue
+      const unwatched = now - job.seenAt > STALE_MS
+      if (job.project !== project) {
+        // Another project's job that no session of it came back for: watched here to its end, which is at once,
+        // without a notice, so it stops running and stops holding a place among the kept jobs.
+        if (unwatched && now > job.startedAt + backgroundMs) adopt(deps, job, true)
+      } else if (job.sessionId === me || unwatched) adopt(deps, job)
+      else void recheck(deps, job).catch(() => undefined)
     }
+  }
+
+  // A job another session was seen watching a moment ago: that session may be the one that just ended, so it is
+  // looked at once more when its last heartbeat would be stale, and taken over if no newer one came.
+  async function recheck(deps: RunnerDeps, job: Job) {
+    await deps.sleep(STALE_MS - (nowOf(deps) - job.seenAt) + POLL_MS)
+    const now = await stored(deps, job.id)
+    if (now?.status === 'running' && nowOf(deps) - now.seenAt > STALE_MS) adopt(deps, now)
   }
 
   /** What the jobs tool answers: this project's background jobs, of any session, newest first. */
