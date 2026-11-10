@@ -5,8 +5,8 @@ import { marksAt } from './activity'
 import type { Activity } from './activity'
 import type { Config } from './config'
 import type { GitStatus } from './git'
-import { ancestors, isInside, join, parent } from './paths'
-import { flatten, scrollTop } from './tree'
+import { ancestors, isInside, join, parent, relative } from './paths'
+import { flatten, isHiddenName, scrollTop } from './tree'
 import type { Listing, Row } from './tree'
 import type { RowState } from './view'
 
@@ -146,9 +146,14 @@ function toParent(view: ExplorerView, rows: readonly Row[], path: string, height
   return { view: { ...view, cursor: up, top: scrollTop(view.top, index, height, rows.length) } }
 }
 
-/** The view with every directory from the root down to `path` expanded and the cursor on it, back in the tree. */
+/**
+ * The view with every directory from the root down to `path` expanded and the cursor on it, back in the tree. A path
+ * the tree does not draw (a dotfile, or under a dot folder, with hidden files off) leaves the view as it is, since a
+ * cursor on no row would jump to the first one.
+ */
 export function revealed(view: ExplorerView, path: string): ExplorerView {
   if (!isInside(view.root, path)) return view
+  if (!view.showHidden && relative(view.root, path)?.split('/').some(isHiddenName)) return view
   const opened = ancestors(view.root, path).filter(dir => dir !== view.root)
   const expanded = [...view.expanded, ...opened.filter(dir => !view.expanded.includes(dir))]
   const { preview: _, ...rest } = view
