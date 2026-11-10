@@ -10,13 +10,13 @@ failed=()
 plugin_dirs ${name:+"$name"}
 if [ -z "$name" ]; then
   echo "==> scripts and hooks"
-  node --test scripts/*.test.mjs || failed+=(scripts)
+  run node --test scripts/*.test.mjs || failed+=(scripts)
 fi
 for p in "${dirs[@]}"; do
   n=$(basename "$p")
   if [ -f "${p}hooks/hooks.json" ]; then
     echo "==> $n"
-    claude plugin test "${p%/}" || failed+=("$n")
+    run claude plugin test "${p%/}" || failed+=("$n")
   else
     echo "==> $n: skipped, skills only"
   fi
@@ -25,7 +25,7 @@ if [ -z "$name" ] || [ "$name" = codex ]; then
   cua_node=/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node
   if [ -x "$cua_node" ]; then
     echo "==> codex computer use helper"
-    "$cua_node" --test plugins/codex/helper/test/*.test.mjs || failed+=(codex-helper)
+    run "$cua_node" --test plugins/codex/helper/test/*.test.mjs || failed+=(codex-helper)
   else
     echo "==> codex computer use helper: skipped, $cua_node not found"
   fi
