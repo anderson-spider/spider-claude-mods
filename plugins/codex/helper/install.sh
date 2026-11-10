@@ -41,7 +41,7 @@ chmod 700 "$TARGET/state" "$TARGET/run"
 
 # From a clone or the plugin cache: copy the code over, never the state.
 if [ "$HERE" != "$TARGET" ]; then
-  rm -rf "$TARGET/lib" "$TARGET/test"
+  rm -rf "${TARGET:?}/lib" "${TARGET:?}/test"
   cp -R "$HERE/lib" "$HERE/test" "$TARGET/"
   cp "$HERE/launch.mjs" "$HERE/helper.mjs" "$HERE/install.sh" "$HERE/uninstall.sh" "$TARGET/"
   chmod +x "$TARGET"/*.sh "$TARGET"/*.mjs

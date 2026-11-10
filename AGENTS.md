@@ -59,7 +59,7 @@ Nobody edits a plugin's `version` or `CHANGELOG.md`: `.github/workflows/release.
 
 ## CI
 
-- `checks`: `.github/workflows/ci.yml` runs the consistency and release checks, `shellcheck` on the scripts under `scripts/`, `actionlint` on the workflows (its exceptions are in `.github/actionlint.yaml`) and the script and helper tests there. It is the required check.
+- `checks`: `.github/workflows/ci.yml` runs the consistency and release checks, `shellcheck` on the scripts under `scripts/` and `plugins/codex/helper/`, `actionlint` on the workflows (its exceptions are in `.github/actionlint.yaml`) and the script and helper tests there. It is the required check.
 - `plugins`: calls the same tasks as `npm run check`, with the Claude Code CLI that `package.json` pins and `npm ci` installs: `plugins:validate` and `plugins:test` on the checkout, then, in a copy with a scaffolded `ci-sample`, those two on the sample and `typecheck` on every plugin and the sample, which generates the typings in a session without login. The loops live in `scripts/tasks/` only: change what a check runs there, not in the workflow.
 - `install`: runs `scripts/tasks/install-test.sh`.
 - A pull request runs all of it again when its title is edited, since the release check reads the title.
