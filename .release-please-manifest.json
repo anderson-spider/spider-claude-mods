@@ -1,7 +1,7 @@
 {
   "plugins/antigravity": "0.3.1",
   "plugins/codex": "0.4.3",
-  "plugins/file-explorer": "0.4.2",
+  "plugins/file-explorer": "0.4.3",
   "plugins/gitlab": "0.7.1",
   "plugins/image-preview": "0.3.2",
   "plugins/session-hud": "0.14.0",
