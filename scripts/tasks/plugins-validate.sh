@@ -6,13 +6,10 @@ set -euo pipefail
 use_pinned_tools
 name=${1:-}
 failed=()
-if [ -n "$name" ]; then
-  require_plugin "$name"
-  dirs=("plugins/$name/")
-else
+plugin_dirs ${name:+"$name"}
+if [ -z "$name" ]; then
   echo "==> marketplace"
   claude plugin validate --strict . || failed+=(marketplace)
-  dirs=(plugins/*/)
 fi
 for p in "${dirs[@]}"; do
   echo "==> $(basename "$p")"
