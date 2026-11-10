@@ -207,6 +207,36 @@ test('another session’s watched job is left to it; once unwatched past the lim
   expect(next.submitted[0]).toMatch(/job #j1 failed: ask/)
 })
 
+test('a taken-over job past its limit whose process is gone is read as it ended, not reported as stopped', async () => {
+  const shared = memoryStore()
+  const owner = deps([{ stdout: started, gate: new Promise(() => undefined) }], { session: 'sess-a', memory: shared })
+  await createRunner(limits).startJob(owner.d, ask)
+  owner.runs.dead.add('/tmp/codex/runs/j1')
+  const next = deps([], { session: 'sess-b', memory: shared })
+  next.time.set(700_000)
+  await createRunner(limits).resume({ ...next.d, files: owner.d.files })
+  await next.submission()
+  expect(owner.runs.stopped).toEqual([])
+  expect(next.submitted[0]).toMatch(/job #j1 lost: ask/)
+  expect(next.submitted[0]).not.toMatch(/the run was stopped/)
+})
+
+test('another project’s job is left alone until it is unwatched past its limit, then stopped without a notice', async () => {
+  const shared = memoryStore()
+  const owner = deps([{ stdout: started, gate: new Promise(() => undefined) }], { session: 'sess-a', memory: shared, project: async () => '/other' })
+  await createRunner(limits).startJob(owner.d, ask)
+  const next = deps([], { session: 'sess-b', memory: shared })
+  const d = { ...next.d, files: owner.d.files }
+  next.time.set(120_000)
+  await createRunner(limits).resume(d)
+  expect(owner.runs.stopped).toEqual([])
+  next.time.set(700_000)
+  await createRunner(limits).resume(d)
+  expect(owner.runs.stopped).toEqual(['/tmp/codex/runs/j1'])
+  expect(await next.job('j1')).toMatchObject({ status: 'failed', project: '/other' })
+  expect(next.submitted).toEqual([])
+})
+
 test('finished jobs are pruned past 7 days or past the 50 newest, with their run folders', async () => {
   const records: Record<string, Job> = {}
   for (let i = 0; i < 52; i++) {

@@ -193,9 +193,13 @@ export function createRunner(limits: () => Limits) {
     await deps.submit(jobMessage(job, outcome)).catch(() => undefined)
   }
 
-  // A run past the background limit: stopped when its process is still that run, then reported as timed out.
+  // A run past the background limit: stopped when its process is still that run, then reported as timed out. With no
+  // process to stop it ended or died meanwhile, and is read as that.
   async function timeOut(deps: RunnerDeps, job: Job): Promise<Outcome> {
-    await deps.files.stop(job.dir).catch(() => false)
+    if (!(await deps.files.stop(job.dir).catch(() => false))) {
+      const now = await seen(deps, job)
+      return finish(deps, job, 'ended' in now ? now.ended : 'lost')
+    }
     const { backgroundMs } = limits()
     const error = `Codex did not finish within ${minutesOf(backgroundMs)} min; the run was stopped.`
     return finish(deps, job, { threadId: job.threadId, error, timedOut: true })
@@ -283,14 +287,24 @@ export function createRunner(limits: () => Limits) {
    * At session start (a reload, a new session): prunes, then watches again the running jobs of this project that are
    * this session's (its id survives a reload) or that no watcher has seen for a while (their session ended or changed
    * id). A watch finds at once a job that ended, lost its process or ran past the limit, and its notice comes here.
+   * Another project's job is left to its own sessions, until it is unwatched and past its limit.
    */
   async function resume(deps: RunnerDeps): Promise<void> {
     const me = await deps.sessionId()
     const project = await deps.project()
     const now = nowOf(deps)
+    const { backgroundMs } = limits()
     for (const job of await prune(deps, await jobs(deps))) {
-      if (job.status !== 'running' || job.project !== project) continue
-      if (job.sessionId === me || now - job.seenAt > STALE_MS) adopt(deps, job)
+      if (job.status !== 'running') continue
+      const unwatched = now - job.seenAt > STALE_MS
+      if (job.project === project) {
+        if (job.sessionId === me || unwatched) adopt(deps, job)
+      } else if (unwatched && now > job.startedAt + backgroundMs) {
+        // Another project's job that no session of it came back for: ended here without a notice, so it stops
+        // running and stops holding a place among the kept jobs.
+        await timeOut(deps, job)
+        await save(deps, job)
+      }
     }
   }
 
