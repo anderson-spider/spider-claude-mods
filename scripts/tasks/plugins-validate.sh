@@ -9,12 +9,12 @@ failed=()
 plugin_dirs ${name:+"$name"}
 if [ -z "$name" ]; then
   echo "==> marketplace"
-  claude plugin validate --strict . || failed+=(marketplace)
+  run claude plugin validate --strict . || failed+=(marketplace)
 fi
 for p in "${dirs[@]}"; do
   echo "==> $(basename "$p")"
-  claude plugin validate --strict "${p%/}" || failed+=("$(basename "$p")")
+  run claude plugin validate --strict "${p%/}" || failed+=("$(basename "$p")")
 done
 echo "==> consistency"
-node scripts/check-consistency.mjs || failed+=(consistency)
+run node scripts/check-consistency.mjs || failed+=(consistency)
 if [ "${#failed[@]}" -gt 0 ]; then echo "validate failed: ${failed[*]}" >&2; exit 1; fi

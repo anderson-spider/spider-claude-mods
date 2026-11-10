@@ -50,6 +50,14 @@ ensure_typings() {
   fi
 }
 
+# Runs one target's command. With QUIET=1 its output shows only when it fails, so a run prints the `==>` lines and the
+# failures: `npm run check` runs that way unless QUIET is set (QUIET=0 shows everything, as each task alone and CI do).
+run() {
+  local out
+  if [ "${QUIET:-0}" != 1 ]; then "$@"; return; fi
+  out=$("$@" 2>&1) || { printf '%s\n' "$out"; return 1; }
+}
+
 # A plugin named on the command line: lowercase words joined by hyphens, with a folder under plugins/.
 require_plugin() {
   [[ "$1" =~ ^[a-z][a-z0-9-]*$ && -d "plugins/$1" ]] || { echo "no such plugin: $1" >&2; exit 1; }

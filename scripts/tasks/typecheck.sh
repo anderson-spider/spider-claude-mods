@@ -9,6 +9,6 @@ ensure_typings "${dirs[@]}"
 failed=()
 for d in "${dirs[@]}"; do
   echo "==> tsc ${d%/}"
-  tsc -p "${d}tsconfig.json" || failed+=("${d%/}")
+  run tsc -p "${d}tsconfig.json" || failed+=("${d%/}")
 done
 if [ "${#failed[@]}" -gt 0 ]; then echo "tsc failed: ${failed[*]}" >&2; exit 1; fi
