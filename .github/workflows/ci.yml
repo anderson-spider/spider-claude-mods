@@ -32,7 +32,7 @@ jobs:
         run: node scripts/check-release.mjs "origin/${{ github.base_ref }}"
       # Warnings and errors only: the notes are about quotes the scripts use on purpose.
       - name: Shell scripts pass shellcheck
-        run: shellcheck -x -S warning scripts/*.sh scripts/tasks/*.sh scripts/install-test/*.sh
+        run: shellcheck -x -S warning scripts/*.sh scripts/tasks/*.sh scripts/install-test/*.sh plugins/codex/helper/*.sh
       # The exceptions are in .github/actionlint.yaml.
       - name: Workflows pass actionlint
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
