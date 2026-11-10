@@ -186,6 +186,56 @@ test('another session’s job no watcher has seen for a minute is taken over and
   expect(((await mine.memory.store.get('job:j1')) as Job).endedAt).toBe(30_000)
 })
 
+test('a job another session watched a moment ago is looked at again a minute later, and taken over when that session is gone', async () => {
+  const memory = memoryStore()
+  // The other session went away right after starting its job: its watch never beats again.
+  const other = deps([{ stdout: answered('Theirs.'), gate: new Promise(() => undefined) }], { memory, session: 'sess-0', sleep: () => new Promise(() => undefined) })
+  await createRunner(limits).startJob(other.d, ask)
+  const mine = deps([], { memory, session: 'sess-b' })
+  mine.runs.states.set('/tmp/agy/runs/j1', { head: answered('Theirs.').split('\n')[0]!, tail: answered('Theirs.'), exit: 0, endedAt: 30_000 })
+
+  await createRunner(limits).resume(mine.d)
+  await mine.submission()
+
+  expect(mine.submitted[0]).toMatch(/job #j1 done: ask "Review the plan"/)
+  expect(mine.time.now()).toBeGreaterThanOrEqual(62_000)
+})
+
+test('a taken-over job past its limit whose process is gone is read as it ended, not reported as stopped', async () => {
+  const memory = memoryStore()
+  const other = deps([{ stdout: init(), gate: new Promise(() => undefined) }], { memory, session: 'sess-0', sleep: () => new Promise(() => undefined) })
+  await createRunner(limits).startJob(other.d, ask)
+  other.runs.dead.add('/tmp/agy/runs/j1')
+  const mine = deps([], { memory, session: 'sess-b' })
+  mine.time.set(700_000)
+
+  await createRunner(limits).resume({ ...mine.d, files: other.d.files })
+  await mine.submission()
+
+  expect(other.runs.stopped).toEqual([])
+  expect(mine.submitted[0]).toMatch(/job #j1 lost: ask/)
+  expect(mine.submitted[0]).not.toMatch(/the run was stopped/)
+})
+
+test('another project’s job is left alone until it is unwatched past its limit, then stopped without a notice', async () => {
+  const memory = memoryStore()
+  const other = deps([{ stdout: init(), gate: new Promise(() => undefined) }], { memory, session: 'sess-0', project: async () => '/other', sleep: () => new Promise(() => undefined) })
+  await createRunner(limits).startJob(other.d, ask)
+  const mine = deps([], { memory, session: 'sess-b' })
+  const d = { ...mine.d, files: other.d.files }
+
+  mine.time.set(120_000)
+  await createRunner(limits).resume(d)
+  expect(other.runs.stopped).toEqual([])
+
+  mine.time.set(700_000)
+  await createRunner(limits).resume(d)
+  while ((await mine.job('j1'))?.status === 'running') await settle()
+  expect(other.runs.stopped).toEqual(['/tmp/agy/runs/j1'])
+  expect(await mine.job('j1')).toMatchObject({ status: 'failed', project: '/other' })
+  expect(mine.submitted).toEqual([])
+})
+
 test('session start prunes finished jobs past 7 days or the 50 newest, and removes worktrees no running job holds', async () => {
   const memory = memoryStore()
   const record = (id: string, endedAt: number) => ({ id, kind: 'ask', prompt: id, status: 'done', startedAt: endedAt, endedAt, sessionId: 's', project: '/proj', seenAt: 0, dir: `/tmp/agy/runs/${id}`, background: true, request: ask, workspace: { cwd: '/proj' } })
