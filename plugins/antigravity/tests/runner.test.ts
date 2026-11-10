@@ -174,7 +174,8 @@ test('another session’s job no watcher has seen for a minute is taken over and
   const mine = deps([], { memory, session: 'sess-b' })
   mine.runs.states.set('/tmp/agy/runs/j1', { head: answered('Theirs.').split('\n')[0]!, tail: answered('Theirs.'), exit: 0, endedAt: 30_000 })
 
-  await createRunner(limits).resume(mine.d)
+  // Seen a moment ago, the job is left to its watcher; the look a minute later is the next test's.
+  await createRunner(limits).resume({ ...mine.d, sleep: () => new Promise(() => undefined) })
   await settle()
   expect(mine.submitted).toEqual([])
 
