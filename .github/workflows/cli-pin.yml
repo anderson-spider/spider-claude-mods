@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: The exact version to pin (X.Y.Z); empty takes npm's latest when it is newer than the pin
+        description: The exact version to pin (X.Y.Z), one that never had a cli-pin pull request; empty takes npm's latest when it is newer than the pin
         required: false
 
 permissions: {}
@@ -41,13 +41,14 @@ jobs:
           version=$(node scripts/bump-cli.mjs ${ASKED:+"$ASKED"})
           echo "version=$version" >> "$GITHUB_OUTPUT"
       # One branch per version, never rewritten, so fixes pushed to it stay. A newer CLI opens a new pull request and
-      # closes the older one, whose branch is kept. A version that already has a pull request, open or closed, is left
-      # alone; a branch a failed run left without one gets its pull request now.
+      # closes the older one, whose branch is kept; a version asked for by hand closes none. A version that already has
+      # a pull request, open or closed, is left alone; a branch a failed run left without one gets its pull request now.
       - name: Open the pull request
         if: steps.pin.outputs.version != ''
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ steps.pin.outputs.version }}
+          ASKED: ${{ inputs.version }}
           BOT: ${{ vars.RELEASE_BOT }}
         run: |
           branch="cli-pin/v$VERSION"
@@ -63,4 +64,4 @@ jobs:
             git push --quiet origin "$branch"
           fi
           gh pr create --head "$branch" --base main --title "$title" --body "Moves the Claude Code CLI pin to v$VERSION in \`package.json\`, its lockfile and the README (\`node scripts/bump-cli.mjs\`). The \`plugins\` job shows what the new CLI breaks; fix that here before merging."
-          for number in $older; do gh pr close "$number" --comment "Superseded by the pull request for v$VERSION."; done
+          [ -n "$ASKED" ] || for number in $older; do gh pr close "$number" --comment "Superseded by the pull request for v$VERSION."; done
