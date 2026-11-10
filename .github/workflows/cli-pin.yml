@@ -35,7 +35,8 @@ jobs:
           version=$(node scripts/bump-cli.mjs)
           echo "version=$version" >> "$GITHUB_OUTPUT"
       # One branch per version, never rewritten, so fixes pushed to it stay. A newer CLI opens a new pull request and
-      # closes the older one, whose branch is kept; a day with the same version does nothing.
+      # closes the older one, whose branch is kept. A version that already has a pull request, open or closed, is left
+      # alone; a branch a failed run left without one gets its pull request now.
       - name: Open the pull request
         if: steps.pin.outputs.version != ''
         env:
@@ -45,13 +46,15 @@ jobs:
         run: |
           branch="cli-pin/v$VERSION"
           title="build: check the repository with Claude Code v$VERSION"
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
-            echo "$branch already exists"
+          if [ "$(gh pr list --head "$branch" --state all --json number --jq length)" != 0 ]; then
+            echo "v$VERSION already has a pull request"
             exit 0
           fi
           older=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("cli-pin/")) | .number')
-          git switch --quiet -c "$branch"
-          git -c user.name="$BOT" -c user.email="$BOT@users.noreply.github.com" commit --quiet -am "$title"
-          git push --quiet origin "$branch"
+          if ! git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            git switch --quiet -c "$branch"
+            git -c user.name="$BOT" -c user.email="$BOT@users.noreply.github.com" commit --quiet -am "$title"
+            git push --quiet origin "$branch"
+          fi
           gh pr create --head "$branch" --base main --title "$title" --body "Moves the Claude Code CLI pin to v$VERSION in \`package.json\`, its lockfile and the README (\`node scripts/bump-cli.mjs\`). The \`plugins\` job shows what the new CLI breaks; fix that here before merging."
           for number in $older; do gh pr close "$number" --comment "Superseded by the pull request for v$VERSION."; done

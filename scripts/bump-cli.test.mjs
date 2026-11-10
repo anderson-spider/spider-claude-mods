@@ -53,6 +53,7 @@ test("the CLI says nothing on stdout when the pin is already at the version aske
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /already at 2\.1\.322/);
   assert.equal(readFileSync(join(root, "package.json"), "utf8"), before);
+  assert.equal(readFileSync(join(root, "README.md"), "utf8"), readme);
 });
 
 test("the CLI fails on a version that is not exact, and on extra arguments", (t) => {
