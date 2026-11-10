@@ -561,8 +561,8 @@ test('the panel lists an agent of any type from its spawn, running with its mode
   world(on)
   on('tool.call', { tool: 'Read' }, () => ({ result: 'file' }) as never)
   on('tool.call', { tool: 'Bash' }, () => ({ result: 'boom', isError: true }) as never)
-  // An MCP tool's name is typed from the servers connected when the typings were written, so the filter is not typed here.
-  on('tool.call', { tool: 'mcp__gitlab__gitlab_mr' } as never, () => ({ result: 'mr' }) as never)
+  // An MCP tool's name is typed from the servers connected when the typings were written, so the name is not typed here.
+  on('tool.call', { tool: 'mcp__gitlab__gitlab_mr' as never }, () => ({ result: 'mr' }) as never)
   await start($)
   await flush()
   const { agentId } = await spawnAgent($, 'reviewer')
