@@ -43,6 +43,18 @@ test('full mode stops formatting a huge log at the character cap and says it was
   expect(full.endsWith('…(truncated; use mode errors or tail)')).toBe(true)
 })
 
+test('tail mode keeps the end of a huge log, cut at a line start, and says the earlier lines went', async () => {
+  const trace = Array.from({ length: 5_000 }, (_, i) => `line ${i + 1} ${'x'.repeat(40)}`).join('\n')
+  const { ctx } = fakeCtx({ 'GET /jobs/3': { name: 'big', status: 'failed' }, 'GET /jobs/3/trace': trace })
+
+  const tail = (await jobLog(ctx, { jobId: 3, mode: 'tail', lines: 4_000 })).split('\n')
+
+  expect(tail.join('\n').length).toBeLessThanOrEqual(60_000)
+  expect(tail[1]).toBe('…(earlier lines cut; ask for fewer lines)')
+  expect(tail[2]).toMatch(/^ *\d+\| line \d+ x+$/)
+  expect(tail.at(-1)).toBe(` 5000| line 5000 ${'x'.repeat(40)}`)
+})
+
 test('errors mode heads the excerpt with the job and its failure reason; tail and pattern work', async () => {
   const trace = ['$ npm test', 'ok 1', 'FAIL src/a.test.ts', 'expected 1', 'done'].join('\n')
   const { ctx } = fakeCtx({

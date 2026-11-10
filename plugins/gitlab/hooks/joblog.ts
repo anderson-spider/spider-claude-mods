@@ -39,6 +39,21 @@ function numberedWithin(lines: string[], from: number): string {
   return out.join('\n')
 }
 
+/** The lines from `from` to the end, numbered, within `room` characters: a tail is read for its end, so past the room the earlier lines go. */
+function numberedTail(lines: string[], from: number, room: number): string {
+  const out: string[] = []
+  let size = 0
+  let i = lines.length - 1
+  for (; i >= from; i--) {
+    const line = `${String(i + 1).padStart(5)}| ${lines[i]}`
+    if (size + line.length + 1 > room) break
+    out.push(line)
+    size += line.length + 1
+  }
+  if (i >= from) out.push('…(earlier lines cut; ask for fewer lines)')
+  return out.reverse().join('\n')
+}
+
 /** The matching lines with `CONTEXT` lines around each (ranges merged, gaps marked), then the log's last lines. */
 export function errorExcerpt(lines: string[], match: RegExp): { text: string; matches: number } {
   const ranges: [number, number][] = []
@@ -102,7 +117,7 @@ export async function jobLog(ctx: Ctx, input: LogInput): Promise<string> {
   if (mode === 'tail') {
     const n = id(input.lines, 'lines') ?? DEFAULT_TAIL
     const from = Math.max(0, lines.length - n)
-    return clip(`${head}\n${numberedWithin(lines, from)}`, 'ask for fewer lines')
+    return `${head}\n${numberedTail(lines, from, MAX_CHARS - head.length)}`
   }
   const { text, matches } = errorExcerpt(lines, match)
   return clip(`${head}; ${matches} matching lines, then the last ${Math.min(TAIL_WITH_ERRORS, lines.length)}\n${text}`, 'pass pattern to narrow it')
