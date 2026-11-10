@@ -35,9 +35,9 @@ jobs:
       - name: codex computer use helper tests
         run: node --test plugins/codex/helper/test/*.test.mjs
 
-  # Neither command logs in. The typings tsc needs are written by an interactive session, which starts without a login.
-  # The pinned row, with the CLI package.json pins, is the required `plugins` check; the latest row shows early what a
-  # newer CLI breaks and never fails the run.
+  # The same tasks as `npm run check` (scripts/tasks/), which pick the tools from node_modules and run every plugin, the
+  # unlisted ones included, then fail naming what failed. No task logs in. The pinned row, with the CLI package.json
+  # pins, is the `plugins` check; the latest row shows early what a newer CLI breaks and never fails the run.
   plugins:
     name: ${{ matrix.cli == 'latest' && 'plugins-latest' || 'plugins' }}
     runs-on: ubuntu-latest
@@ -61,56 +61,26 @@ jobs:
         run: |
           npm ci
           [ "$CLI" = latest ] && npm install --no-save @anthropic-ai/claude-code@latest
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           node_modules/.bin/claude --version
-      # Each step runs every plugin, the unlisted ones included, then fails with the list of those that failed.
       - name: Validate the marketplace and every plugin
-        run: |
-          failed=()
-          claude plugin validate --strict . || failed+=(marketplace)
-          for source in $(node -p "const r = p => require('./.claude-plugin/' + p); [...r('marketplace.json').plugins.map(p => p.source), ...(require('fs').existsSync('.claude-plugin/unlisted.json') ? r('unlisted.json').map(n => './plugins/' + n) : [])].join(' ')"); do
-            echo "==> validate $source"
-            claude plugin validate --strict "$source" || failed+=("$source")
-          done
-          if [ "${#failed[@]}" -gt 0 ]; then echo "validate failed: ${failed[*]}" >&2; exit 1; fi
-      - name: Test every plugin
-        run: |
-          failed=()
-          for source in $(node -p "const r = p => require('./.claude-plugin/' + p); [...r('marketplace.json').plugins.map(p => p.source), ...(require('fs').existsSync('.claude-plugin/unlisted.json') ? r('unlisted.json').map(n => './plugins/' + n) : [])].join(' ')"); do
-            # A skills-only plugin has no hooks module for `claude plugin test` to load.
-            [ -f "$source/hooks/hooks.json" ] || { echo "==> test $source: skipped, skills only"; continue; }
-            echo "==> test $source"
-            claude plugin test "$source" || failed+=("$source")
-          done
-          if [ "${#failed[@]}" -gt 0 ]; then echo "test failed: ${failed[*]}" >&2; exit 1; fi
+        run: npm run plugins:validate
+      - name: Test the scripts and every plugin
+        run: npm run plugins:test
       # The scaffold runs in a copy so the checkout stays clean.
       - name: Scaffold a sample plugin and check it
         run: |
           cp -R . "$RUNNER_TEMP/scaffold"
           cd "$RUNNER_TEMP/scaffold"
           node scripts/new-plugin.mjs ci-sample "CI sample plugin."
-          claude plugin validate --strict plugins/ci-sample
-          claude plugin test plugins/ci-sample
-      # Same loop as `npm run plugins:types`, on Linux's `script`. A fresh runner has no login: onboarding and folder
-      # trust are marked done so the session starts and loads every plugin of the scaffold copy, ci-sample included.
+          npm run plugins:validate -- ci-sample
+          npm run plugins:test -- ci-sample
+      # typecheck generates the typings first, in an interactive session. A fresh runner has no login: onboarding and
+      # folder trust are marked done so the session starts and loads every plugin of the scaffold copy, ci-sample included.
       - name: Type-check every plugin and the sample
         working-directory: ${{ runner.temp }}/scaffold
         run: |
           node -e 'require("fs").writeFileSync(require("os").homedir() + "/.claude.json", JSON.stringify({ hasCompletedOnboarding: true, theme: "dark", projects: { [process.cwd()]: { hasTrustDialogAccepted: true } } }))'
-          # Only plugins with a tsconfig.json get typings; a skills-only plugin has no TypeScript.
-          typed=()
-          for d in plugins/*/; do [ -f "${d}tsconfig.json" ] && typed+=("$d"); done
-          args=()
-          for d in "${typed[@]}"; do args+=(--plugin-dir "${d%/}"); done
-          ready() { for d in "${typed[@]}"; do [ -f "${d}.claude-plugin/types/tsconfig.json" ] || return 1; done; }
-          { for _ in $(seq 120); do ready && break; sleep 1; done; sleep 2; printf '/exit\r'; } | script -q -e -c "claude ${args[*]}" /dev/null >/dev/null 2>&1 || true
-          ready || { echo "Claude Code did not write the typings" >&2; exit 1; }
-          failed=()
-          for d in "${typed[@]}"; do
-            echo "==> tsc ${d%/}"
-            tsc -p "${d}tsconfig.json" || failed+=("${d%/}")
-          done
-          if [ "${#failed[@]}" -gt 0 ]; then echo "tsc failed: ${failed[*]}" >&2; exit 1; fi
+          npm run typecheck
 
   # A new user's install on a clean Linux machine: bootstrap.sh from this checkout, then every plugin loads in a session
   # without login (scripts/install-test/).

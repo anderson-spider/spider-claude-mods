@@ -1,4 +1,4 @@
-# Sourced by the task scripts: which `claude` and `tsc` a task runs.
+# Sourced by the task scripts: which `claude` and `tsc` a task runs, and which plugins it runs them on.
 
 # The node_modules/.bin that holds the pinned tools: this checkout's, else the main checkout's, since a fresh worktree
 # has no node_modules until `npm ci` runs in it. Empty when neither has them.
@@ -21,8 +21,9 @@ use_pinned_tools() {
 }
 
 # Typings and installed plugins belong to the Claude Code you run sessions with, so these tasks use that claude, not
-# the pinned one `npm run` puts first on PATH.
+# the pinned one `npm run` puts first on PATH. A CI runner has only the pinned one, which is the version checked there.
 use_own_claude() {
+  if [ -n "${CI:-}" ]; then use_pinned_tools; return; fi
   PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/node_modules/\.bin$' | paste -sd: -)
   command -v claude >/dev/null || { echo "claude is not on PATH outside node_modules: install Claude Code" >&2; exit 1; }
 }
@@ -51,4 +52,28 @@ ensure_typings() {
 # A plugin named on the command line: lowercase words joined by hyphens, with a folder under plugins/.
 require_plugin() {
   [[ "$1" =~ ^[a-z][a-z0-9-]*$ && -d "plugins/$1" ]] || { echo "no such plugin: $1" >&2; exit 1; }
+}
+
+# Sets `dirs` to the folders of the plugins named, or of every plugin. The folders under plugins/ are the one list
+# every task and CI run on: check-consistency fails when they differ from marketplace.json plus unlisted.json.
+plugin_dirs() {
+  local n
+  dirs=()
+  if [ "$#" -gt 0 ]; then
+    for n in "$@"; do require_plugin "$n"; dirs+=("plugins/$n/"); done
+  else
+    dirs=(plugins/*/)
+  fi
+}
+
+# The same, keeping the plugins with a tsconfig.json; one named that ships only skills has no TypeScript to check.
+typed_plugin_dirs() {
+  local named=$# all d
+  plugin_dirs "$@"
+  all=("${dirs[@]}")
+  dirs=()
+  for d in "${all[@]}"; do
+    if [ -f "${d}tsconfig.json" ]; then dirs+=("$d")
+    elif [ "$named" -gt 0 ]; then echo "$(basename "$d") ships skills only and has no TypeScript" >&2; exit 1; fi
+  done
 }
