@@ -2,8 +2,8 @@
 # npm run check [-- <name>] — the required CI checks, for every plugin or one: no hand-edited plugin version among the
 # committed, uncommitted and untracked changes against origin/main as last fetched (always every plugin; the pull
 # request title is checked in CI), plugins:validate, plugins:test and typecheck.
-# Every step runs; the task fails at the end and names the steps that failed. A target that passes prints only its
-# `==>` line; QUIET=0 npm run check prints everything.
+# Every step runs; the task fails at the end and names the steps that failed. The output of a target that passes is
+# hidden; QUIET=0 npm run check prints everything.
 set -euo pipefail
 . scripts/tasks/lib.sh
 use_pinned_tools
