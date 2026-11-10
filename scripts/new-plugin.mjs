@@ -2,11 +2,13 @@
 // Run: npm run plugin:new -- <name> [description]   (or: node scripts/new-plugin.mjs <name> [description])
 // `scaffoldPlugin(root, name, description)` is the pure core. It checks everything, then writes, so a refusal leaves no file.
 // What it writes: plugins/<name>/ from scripts/plugin-template/, the marketplace entry, the plugin's line in the root
-// AGENTS.md "Where to look" list, the root README table row and install line, and the plugin list of scripts/bootstrap.sh
-// when the repository has one.
+// AGENTS.md "Where to look" list, the root README table row and install line, and, when the repository has them, the
+// plugin list of scripts/bootstrap.sh and the plugin's entries in release-please's config and manifest. The plugin
+// starts at 0.0.0: its first release sets the version (0.1.0 for a `feat`).
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { RELEASE_CONFIG, RELEASE_MANIFEST, releasePackage } from './check-consistency.mjs'
 
 const TEMPLATE_DIR = fileURLToPath(new URL('./plugin-template/', import.meta.url))
 // Lowercase words joined by single hyphens, starting with a letter. The name is also the middle of `mcp__<name>__<tool>`.
@@ -69,7 +71,7 @@ export function scaffoldPlugin(root, name, description) {
 
   const values = { name, id: name.replaceAll('-', '_'), description: summary }
   const created = {
-    [join('plugins', name, '.claude-plugin/plugin.json')]: `${JSON.stringify({ name, version: '0.1.0', description: summary, author: { name: 'anderson-spider' }, license: 'MIT' }, null, 2)}\n`,
+    [join('plugins', name, '.claude-plugin/plugin.json')]: `${JSON.stringify({ name, version: '0.0.0', description: summary, author: { name: 'anderson-spider' }, license: 'MIT' }, null, 2)}\n`,
   }
   for (const file of filesUnder(TEMPLATE_DIR)) {
     created[join('plugins', name, file.replace(/\.tmpl$/, ''))] = render(readText(join(TEMPLATE_DIR, file)), values, file)
@@ -92,6 +94,13 @@ export function scaffoldPlugin(root, name, description) {
     const text = readText(bootstrapPath)
     if (!/^ALL="[^"]*"$/m.test(text)) throw new Error('scripts/bootstrap.sh: no ALL="<plugins>" line')
     edited['scripts/bootstrap.sh'] = text.replace(/^ALL="[^"]*"$/m, `ALL="${marketplace.plugins.map(entry => entry.name).join(' ')}"`)
+  }
+
+  if (existsSync(join(root, RELEASE_CONFIG))) {
+    const sorted = entries => Object.fromEntries(Object.entries(entries).sort(([a], [b]) => (a < b ? -1 : 1)))
+    const config = JSON.parse(readText(join(root, RELEASE_CONFIG)))
+    edited[RELEASE_CONFIG] = `${JSON.stringify({ ...config, packages: sorted({ ...config.packages, [`plugins/${name}`]: releasePackage(name) }) }, null, 2)}\n`
+    edited[RELEASE_MANIFEST] = `${JSON.stringify(sorted({ ...JSON.parse(readText(join(root, RELEASE_MANIFEST))), [`plugins/${name}`]: '0.0.0' }), null, 2)}\n`
   }
 
   for (const [path, text] of Object.entries({ ...created, ...edited })) {

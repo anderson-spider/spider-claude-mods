@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { SHARED_BLOCK_WORDS, checkRepo, citedTests, declaredTests } from "./check-consistency.mjs";
+import { SHARED_BLOCK_WORDS, checkRepo, citedTests, declaredTests, releasePackage } from "./check-consistency.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const script = fileURLToPath(new URL("./check-consistency.mjs", import.meta.url));
@@ -703,3 +703,51 @@ test("bootstrap.sh lists only the marketplace plugins, not the unlisted ones", (
   );
 });
 
+
+/** Gives the fixture release-please's config and manifest, both naming alpha at its plugin.json version. */
+const withRelease = (files) => {
+  files["release-please-config.json"] = json({ packages: { "plugins/alpha": releasePackage("alpha") } });
+  files[".release-please-manifest.json"] = json({ "plugins/alpha": "1.2.3" });
+};
+const release = (file, change) => (files) => {
+  withRelease(files);
+  files[file] = json(change(JSON.parse(files[file])));
+};
+
+test("release-please's config and manifest naming every plugin at its version pass, the unlisted ones included", (t) => {
+  assert.deepEqual(problems(t, withRelease), []);
+  assert.deepEqual(
+    problems(t, (files) => {
+      withRelease(files);
+      unlistAlpha(files);
+    }),
+    [],
+  );
+});
+
+for (const { name, change, expected } of [
+  {
+    name: "a release config missing a plugin",
+    change: release("release-please-config.json", () => ({ packages: {} })),
+    expected: 'release-please-config.json: lists "", but the plugins are "plugins/alpha"',
+  },
+  {
+    name: "a release manifest with a plugin that is gone",
+    change: release(".release-please-manifest.json", (versions) => ({ ...versions, "plugins/ghost": "1.0.0" })),
+    expected: '.release-please-manifest.json: lists "plugins/alpha plugins/ghost", but the plugins are "plugins/alpha"',
+  },
+  {
+    name: "a release manifest at another version than plugin.json",
+    change: release(".release-please-manifest.json", () => ({ "plugins/alpha": "1.2.4" })),
+    expected: ".release-please-manifest.json: plugins/alpha is at 1.2.4, but its plugin.json is at 1.2.3",
+  },
+  {
+    name: "a release package under another name",
+    change: release("release-please-config.json", () => ({ packages: { "plugins/alpha": { "package-name": "beta", "release-as": "2.0.0" } } })),
+    expected: 'release-please-config.json: plugins/alpha needs "package-name": "alpha", which its tags start with',
+  },
+]) {
+  test(`${name} is reported`, (t) => {
+    assert.deepEqual(problems(t, change), [expected]);
+  });
+}

@@ -1,7 +1,9 @@
 name: ci
 
 on:
+  # `edited` runs the checks again when the title changes: the release rules read it.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -20,9 +22,14 @@ jobs:
           node-version-file: .nvmrc
       - name: Marketplace and plugin manifests agree
         run: node scripts/check-consistency.mjs
-      - name: Plugins with changed shipped files bumped their version
+      - name: No plugin version edited by hand, and a title that releases what changed
         if: github.event_name == 'pull_request'
-        run: node scripts/check-version-bump.mjs "origin/${{ github.base_ref }}"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          RELEASE_BOT: ${{ vars.RELEASE_BOT }}
+        run: node scripts/check-release.mjs "origin/${{ github.base_ref }}"
       - name: Script and hook tests
         run: node --test scripts/*.test.mjs
       - name: codex computer use helper tests

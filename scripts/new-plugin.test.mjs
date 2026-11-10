@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checkRepo } from "./check-consistency.mjs";
+import { checkRepo, releasePackage } from "./check-consistency.mjs";
 import { invalidName, scaffoldPlugin } from "./new-plugin.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -118,7 +118,7 @@ test("the plugin files carry the name, its tool id and the description, with no 
   const dir = join(root, "plugins/my-tool");
   const plugin = JSON.parse(readFileSync(join(dir, ".claude-plugin/plugin.json"), "utf8"));
 
-  assert.deepEqual(plugin, { name: "my-tool", version: "0.1.0", description: "Does my thing.", author: { name: "anderson-spider" }, license: "MIT" });
+  assert.deepEqual(plugin, { name: "my-tool", version: "0.0.0", description: "Does my thing.", author: { name: "anderson-spider" }, license: "MIT" });
   assert.deepEqual(JSON.parse(readFileSync(join(dir, "hooks/hooks.json"), "utf8")), { modules: ["./register.tsx"] });
   assert.equal(JSON.parse(readFileSync(join(dir, "tsconfig.json"), "utf8")).extends, "./.claude-plugin/types/tsconfig.json");
   const register = readFileSync(join(dir, "hooks/register.tsx"), "utf8");
@@ -296,4 +296,18 @@ test("the bootstrap plugin list takes the new plugin in marketplace order, and a
   const before = listing(other);
   assert.throws(() => scaffoldPlugin(other, "alpha"), /scripts\/bootstrap\.sh: no ALL="<plugins>" line/);
   assert.deepEqual(listing(other), before);
+});
+
+test("release-please's config and manifest take the new plugin at 0.0.0, in order, when the repository has them", (t) => {
+  const root = fixture(t);
+  writeFileSync(join(root, "release-please-config.json"), json({ "release-type": "simple", packages: { "plugins/mid": releasePackage("mid") } }));
+  writeFileSync(join(root, ".release-please-manifest.json"), json({ "plugins/mid": "1.0.0" }));
+  const { edited } = scaffoldPlugin(root, "alpha");
+  assert.ok(edited.includes("release-please-config.json") && edited.includes(".release-please-manifest.json"));
+  assert.deepEqual(JSON.parse(readFileSync(join(root, "release-please-config.json"), "utf8")), {
+    "release-type": "simple",
+    packages: { "plugins/alpha": releasePackage("alpha"), "plugins/mid": releasePackage("mid") },
+  });
+  assert.equal(readFileSync(join(root, ".release-please-manifest.json"), "utf8"), `${json({ "plugins/alpha": "0.0.0", "plugins/mid": "1.0.0" })}\n`);
+  assert.deepEqual(checkRepo(root).errors, []);
 });

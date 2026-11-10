@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "bb6b8db7ce422d949cdd07dff85323523fa83dc7",
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "always-update": true,
+  "extra-files": [
+    {
+      "type": "json",
+      "path": ".claude-plugin/plugin.json",
+      "jsonpath": "$.version"
+    }
+  ],
+  "changelog-sections": [
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring"
+    },
+    {
+      "type": "revert",
+      "section": "Reverts"
+    }
+  ],
+  "packages": {
+    "plugins/antigravity": {
+      "package-name": "antigravity"
+    },
+    "plugins/codex": {
+      "package-name": "codex"
+    },
+    "plugins/file-explorer": {
+      "package-name": "file-explorer"
+    },
+    "plugins/gitlab": {
+      "package-name": "gitlab"
+    },
+    "plugins/image-preview": {
+      "package-name": "image-preview"
+    },
+    "plugins/session-hud": {
+      "package-name": "session-hud"
+    },
+    "plugins/sonarqube": {
+      "package-name": "sonarqube"
+    },
+    "plugins/subagent-effort": {
+      "package-name": "subagent-effort"
+    },
+    "plugins/tailscale": {
+      "package-name": "tailscale"
+    }
+  }
+}
