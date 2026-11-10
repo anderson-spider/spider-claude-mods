@@ -261,6 +261,23 @@ test('a link to a folder opens as a folder; a folder that went away leaves the t
   await ui.unmount()
 })
 
+test('an open folder that went away is listed once more, not on every background check', async ($, on) => {
+  const w = world(on, FILES)
+  await start($)
+  const ui = await $.ui.mount(pane())
+  await key(ui, 'j')
+  await key(ui, 'j')
+  await key(ui, 'l')
+  expect(await rows(ui)).toContain('    ◇ app.ts')
+  w.remove('src')
+  await w.clock.advance(6000)
+  expect(await rows(ui)).not.toContain('  ▾ src/')
+  const listed = w.lists.filter(dir => dir === `${ROOT}/src`).length
+  await w.clock.advance(12_000)
+  expect(w.lists.filter(dir => dir === `${ROOT}/src`).length).toBe(listed)
+  await ui.unmount()
+})
+
 test('a folder of 2500 files draws its first 2000 and a row for the rest, and the pane stays within its rows', async ($, on) => {
   world(on, ['big/', ...Array.from({ length: 2500 }, (_, i) => `big/f${i}.txt`)])
   await start($)

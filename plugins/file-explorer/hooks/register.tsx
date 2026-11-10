@@ -92,7 +92,8 @@ async function listDir($: Dollar, held: Held, dir: string): Promise<void> {
     }))
     listing = listingOf(entries, stat.mtimeMs, held.config.sort)
   } catch {
-    listing = { entries: [], omitted: 0, mtimeMs: 0 }
+    // The folder's own mtime when it still stands (one that cannot be listed), so the check below does not read it again on every pass.
+    listing = { entries: [], omitted: 0, mtimeMs: (await $.fs.stat(dir).catch(() => undefined))?.mtimeMs ?? 0 }
   }
   await update($, dirsAtom, dirs => ({ ...dirs, [dir]: listing }))
 }
@@ -118,7 +119,8 @@ async function refreshDirs($: Dollar, held: Held, force: boolean): Promise<void>
     const listing = dirs[dir]
     if (!listing || force) return dir
     const stat = await $.fs.stat(dir).catch(() => undefined)
-    return stat?.mtimeMs !== listing.mtimeMs ? dir : undefined
+    // A folder that is gone reads as 0, the mtime its empty listing was given.
+    return (stat?.mtimeMs ?? 0) !== listing.mtimeMs ? dir : undefined
   }))
   if (Object.keys(dirs).some(dir => !shown.has(dir))) {
     // Read the view again: a folder expanded while the stats ran keeps its listing.
