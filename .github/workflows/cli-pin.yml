@@ -2,8 +2,8 @@ name: cli-pin
 
 # Once a day: when npm serves a Claude Code CLI newer than the one package.json pins, scripts/bump-cli.mjs moves the pin
 # (package.json, its lockfile and the README) and a pull request carries it, so the normal checks run on the new CLI and
-# show what it breaks in a pull request that changes nothing else. A person merges it: `plugins` is not a required
-# check, so nothing merges by itself here.
+# show what it breaks in a pull request that changes nothing else. A person merges it, once `plugins` passes on the
+# new CLI; nothing merges by itself here.
 # The GitHub App's token is what lets the pull request run the checks: one opened with GITHUB_TOKEN starts no workflow.
 on:
   schedule:
