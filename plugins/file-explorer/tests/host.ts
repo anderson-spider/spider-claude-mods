@@ -24,6 +24,7 @@ export function world(on: On, files: readonly string[], opts: { git?: Git; draft
   const copies: string[] = []
   const fills: string[] = []
   const reads: string[] = []
+  const lists: string[] = []
   const gitRuns: string[][] = []
   const prompt = { text: opts.draft ?? '' }
   const git = { current: opts.git }
@@ -78,6 +79,7 @@ export function world(on: On, files: readonly string[], opts: { git?: Git; draft
 
   on('fs.list', (_$, e) => {
     const dir = (e as { path?: string }).path ?? ROOT
+    lists.push(dir)
     if (target(dir)?.kind !== 'dir') return { deny: `ENOENT: ${dir}` } as never
     const real = tree.get(dir)?.link ?? dir
     const entries = [...tree.entries()].filter(([path]) => path !== real && parentOf(path) === real).map(([path, node]) => ({
@@ -118,7 +120,7 @@ export function world(on: On, files: readonly string[], opts: { git?: Git; draft
     }
   })
 
-  return { tree, add, remove, touch, runs, gitRuns, opened, copies, fills, reads, prompt, git, clock }
+  return { tree, add, remove, touch, runs, gitRuns, opened, copies, fills, reads, lists, prompt, git, clock }
 }
 
 export const start = ($: Engine, cwd = ROOT) => $.session.start({ cwd, surface: 'terminal', isInteractive: true } as never)
