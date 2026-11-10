@@ -138,6 +138,35 @@ test('a tile with no preview is neither re-read nor redrawn on every poll', asyn
   expect(writes).toBe(1)
 })
 
+test('an image whose file never shows up is looked for during five seconds, then left alone until the draft changes', async ($, on) => {
+  const clock = mock.clock(on)
+  let draft = 'typed by hand [Image #7]'
+  let looks = 0
+  on('session.start', () => ({ cwd: '/work' }))
+  on('prompt.read', () => ({ value: { text: draft, cursor: draft.length } }))
+  on('env.get', ($, e) => ({ value: GHOSTTY[e.name] }))
+  on('process.run', () => ran('501\n'))
+  on('session.id', () => ({ value: 'sess-7' }))
+  on('fs.list', () => ({ value: [{ name: '-work', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] }))
+  on('fs.exists', ($, e) => {
+    if (e.path.endsWith('.png')) looks++
+    return { value: e.path === '/tmp/claude-501/-work/sess-7/images' }
+  })
+
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  for (let i = 0; i < 24; i++) await clock.advance(200)
+  const before = looks
+  await clock.advance(200)
+  expect(looks).toBeGreaterThan(before)
+  const settled = looks
+  for (let i = 0; i < 25; i++) await clock.advance(200)
+  expect(looks).toBe(settled)
+
+  draft = 'typed by hand [Image #7] [Image #8]'
+  await clock.advance(200)
+  expect(looks).toBeGreaterThan(settled)
+})
+
 test('tiles that don\'t fit become a +N label, and a band too short for one draws nothing', async ($, on) => {
   const clock = mock.clock(on)
   const draft = Array.from({ length: 10 }, (_, i) => `[Image #${i + 1}]`).join(' ')
