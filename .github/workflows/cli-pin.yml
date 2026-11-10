@@ -1,6 +1,6 @@
 name: cli-pin
 
-# Once a day: when npm serves a Claude Code CLI newer than the one package.json pins, scripts/bump-cli.mjs moves the pin
+# Once a day, or on demand with a version of your choice: when npm serves a Claude Code CLI newer than the one package.json pins, scripts/bump-cli.mjs moves the pin
 # (package.json, its lockfile and the README) and a pull request carries it, so the normal checks run on the new CLI and
 # show what it breaks in a pull request that changes nothing else. A person merges it: `plugins` is not a required
 # check, so nothing merges by itself here.
@@ -9,6 +9,10 @@ on:
   schedule:
     - cron: '23 7 * * *'
   workflow_dispatch:
+    inputs:
+      version:
+        description: The exact version to pin (X.Y.Z); empty takes npm's latest when it is newer than the pin
+        required: false
 
 permissions: {}
 
@@ -29,10 +33,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Move the pin to the latest CLI
+      - name: Move the pin
         id: pin
+        env:
+          ASKED: ${{ inputs.version }}
         run: |
-          version=$(node scripts/bump-cli.mjs)
+          version=$(node scripts/bump-cli.mjs ${ASKED:+"$ASKED"})
           echo "version=$version" >> "$GITHUB_OUTPUT"
       # One branch per version, never rewritten, so fixes pushed to it stay. A newer CLI opens a new pull request and
       # closes the older one, whose branch is kept. A version that already has a pull request, open or closed, is left
