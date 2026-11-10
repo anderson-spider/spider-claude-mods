@@ -1,6 +1,6 @@
 {
   "name": "file-explorer",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "File tree pane that follows Claude's reads, edits and searches, with git status, search, preview and path references",
   "author": {
     "name": "anderson-spider"
@@ -8,7 +8,15 @@
   "homepage": "https://github.com/anderson-spider/claude-mods/tree/main/plugins/file-explorer",
   "repository": "https://github.com/anderson-spider/claude-mods",
   "license": "MIT",
-  "keywords": ["files", "tree", "explorer", "git", "pane", "mod", "claude-code"],
+  "keywords": [
+    "files",
+    "tree",
+    "explorer",
+    "git",
+    "pane",
+    "mod",
+    "claude-code"
+  ],
   "userConfig": {
     "autoOpen": {
       "type": "boolean",
@@ -50,14 +58,21 @@
       "type": "string",
       "title": "Sort",
       "description": "Order inside a folder, folders first: by name, by extension, or newest first.",
-      "options": ["name", "type", "modified"],
+      "options": [
+        "name",
+        "type",
+        "modified"
+      ],
       "default": "name"
     },
     "enterAction": {
       "type": "string",
       "title": "Enter on a file",
       "description": "What Enter or a double click does on a file: preview it in the pane, or open it in the editor.",
-      "options": ["preview", "editor"],
+      "options": [
+        "preview",
+        "editor"
+      ],
       "default": "preview"
     },
     "editor": {
@@ -70,28 +85,42 @@
       "type": "string",
       "title": "Icons",
       "description": "Nerd Font glyphs in the terminal (needs a patched font) or plain Unicode. Other surfaces always use Unicode.",
-      "options": ["unicode", "nerd"],
+      "options": [
+        "unicode",
+        "nerd"
+      ],
       "default": "unicode"
     },
     "theme": {
       "type": "string",
       "title": "Colours",
       "description": "auto follows the Claude Code theme; dark and light are fixed palettes.",
-      "options": ["auto", "dark", "light"],
+      "options": [
+        "auto",
+        "dark",
+        "light"
+      ],
       "default": "auto"
     },
     "git": {
       "type": "string",
       "title": "Git indicators",
       "description": "full: status letters and lines added and removed; status: letters only; off: no git.",
-      "options": ["full", "status", "off"],
+      "options": [
+        "full",
+        "status",
+        "off"
+      ],
       "default": "full"
     },
     "search": {
       "type": "string",
       "title": "Search",
       "description": "fuzzy matches the letters in order; substring needs them together.",
-      "options": ["fuzzy", "substring"],
+      "options": [
+        "fuzzy",
+        "substring"
+      ],
       "default": "fuzzy"
     },
     "refreshSeconds": {
