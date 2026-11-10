@@ -36,19 +36,12 @@ jobs:
         run: node --test plugins/codex/helper/test/*.test.mjs
 
   # The same tasks as `npm run check` (scripts/tasks/), which pick the tools from node_modules and run every plugin, the
-  # unlisted ones included, then fail naming what failed. No task logs in. The pinned row, with the CLI package.json
-  # pins, is the `plugins` check; the latest row shows early what a newer CLI breaks and never fails the run.
+  # unlisted ones included, then fail naming what failed. No task logs in. They run the CLI package.json pins;
+  # what a newer CLI breaks shows in the pull request that moves the pin (.github/workflows/cli-pin.yml).
   plugins:
-    name: ${{ matrix.cli == 'latest' && 'plugins-latest' || 'plugins' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: ${{ matrix.cli == 'latest' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        cli: [pinned, latest]
     env:
-      CLI: ${{ matrix.cli }}
       DISABLE_AUTOUPDATER: 1
     steps:
       - uses: actions/checkout@v4
@@ -56,11 +49,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      # npm ci installs the pinned CLI and TypeScript; the latest row swaps in the newest CLI without touching the lockfile.
-      - name: Install Claude Code and TypeScript
+      - name: Install the pinned Claude Code and TypeScript
         run: |
           npm ci
-          [ "$CLI" = latest ] && npm install --no-save @anthropic-ai/claude-code@latest
           node_modules/.bin/claude --version
       - name: Validate the marketplace and every plugin
         run: npm run plugins:validate
