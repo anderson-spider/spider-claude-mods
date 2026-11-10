@@ -37,7 +37,7 @@ const askWorld = (on: On, now: () => number = Date.now, routes: string[] = []) =
   on('http.fetch', (_$, e) => {
     const route = e.url.replace('http://codex-cu', '')
     routes.push(route)
-    const body = JSON.parse(e.init?.body ?? '{}') as Record<string, unknown>
+    const body = JSON.parse((e.init?.body ?? '{}') as string) as Record<string, unknown>
     const reply = (value: unknown) => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify(value) } })
 
     if (route === '/approve') {

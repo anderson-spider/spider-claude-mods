@@ -38,7 +38,7 @@ function world(on: On, opts: { project?: Settings; local?: Settings; text?: stri
   on('tool.register', (_$, e) => (tools.push(e as unknown as Tool), { value: { tool: id(e.name) } }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('http.fetch', (_$, e) => {
-    sent.push({ url: e.url, method: e.init?.method, headers: e.init?.headers, body: e.init?.body })
+    sent.push({ url: e.url, method: e.init?.method, headers: e.init?.headers, body: e.init?.body as string | undefined })
     if (host.fetchError) throw new Error(host.fetchError)
     const status = host.status ?? 200
 

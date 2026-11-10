@@ -15,7 +15,7 @@
     "plugin:new": "bash scripts/tasks/plugin-new.sh"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "2.1.303",
+    "@anthropic-ai/claude-code": "2.1.322",
     "typescript": "7.0.2"
   }
 }

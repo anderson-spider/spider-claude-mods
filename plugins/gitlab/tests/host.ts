@@ -52,7 +52,7 @@ export function world(on: On, opts: { remote?: string; branch?: string; project?
     return out(1, '')
   })
   on('http.fetch', (_$, e) => {
-    sent.push({ url: e.url, method: e.init?.method, headers: e.init?.headers, body: e.init?.body })
+    sent.push({ url: e.url, method: e.init?.method, headers: e.init?.headers, body: e.init?.body as string | undefined })
     if (host.fetchError) throw new Error(host.fetchError)
     const listed = (host.api as Record<string, Answer | Answer[]>)[e.url]
     const answer = Array.isArray(listed) ? (listed.length > 1 ? listed.shift() : listed[0]) : listed

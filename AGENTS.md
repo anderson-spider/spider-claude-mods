@@ -7,8 +7,6 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 - Plugin work: read `plugins/<name>/AGENTS.md` before changing files under `plugins/<name>/`. Keep plugin guidance there: a plugin-root `CLAUDE.md` draws a validation warning.
 - Second opinions and reviews from another model family through Google's Antigravity CLI (agy): `plugins/antigravity/AGENTS.md`.
 - Second opinions and images through the Codex CLI, and native Mac app control through Codex computer use: `plugins/codex/AGENTS.md`.
-- Self-hosted ComfyUI tools (nodes, models, templates, jobs, uploads, ComfyUI-Manager): `plugins/comfyui-local/AGENTS.md`.
-- Coolify API tools (projects, applications, deployments): `plugins/coolify/AGENTS.md`.
 - File tree pane with git status and Claude's activity: `plugins/file-explorer/AGENTS.md`.
 - GitLab merge requests and pipelines of the current repository: `plugins/gitlab/AGENTS.md`.
 - Thumbnails of pasted images above the prompt: `plugins/image-preview/AGENTS.md`.

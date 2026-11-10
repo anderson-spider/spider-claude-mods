@@ -9,7 +9,7 @@ export const OWN = 'mcp__computer-use__left_click'
 export const BAND = {
   plugin: 'codex',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: true, maxRows: 12, bodyColumns: 120, scroll: { offset: 0, bodyRows: 12 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: true, maxRows: 12, bodyColumns: 120, scroll: { offset: 0, bodyRows: 12 }, view: {} },
 } as const
 
 export const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as never
@@ -45,7 +45,7 @@ export const world = (on: On, now: () => number = Date.now) => {
   })
   on('http.fetch', async (_$, e) => {
     const route = e.url.replace('http://codex-cu', '')
-    const body = JSON.parse(e.init?.body ?? '{}') as Record<string, unknown>
+    const body = JSON.parse((e.init?.body ?? '{}') as string) as Record<string, unknown>
     posted.push({ route, body, socketPath: e.init?.socketPath })
     const caller = String(body.caller)
     const code = String(body.code ?? '')

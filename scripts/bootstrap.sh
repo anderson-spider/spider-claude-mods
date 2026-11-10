@@ -19,7 +19,7 @@ set -eu
 MARKET=spider-claude-mods
 REPO=${BOOTSTRAP_SOURCE:-anderson-spider/claude-mods}
 # Every plugin of the marketplace; check-consistency keeps this list equal to marketplace.json.
-ALL="antigravity codex comfyui-local coolify file-explorer gitlab image-preview session-hud sonarqube subagent-effort tailscale"
+ALL="antigravity codex file-explorer gitlab image-preview session-hud sonarqube subagent-effort tailscale"
 NODE=${BOOTSTRAP_NODE:-/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node}
 ONLY=
 CHECK=
@@ -106,7 +106,6 @@ printf '\ndone. Next:\n  - start a new Claude Code session, or run /reload-plugi
 for p in $PLUGINS; do
   case "$p" in
     codex) if [ -n "$MAC" ]; then echo '  - codex computer use: `/codex-cu on` turns it on, and `/codex-cu status` should report the helper running'; fi ;;
-    coolify) echo '  - coolify needs its url and apiKey: `claude plugin configure coolify`' ;;
     subagent-effort) echo '  - subagent-effort needs a Jev key: its apiKey (`claude plugin configure subagent-effort`) or SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY (or JEV_API_KEY) in the environment' ;;
     gitlab) echo '  - gitlab needs its tokens (host=token pairs): `claude plugin configure gitlab`' ;;
     tailscale) echo '  - tailscale needs its apiKey: `claude plugin configure tailscale`' ;;
