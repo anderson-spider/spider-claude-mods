@@ -59,14 +59,16 @@ Nobody edits a plugin's `version` or `CHANGELOG.md`: `.github/workflows/release.
 
 ## CI
 
-- `checks`: `.github/workflows/ci.yml` runs the consistency and release checks and the script and helper tests there. It is the required check.
+- `checks`: `.github/workflows/ci.yml` runs the consistency and release checks, `shellcheck` on the scripts under `scripts/`, `actionlint` on the workflows (its exceptions are in `.github/actionlint.yaml`) and the script and helper tests there. It is the required check.
 - `plugins`: calls the same tasks as `npm run check`, with the Claude Code CLI that `package.json` pins and `npm ci` installs: `plugins:validate` and `plugins:test` on the checkout, then, in a copy with a scaffolded `ci-sample`, those two on the sample and `typecheck` on every plugin and the sample, which generates the typings in a session without login. The loops live in `scripts/tasks/` only: change what a check runs there, not in the workflow.
 - `install`: runs `scripts/tasks/install-test.sh`.
 - A pull request runs all of it again when its title is edited, since the release check reads the title.
+- Before merging by hand, wait for `checks`, `plugins` and `install`: only `checks` gates a merge, so `gh pr merge --auto` merges as soon as it passes.
+- After merging a change to a workflow that no pull request runs (`cli-pin.yml`, `release.yml`), check its next run; `cli-pin` can be run by hand.
 - The pinned CLI version must equal the one the root README says the repository is checked with (`check-consistency`). Node comes from `.nvmrc`.
 - CLI pin: a newer CLI is checked in the pull request that moves the pin, which nobody opens by hand. `.github/workflows/cli-pin.yml` runs `node scripts/bump-cli.mjs` once a day, which sets the version npm serves as `latest`, when that is newer than the pin, in `package.json`, its lockfile and the README, and opens a `build:` pull request from `cli-pin/v<version>` with the release app's token, so the checks run on it. A person merges it, after fixing on that branch what the new CLI breaks; a newer version opens a new pull request and closes the older one.
 - To pick the pinned version, older ones included, run that workflow by hand with its `version` input, or run the script with a version, then `npm ci` and `npm run plugins:types`.
-- Dependabot (`.github/dependabot.yml`) opens weekly `build:` pull requests for the actions the workflows use and for TypeScript; the CLI pin is not its to move. Its alerts and security updates are on in the repository settings.
+- Dependabot (`.github/dependabot.yml`) opens weekly `build:` pull requests for the actions the workflows use, minor and patch updates grouped in one and each major on its own, and for TypeScript; the CLI pin is not its to move. Its alerts and security updates are on in the repository settings.
 
 ## Conventions
 

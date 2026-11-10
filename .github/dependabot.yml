@@ -1,6 +1,7 @@
-# Weekly pull requests for the actions the workflows use and for the npm tools package.json pins. The Claude Code CLI
-# is left out: .github/workflows/cli-pin.yml moves that pin, with the README sentence that must follow it.
-# The `build` prefix is a title type that opens no release (scripts/check-release.mjs).
+# Weekly pull requests for the actions the workflows use and for the npm tools package.json pins. Minor and patch
+# updates of the actions come in one pull request; a major version comes alone, to be read on its own.
+# The Claude Code CLI is left out: .github/workflows/cli-pin.yml moves that pin, with the README sentence that must
+# follow it. The `build` prefix is a title type that opens no release (scripts/check-release.mjs).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -12,6 +13,7 @@ updates:
     groups:
       actions:
         patterns: ['*']
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /
     schedule:
