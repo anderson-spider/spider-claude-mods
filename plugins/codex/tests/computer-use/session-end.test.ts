@@ -32,7 +32,7 @@ const world = (on: On, options: { fetchFails?: boolean; storeFails?: boolean; en
   })
   on('process.run', (_$, e) => (runs.push([...e.argv]), { value: ran('501\n') }))
   on('http.fetch', (_$, e) => {
-    fetched.push({ url: e.url, body: JSON.parse(e.init?.body ?? '{}'), socketPath: e.init?.socketPath })
+    fetched.push({ url: e.url, body: JSON.parse((e.init?.body ?? '{}') as string), socketPath: e.init?.socketPath })
 
     if (options.fetchFails === true) {
       throw new Error('no socket')

@@ -211,7 +211,7 @@ function commandWorld(
   on('http.fetch', (_$, e) => {
     attempts++
     const route = e.url.replace('http://codex-cu', '')
-    posted.push([route, JSON.parse(e.init?.body ?? '{}') as Record<string, unknown>, e.init?.socketPath])
+    posted.push([route, JSON.parse((e.init?.body ?? '{}') as string) as Record<string, unknown>, e.init?.socketPath])
 
     if (options.badGateway === true) {
       return { value: { status: 502, ok: false, headers: {}, text: 'bad gateway' } }

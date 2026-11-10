@@ -110,7 +110,7 @@ export const start = ($: { session: { start: (e: never) => Promise<unknown> } })
 
 export const band = (columns = 110, hasSurvey = false, isWorking = false) => ({
   plugin: 'session-hud', component: 'AbovePrompt', surface: 'terminal',
-  props: { hasSurvey, isWorking, maxRows: 20, bodyColumns: columns, scroll: { offset: 0, bodyRows: 20 }, view: {} },
+  props: { hasSurvey, isCollapsed: false, isWorking, maxRows: 20, bodyColumns: columns, scroll: { offset: 0, bodyRows: 20 }, view: {} },
 }) as never
 
 /** The session panel as a pane on `surface`, `columns` wide. */
