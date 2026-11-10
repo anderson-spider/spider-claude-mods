@@ -35,7 +35,7 @@ test('list by ref skips the MR lookup, and an explicit iid without an MR is an e
 })
 
 test('jobs read the latest pipeline by default, with downstream pipelines, and failedOnly keeps failed jobs and failed downstream pipelines', async () => {
-  const { ctx } = fakeCtx({
+  const { ctx, calls } = fakeCtx({
     'GET /merge_requests': [MR],
     'GET /merge_requests/7/pipelines': [P(90, 'failed'), P(80, 'success')],
     'GET /pipelines/90/jobs': JOBS,
@@ -56,6 +56,8 @@ test('jobs read the latest pipeline by default, with downstream pipelines, and f
       { name: 'child', stage: 'post', status: 'success', pipeline: 96, pipelineStatus: 'failed' },
     ],
   })
+  // GitLab does the filtering, so a failure past the first hundred jobs is not missed
+  expect(calls.find((c) => c.path === '/pipelines/90/jobs')?.query).toEqual({ 'scope[]': 'failed', per_page: 100, page: 1 })
 })
 
 test('retry and cancel act on a job or a pipeline, play only on a job', async () => {

@@ -1,12 +1,14 @@
 import { expect, test } from 'claude-code/testing'
-import { isCodexRun, lastAnswerOf, parseExit } from '../hooks/detached'
+import { isRunOf, lastAnswerOf, parseExit } from '../hooks/detached'
 import { line } from './fakes'
 
-test('only a Codex exec process counts as the run, so a reused pid is never killed', () => {
-  expect(isCodexRun('/Users/me/.local/bin/codex exec --json --skip-git-repo-check -c sandbox_mode="read-only"')).toBe(true)
-  expect(isCodexRun('node /opt/homebrew/bin/codex exec review --json')).toBe(true)
-  expect(isCodexRun('/usr/bin/vim notes.md')).toBe(false)
-  expect(isCodexRun('')).toBe(false)
+test('only the process carrying the run’s answer file counts as the run, whatever the executable is called', () => {
+  const dir = '/tmp/codex/runs/j1'
+  expect(isRunOf(`/Users/me/.local/bin/codex exec --json -o ${dir}/answer.md hello`, dir)).toBe(true)
+  expect(isRunOf(`node /opt/tools/cdx-wrapper exec review --json -o ${dir}/answer.md`, dir)).toBe(true)
+  expect(isRunOf('/Users/me/.local/bin/codex exec --json -o /tmp/codex/runs/j2/answer.md hello', dir)).toBe(false)
+  expect(isRunOf('/usr/bin/vim notes.md', dir)).toBe(false)
+  expect(isRunOf('', dir)).toBe(false)
 })
 
 test('the exit file gives the status and when the run ended; anything else is no status yet', () => {

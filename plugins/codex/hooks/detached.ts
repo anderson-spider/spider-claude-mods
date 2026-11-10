@@ -22,6 +22,8 @@ export const answerPath = (dir: string) => `${dir}/answer.md`
 // the whole file, which a long run's command output can grow past what a host read takes.
 const HEAD_BYTES = 8_192
 const TAIL_BYTES = 65_536
+// The end of a rollout an answer is looked for in.
+const ROLLOUT_BYTES = 1_048_576
 
 /** What the runs need from the host: processes, text files, and Codex's own folder. */
 export type DetachedHost = {
@@ -33,10 +35,10 @@ export type DetachedHost = {
 }
 
 /**
- * A Codex process as `ps` shows it: the executable, then `exec` (a new run, a follow-up or a review). Another program
- * that took over a reused pid does not match, so it is never killed.
+ * The run of `dir` as `ps` shows it: whatever the executable is called (`codexPath` may name a wrapper), its arguments
+ * carry the run's own answer file. Another program that took over a reused pid does not match, so it is never killed.
  */
-export const isCodexRun = (command: string) => /codex\S*\s+exec\b/.test(command)
+export const isRunOf = (command: string, dir: string) => command.includes(` -o ${answerPath(dir)}`)
 
 /** The run's `exit` file: its exit status and, in seconds, when it ended; undefined while it is not a status. */
 export function parseExit(text: string | undefined): { exit: number; endedAt?: number } | undefined {
@@ -82,7 +84,7 @@ export function detachedRuns(host: DetachedHost): RunFiles {
     // The pid is written a moment after the start; until then the run counts as alive.
     if (!pid) return parseExit(await host.read(`${dir}/exit`)) === undefined
     const ps = await host.run(['ps', '-o', 'command=', '-p', pid], { timeoutMs: 5_000 })
-    return ps.exitCode === 0 && isCodexRun(ps.stdout)
+    return ps.exitCode === 0 && isRunOf(ps.stdout, dir)
   }
 
   return {
@@ -120,12 +122,12 @@ export function detachedRuns(host: DetachedHost): RunFiles {
       )
       const path = found.stdout.split('\n').find(Boolean)
       if (!path) return undefined
-      if (path.endsWith('.zst')) {
-        const unpacked = await host.run(['zstd', '-dcq', path], { timeoutMs: 10_000 })
-        return unpacked.exitCode === 0 ? lastAnswerOf(unpacked.stdout, sinceMs) : undefined
-      }
-      const text = await host.read(path)
-      return text === undefined ? undefined : lastAnswerOf(text, sinceMs)
+      // Only the end is read: the answer is the last thing a rollout holds, and a long thread's is larger than a host
+      // read or a process's output takes.
+      const end = path.endsWith('.zst')
+        ? await ends(['sh', '-c', 'zstd -dcq "$1" | tail -c "$2"', 'sh', path, String(ROLLOUT_BYTES)])
+        : await ends(['tail', '-c', String(ROLLOUT_BYTES), path])
+      return lastAnswerOf(end, sinceMs)
     },
   }
 }

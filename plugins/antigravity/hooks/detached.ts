@@ -32,10 +32,11 @@ export type DetachedHost = {
 }
 
 /**
- * An agy process as `ps` shows it: the executable, then the print-mode flags the plugin passes. Another program that
- * took over a reused pid does not match, so it is never killed.
+ * An agy process as `ps` shows it: whatever the executable is called (`agyPath` may name a wrapper or another build),
+ * the print-mode flags every run of the plugin starts with. Another program that took over a reused pid does not
+ * match, so it is never killed.
  */
-export const isAgyRun = (command: string) => /(^|\/)agy\s.*--output-format=stream-json/.test(command)
+export const isAgyRun = (command: string) => command.includes(' --output-format=stream-json --disable-slash-commands --sandbox --print-timeout=')
 
 /** The run's `exit` file: its exit status and, in seconds, when it ended; undefined while it is not a status. */
 export function parseExit(text: string | undefined): { exit: number; endedAt?: number } | undefined {

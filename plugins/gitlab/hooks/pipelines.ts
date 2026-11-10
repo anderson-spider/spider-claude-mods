@@ -131,10 +131,11 @@ async function pipelineId(ctx: Ctx, input: PipelineInput): Promise<number> {
 
 async function jobs(ctx: Ctx, input: PipelineInput): Promise<string> {
   const pipeline = await pipelineId(ctx, input)
-  const page = await ctx.api.page(`/pipelines/${pipeline}/jobs`, paging(input, 100))
+  const failed = bool(input.failedOnly)
+  // GitLab filters by status, so a failed job past the first page is not missed
+  const page = await ctx.api.page(`/pipelines/${pipeline}/jobs`, { ...(failed ? { 'scope[]': 'failed' } : {}), ...paging(input, 100) })
   const all = items<Job>(page)
   const bridges = (await ctx.api.get(`/pipelines/${pipeline}/bridges`, { per_page: 100 })) as Bridge[]
-  const failed = bool(input.failedOnly)
   const shown = failed ? all.filter((j) => j.status === 'failed') : all
   return clip(
     json({

@@ -1,6 +1,6 @@
 {
   "name": "codex",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Ask Codex for a second opinion, a review of the branch's changes or requested images and, on macOS, control native Mac apps through Codex computer use; save results locally.",
   "author": {
     "name": "anderson-spider"

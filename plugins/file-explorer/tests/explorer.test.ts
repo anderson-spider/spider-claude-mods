@@ -51,6 +51,13 @@ test('a hit in search reveals; revealing expands every folder down to the file a
   expect(revealed(searching, '/elsewhere/x.ts')).toBe(searching)
 })
 
+test('revealing a dotfile, or a file under a dot folder, moves nothing while hidden files are off', () => {
+  const view = at('/p/a.ts')
+  expect(revealed(view, '/p/.github/workflows/ci.yml')).toBe(view)
+  expect(revealed(view, '/p/src/.env')).toBe(view)
+  expect(revealed({ ...view, showHidden: true }, '/p/.github/ci.yml')).toMatchObject({ cursor: '/p/.github/ci.yml', expanded: ['/p/.github'] })
+})
+
 test('a cursor whose file went away moves to the row now in its place, the last one past the end', () => {
   // Rows: src/, src/x.ts, a.ts. The gone file stood second.
   const view = at('/p/src/gone.ts', ['/p/src'])
