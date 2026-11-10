@@ -120,6 +120,33 @@ function checkBootstrap(root, names, errors) {
   if (listed !== expected) errors.push(`scripts/bootstrap.sh: ALL lists "${listed}", but marketplace.json has "${expected}"`)
 }
 
+export const RELEASE_CONFIG = 'release-please-config.json'
+export const RELEASE_MANIFEST = '.release-please-manifest.json'
+/** A plugin's entry under `packages` in release-please-config.json: the name its tags start with (`<name>-v<version>`). */
+export const releasePackage = name => ({ 'package-name': name })
+
+// release-please releases the packages its config lists, from the versions its manifest holds: both must name every
+// plugin, the unlisted ones included, and the manifest must hold the version each plugin.json has. Skipped in a
+// repository without the config.
+function checkRelease(root, names, errors) {
+  if (!existsSync(join(root, RELEASE_CONFIG))) return
+  const expected = [...names].sort()
+  const packages = readJson(join(root, RELEASE_CONFIG)).packages ?? {}
+  const versions = readJson(join(root, RELEASE_MANIFEST))
+  for (const [file, keys] of [[RELEASE_CONFIG, Object.keys(packages)], [RELEASE_MANIFEST, Object.keys(versions)]]) {
+    const listed = keys.sort().join(' ')
+    const wanted = expected.map(name => `plugins/${name}`).join(' ')
+    if (listed !== wanted) errors.push(`${file}: lists "${listed}", but the plugins are "${wanted}"`)
+  }
+  for (const name of expected) {
+    const path = `plugins/${name}`
+    if (packages[path] && packages[path]['package-name'] !== name) errors.push(`${RELEASE_CONFIG}: ${path} needs "package-name": "${name}", which its tags start with`)
+    const manifest = join(root, path, '.claude-plugin/plugin.json')
+    const version = existsSync(manifest) ? readJson(manifest).version : undefined
+    if (versions[path] !== undefined && version !== undefined && versions[path] !== version) errors.push(`${RELEASE_MANIFEST}: ${path} is at ${versions[path]}, but its plugin.json is at ${version}`)
+  }
+}
+
 // AGENTS.md pins behavior by test name; a renamed or removed test must fail here, not drift.
 function checkCitedTests(dir, fail) {
   const agents = join(dir, 'AGENTS.md')
@@ -273,6 +300,7 @@ export function checkRepo(root = '.') {
 
   checkCliPin(root, errors)
   checkBootstrap(root, listed, errors)
+  checkRelease(root, known, errors)
   return { errors, count: marketplace.plugins.length, unlisted: unlisted.length }
 }
 

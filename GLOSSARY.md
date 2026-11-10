@@ -2,6 +2,20 @@
 
 A marketplace of Claude Code plugins that extend Claude's interface and tools through function hooks.
 
+## Marketplace
+
+**Shipped file**:
+A file of a plugin that reaches whoever installs it: everything in the plugin's folder except its tests and docs.
+_Avoid_: Source file, plugin file
+
+**Release**:
+One published version of one plugin: its version number, its changelog entry and its tag, covering the shipped-file changes since the previous one.
+_Avoid_: Bump, deploy, publish
+
+**Release pull request**:
+The pull request, kept open by the release app, that holds the next release of every plugin with unreleased changes; merging it publishes them.
+_Avoid_: Version PR, bump PR
+
 ## Codex
 
 **Ask**:

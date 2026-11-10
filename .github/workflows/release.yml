@@ -1,0 +1,34 @@
+name: release
+
+# Every push to main opens or updates the release pull request: each plugin whose shipped files changed gets its next
+# version in plugin.json and its CHANGELOG.md, from the Conventional Commit titles since its last release
+# (release-please-config.json). Merging that pull request, which happens by itself once its checks pass, tags each
+# plugin as <name>-v<version> and publishes a GitHub release per plugin on the next run.
+# The GitHub App's token is what lets the pull request run the checks: one opened with GITHUB_TOKEN starts no workflow.
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          token: ${{ steps.app.outputs.token }}
+      - name: Merge the release pull request once its checks pass
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ steps.release.outputs.pr }}
+        run: gh pr merge --auto --squash --repo "$GITHUB_REPOSITORY" "$(jq -r .number <<<"$PR")"
