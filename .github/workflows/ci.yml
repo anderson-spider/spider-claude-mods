@@ -73,13 +73,11 @@ jobs:
           node scripts/new-plugin.mjs ci-sample "CI sample plugin."
           npm run plugins:validate -- ci-sample
           npm run plugins:test -- ci-sample
-      # typecheck generates the typings first, in an interactive session. A fresh runner has no login: onboarding and
-      # folder trust are marked done so the session starts and loads every plugin of the scaffold copy, ci-sample included.
+      # typecheck generates the typings first, in an interactive session that loads every plugin of the scaffold copy,
+      # ci-sample included; plugins:types marks its first-run screens done on a runner, which has no login.
       - name: Type-check every plugin and the sample
         working-directory: ${{ runner.temp }}/scaffold
-        run: |
-          node -e 'require("fs").writeFileSync(require("os").homedir() + "/.claude.json", JSON.stringify({ hasCompletedOnboarding: true, theme: "dark", projects: { [process.cwd()]: { hasTrustDialogAccepted: true } } }))'
-          npm run typecheck
+        run: npm run typecheck
 
   # A new user's install on a clean Linux machine: bootstrap.sh from this checkout, then every plugin loads in a session
   # without login (scripts/install-test/).

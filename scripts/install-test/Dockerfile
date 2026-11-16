@@ -3,7 +3,8 @@
 FROM node:24-bookworm-slim
 WORKDIR /opt/tools
 COPY package.json package-lock.json ./
-RUN npm ci && npm cache clean --force
+RUN --mount=type=secret,id=ca if [ -f /run/secrets/ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/ca; fi; \
+  npm ci && npm cache clean --force
 ENV PATH=/opt/tools/node_modules/.bin:$PATH DISABLE_AUTOUPDATER=1
 COPY . /src
 USER node
