@@ -20,6 +20,9 @@ import { fileName, isExpired, nameOf, randomSuffix, secretsDir, writeArgv } from
 const PANE = 'secrets'
 const TOOL = 'mcp__secrets__'
 const HOUR = 60 * 60 * 1000
+// A surface may seat the pane a moment after ui.open said it waits, so the request looks again, briefly, before it says so
+const SEAT_CHECKS = 4
+const SEAT_WAIT_MS = 250
 
 const requests = atom({ plugin: 'secrets', key: 'requests' } as const, [] as SecretRequest[])
 const isWaiting = atom({ plugin: 'secrets', key: 'isWaiting' } as const, false)
@@ -33,6 +36,16 @@ let cwd: string | undefined
 /** The private folder, or undefined where no home is known. */
 async function folder($: EngineInterface): Promise<string | undefined> {
   return secretsDir({ home: await $.env.get('HOME'), configDir: await $.env.get('CLAUDE_CONFIG_DIR') })
+}
+
+/** Whether a surface draws the pane now, asked again a few times over a moment: `ui.open` can answer undrawn just before the surface seats it. */
+async function isDrawn($: EngineInterface): Promise<boolean> {
+  for (let check = 1; ; check++) {
+    const pane = (await $.ui.panes()).find((p) => p.id === PANE)
+    if (pane?.isPlaced) return true
+    if (check === SEAT_CHECKS) return false
+    await $.clock.sleep(SEAT_WAIT_MS)
+  }
 }
 
 /** Deletes the files past their day and rebuilds the scrubber's index from the ones left. */
@@ -266,9 +279,11 @@ export const register: Register = (on) => {
     // Opened by Claude, not the person, so a narrow terminal leaves the pane waiting undrawn;
     // the card then shows in the band above the prompt
     const opened = await $.ui.open({ id: PANE, title: 'secrets', focus: true })
-    await update($, isWaiting, () => !opened.isPlaced)
-    $.ui.toast(opened.isPlaced ? `Claude needs ${asked.name}` : `Claude needs ${asked.name}: paste it above the prompt`)
-    return { result: askedMessage(asked.name, opened.isPlaced) }
+    // Only when it is still undrawn after looking again does Claude say the card is above the prompt
+    const isPlaced = opened.isPlaced || (await isDrawn($))
+    await update($, isWaiting, () => !isPlaced)
+    $.ui.toast(isPlaced ? `Claude needs ${asked.name}` : `Claude needs ${asked.name}: paste it above the prompt`)
+    return { result: askedMessage(asked.name, isPlaced) }
   })
 
   // While the pane waits for a wider terminal, Claude's request shows here
