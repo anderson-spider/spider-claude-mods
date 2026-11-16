@@ -35,7 +35,7 @@ The request does not block: Claude is told to stop, and hears back in a message 
 CF_API_TOKEN="$(cat ~/.claude/secrets/CF_API_TOKEN.<random>)" npx wrangler deploy
 ```
 
-A file is deleted 24 hours after it was written. `/secrets` opens the pane yourself; closing it while a request waits declines it. A terminal too narrow for the pane shows the card above the prompt instead.
+A file is deleted 24 hours after it was written. `/secrets` opens the pane yourself; closing it while a request waits declines it. A terminal too narrow for the pane shows the card above the prompt instead; the request looks again for about a second first, since a surface can seat the pane just after it was opened, and tells Claude the card is above the prompt only if the pane is still undrawn.
 
 ## What keeps the value out of the conversation
 

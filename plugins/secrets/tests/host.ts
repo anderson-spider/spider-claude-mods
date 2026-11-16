@@ -18,6 +18,8 @@ export type Init = {
   files?: Record<string, { text: string; mtimeMs?: number }>
   /** What ui.open answers: whether a surface draws the pane now. */
   isPlaced?: boolean
+  /** What ui.panes says of the pane, which a surface may seat after ui.open answered: ui.open's answer by default. */
+  seated?: boolean
   /** The exit code of the process that writes a secret file. */
   writeExit?: number
   now?: number
@@ -31,14 +33,15 @@ export function world(on: On, init: Init = {}) {
   const submitted: string[] = []
   const toasts: string[] = []
   const opened: string[] = []
-  let isPlaced = init.isPlaced ?? true
+  const isPlaced = init.isPlaced ?? true
+  let seated = init.seated ?? isPlaced
   const waiting: (() => void)[] = []
 
   on('tool.register', (_$, e) => (tools.push(e as unknown as Tool), { value: { tool: id(e.name) } }))
   on('command.register', (_$, e) => (commands.push(e.name), { value: { command: e.name } }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
-  mock.clock(on, { now: init.now ?? 1_000 })
+  const clock = mock.clock(on, { now: init.now ?? 1_000 })
   on('fs.list', (_$, e) => {
     if (e.path !== DIR) return { deny: `ENOENT: ${e.path}` }
     return {
@@ -68,7 +71,7 @@ export function world(on: On, init: Init = {}) {
     return { value: done(0) }
   })
   on('ui.open', (_$, e) => (opened.push(e.id), { value: isPlaced ? ({ isPlaced: true } as const) : ({ isPlaced: false, reason: 'narrow' } as const) }))
-  on('ui.panes', () => ({ value: [{ id: 'secrets', isPlaced }] as never }))
+  on('ui.panes', () => ({ value: [{ id: 'secrets', isPlaced: seated }] as never }))
   on('ui.toast', (_$, e) => (toasts.push(e.text), { value: undefined }))
   on('prompt.submit', (_$, e) => {
     submitted.push(e.text)
@@ -84,7 +87,9 @@ export function world(on: On, init: Init = {}) {
     toasts,
     opened,
     files,
-    place: (value: boolean) => (isPlaced = value),
+    clock,
+    /** A surface seats (or unseats) the pane, as ui.panes then tells. */
+    seat: (value: boolean) => (seated = value),
     /** Resolves once the plugin has sent a message to the model. */
     submission: () => new Promise<void>((resolve) => (submitted.length ? resolve() : waiting.push(resolve))),
   }

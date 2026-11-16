@@ -41,15 +41,43 @@ test('a request opens the pane and answers at once, without waiting for the user
   expect(submitted).toEqual([])
 })
 
-test('a terminal too narrow for the pane shows the card above the prompt and says so', async ($, on) => {
-  const { tools, toasts } = world(on, { isPlaced: false })
+test('a terminal too narrow for the pane shows the card above the prompt and says so, after looking again', async ($, on) => {
+  const { tools, toasts, clock } = world(on, { isPlaced: false })
   await started($, tools)
 
-  const answer = await $.tool.call(ASK)
+  const call = $.tool.call(ASK)
+  await clock.advance(1_000)
+  const answer = await call
 
   expect(answer.result).toContain('too narrow')
   expect(answer.result).toContain('/secrets')
   expect(toasts).toEqual(['Claude needs CF_TOKEN: paste it above the prompt'])
+})
+
+test('a pane the surface already seats when the request looks again is not called too narrow', async ($, on) => {
+  const { tools, toasts } = world(on, { isPlaced: false, seated: true })
+  await started($, tools)
+
+  const answer = await $.tool.call(ASK)
+
+  expect(answer.result).toContain('in the secrets pane')
+  expect(answer.result).not.toContain('too narrow')
+  expect(toasts).toEqual(['Claude needs CF_TOKEN'])
+})
+
+test('a pane the surface seats a moment after ui.open answered is not called too narrow', async ($, on) => {
+  const { tools, toasts, clock, seat } = world(on, { isPlaced: false })
+  await started($, tools)
+
+  const call = $.tool.call(ASK)
+  await clock.settle()
+  seat(true)
+  await clock.advance(250)
+  const answer = await call
+
+  expect(answer.result).toContain('in the secrets pane')
+  expect(answer.result).not.toContain('too narrow')
+  expect(toasts).toEqual(['Claude needs CF_TOKEN'])
 })
 
 test('a bad name or a missing label is an error result and opens nothing', async ($, on) => {
