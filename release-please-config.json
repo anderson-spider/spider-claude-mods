@@ -55,6 +55,9 @@
     "plugins/image-preview": {
       "package-name": "image-preview"
     },
+    "plugins/secrets": {
+      "package-name": "secrets"
+    },
     "plugins/session-hud": {
       "package-name": "session-hud"
     },
