@@ -15,7 +15,7 @@ test('session start registers the ask, image, review and jobs tools and the four
   const { tools, commands } = world(on)
 
   expect(await started($, tools)).toEqual(['ask', 'image', 'review', 'jobs'])
-  expect(commands).toEqual(['agy-ask', 'agy-image', 'agy-review', 'agy-doctor'])
+  expect(commands).toEqual(['antigravity-ask', 'antigravity-image', 'antigravity-review', 'antigravity-doctor'])
   expect(Object.keys(tools[0]!.inputSchema.properties)).toEqual(['prompt', 'conversationId', 'model', 'effort', 'files', 'wait', 'out', 'maxChars'])
   expect(Object.keys(tools[1]!.inputSchema.properties)).toEqual(['prompt', 'reference', 'conversationId', 'model', 'effort', 'wait', 'out'])
   expect(Object.keys(tools[2]!.inputSchema.properties)).toEqual(['base', 'commit', 'focus', 'model', 'effort', 'wait', 'out', 'maxChars'])
@@ -118,15 +118,15 @@ test('a failed image run says why in the closed set of reasons, never shows the 
   expect(host.written).toEqual([])
 })
 
-test('/agy-image takes a prompt, shows where the images are, and tells Claude they are AI-generated', async ($, on) => {
+test('/antigravity-image takes a prompt, shows where the images are, and tells Claude they are AI-generated', async ($, on) => {
   const host = world(on, { agy: [{ stdout: imaged('Done.'), onEnd: () => (host.state.dirs[ARTIFACTS] = [file('rocket_1.png', 1)]) }] })
   await started($, host.tools)
 
-  const shown = await command($, 'agy-image', 'A rocket')
+  const shown = await command($, 'antigravity-image', 'A rocket')
 
   expect(shown.text).toMatch(/^AI-generated image by agy, saved to:\n- \/tmp\/t\/agy\/\d{8}-\d{6}-a-rocket\.png\n/)
-  expect(shown.context?.[0]).toMatch(new RegExp(`^The user generated an AI image with /agy-image; it is saved to /tmp/t/agy/.*\\.png \\(conversation ${CONVERSATION}\\)\\.$`))
-  expect((await command($, 'agy-image', '  ')).text).toBe(IMAGE_USAGE)
+  expect(shown.context?.[0]).toMatch(new RegExp(`^The user generated an AI image with /antigravity-image; it is saved to /tmp/t/agy/.*\\.png \\(conversation ${CONVERSATION}\\)\\.$`))
+  expect((await command($, 'antigravity-image', '  ')).text).toBe(IMAGE_USAGE)
 })
 
 test('an ask runs agy sandboxed in the session folder, never skipping permissions, saves the answer and returns it', async ($, on) => {
@@ -185,7 +185,7 @@ test('a failed run says why in the closed set of reasons, and never shows the Go
   const quota = await call($, 'ask', { prompt: 'One' })
   expect(quota.isError).toBe(true)
   expect(String(quota.result)).toMatch(/^agy failed \(quota exhausted\): Quota exhausted for projects\/…\/locations\/…\n/)
-  expect(String(quota.result)).toMatch(/Run \/agy-doctor to check the agy CLI, its sign-in and its quota\.$/)
+  expect(String(quota.result)).toMatch(/Run \/antigravity-doctor to check the agy CLI, its sign-in and its quota\.$/)
   expect(String((await call($, 'ask', { prompt: 'Two' })).result)).toMatch(/^agy failed \(local error\): error: invalid flag --bogus\n/)
   expect(String((await call($, 'ask', { prompt: 'Three' })).result)).toMatch(/^agy failed \(timed out\): the print timeout expired\n/)
   const api = String((await call($, 'ask', { prompt: 'Four' })).result)
@@ -273,24 +273,24 @@ test('without origin/HEAD the review falls back to main, else master, else asks 
   expect(host.launched).toHaveLength(2)
 })
 
-test('/agy-review takes one target and a focus, starts the review as a background job at once, and refuses what it cannot read', async ($, on) => {
+test('/antigravity-review takes one target and a focus, starts the review as a background job at once, and refuses what it cannot read', async ($, on) => {
   const host = world(on, {
     agy: [{ stdout: answered('Fine.') }, { stdout: answered('Fine.') }],
     git: { ...REPO, '-C /proj diff --name-only abc1234^!': { exitCode: 0, stdout: 'a\n' }, '-C /proj worktree add --detach <wt> abc1234': { exitCode: 0 } },
   })
   await started($, host.tools)
 
-  const shown = await command($, 'agy-review', '--commit abc1234 focus on the parser')
+  const shown = await command($, 'antigravity-review', '--commit abc1234 focus on the parser')
   expect(host.launched[0]!.argv.at(-1)).toMatch(/\(review of commit abc1234\)[\s\S]*Also look closely at: focus on the parser/)
   expect(shown.text).toMatch(/^Started job #\w+\. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile\.$/)
   expect(host.statuses).toEqual([])
   await host.submission()
   expect(host.submitted[0]).toMatch(/\njob #\w+ done: review "review of commit abc1234"\nSaved to: \/tmp\/t\/agy\/.*\nConversation: [\w-]+\nRead the saved file for the review\.$/)
 
-  await command($, 'agy-review', 'only the runner')
+  await command($, 'antigravity-review', 'only the runner')
   expect(host.launched[1]!.argv.at(-1)).toMatch(/\(review against origin\/main\)[\s\S]*Also look closely at: only the runner/)
 
-  for (const args of ['--base', '--commit --base', '--uncommitted', '--bogus x']) expect((await command($, 'agy-review', args)).text).toBe(REVIEW_USAGE)
+  for (const args of ['--base', '--commit --base', '--uncommitted', '--bogus x']) expect((await command($, 'antigravity-review', args)).text).toBe(REVIEW_USAGE)
   expect(host.launched).toHaveLength(2)
 })
 
@@ -336,7 +336,7 @@ test('a plugin folder the user does not own alone stops the run before agy start
     result: '/tmp/t/agy could not be made a private folder of yours (it is a symlink, another user owns it, or it cannot be made), so agy did not run. Remove it or set TMPDIR.',
     isError: true,
   })
-  expect((await command($, 'agy-ask', 'Hi')).text).toMatch(/^\/tmp\/t\/agy could not be made a private folder of yours/)
+  expect((await command($, 'antigravity-ask', 'Hi')).text).toMatch(/^\/tmp\/t\/agy could not be made a private folder of yours/)
   expect(host.launched).toEqual([])
 })
 
@@ -452,26 +452,26 @@ test('an effort with a defaultModel that names no effort passes as --effort', { 
   expect(host.launched[0]!.argv).toEqual(expect.arrayContaining(['--model=gemini-auto', '--effort=low']))
 })
 
-test('/agy-ask checks the defaultModel against agy models like the tools do', { options: { defaultModel: 'gemini-9' } }, async ($, on) => {
+test('/antigravity-ask checks the defaultModel against agy models like the tools do', { options: { defaultModel: 'gemini-9' } }, async ($, on) => {
   const host = world(on)
   await started($, host.tools)
 
-  expect((await command($, 'agy-ask', 'Hi')).text).toBe('gemini-9 is not an agy model id. agy models lists: gemini-4-argon-high, gemini-3.8-flash-low.')
+  expect((await command($, 'antigravity-ask', 'Hi')).text).toBe('gemini-9 is not an agy model id. agy models lists: gemini-4-argon-high, gemini-3.8-flash-low.')
   expect(host.launched).toEqual([])
 })
 
-test('/agy-ask shows the answer and tells Claude where it is saved', async ($, on) => {
+test('/antigravity-ask shows the answer and tells Claude where it is saved', async ($, on) => {
   const host = world(on, { agy: [{ stdout: answered('Yes.') }] })
   await started($, host.tools)
 
-  const shown = await command($, 'agy-ask', 'Is it safe?')
+  const shown = await command($, 'antigravity-ask', 'Is it safe?')
 
   expect(shown.text).toMatch(new RegExp(`Yes\\.\\n\\n— agy, conversation ${CONVERSATION}\\nSaved to /tmp/t/agy/.*-is-it-safe\\.md$`))
-  expect(shown.context?.[0]).toMatch(/^The user asked agy through \/agy-ask; its answer is saved to /)
-  expect((await command($, 'agy-ask', '  ')).text).toBe('Usage: /agy-ask <question>')
+  expect(shown.context?.[0]).toMatch(/^The user asked agy through \/antigravity-ask; its answer is saved to /)
+  expect((await command($, 'antigravity-ask', '  ')).text).toBe('Usage: /antigravity-ask <question>')
 })
 
-test('/agy-doctor reports the executable, version, sign-in, models, quota and image artifacts folder, spending none', async ($, on) => {
+test('/antigravity-doctor reports the executable, version, sign-in, models, quota and image artifacts folder, spending none', async ($, on) => {
   const usage = { conversation_id: '', status: 'SUCCESS', response: 'Gemini Models\tWeekly Limit Remaining\t99%\t2026-11-16T14:14:59Z\nGemini Models\tFive Hour Limit Remaining\t3%\t2026-11-09T19:14:59Z\n' }
   const host = world(on)
   host.state.files.add('/h/.gemini/antigravity-cli/brain')
@@ -479,7 +479,7 @@ test('/agy-doctor reports the executable, version, sign-in, models, quota and im
   host.state.runs['--output-format=json -p=/usage'] = { exitCode: 0, stdout: JSON.stringify(usage) }
   await started($, host.tools)
 
-  const text = (await command($, 'agy-doctor')).text
+  const text = (await command($, 'antigravity-doctor')).text
 
   expect(text).toBe(
     [
@@ -495,7 +495,7 @@ test('/agy-doctor reports the executable, version, sign-in, models, quota and im
   host.state.runs['--version'] = { exitCode: 0, stdout: '1.4.9\n' }
   host.state.runs.models = { exitCode: 1, stderr: 'Error: authentication required. Run \'agy\' to log in.\n' }
   host.state.files.delete('/h/.gemini/antigravity-cli/brain')
-  expect((await command($, 'agy-doctor')).text).toMatch(
+  expect((await command($, 'antigravity-doctor')).text).toMatch(
     /✗ version: 1\.4\.9; the plugin needs agy 1\.5 or later \(agy update\)\n✗ sign-in and models: Error: authentication required\. Run 'agy' to log in\.\n.*\n✗ image artifacts: \/h\/\.gemini\/antigravity-cli\/brain not found; image requests will find no images\nSign in once by running `! agy`\.$/,
   )
 })

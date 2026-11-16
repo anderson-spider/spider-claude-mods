@@ -202,10 +202,10 @@ export const register: Register = (on, options) => {
     await $.tool.register({ name: 'image', description: IMAGE_DESCRIPTION, inputSchema: IMAGE_INPUT_SCHEMA })
     await $.tool.register({ name: 'review', description: REVIEW_DESCRIPTION, inputSchema: REVIEW_INPUT_SCHEMA })
     await $.tool.register({ name: 'jobs', description: JOBS_DESCRIPTION, inputSchema: JOBS_INPUT_SCHEMA })
-    await $.command.register({ name: 'agy-ask', description: ASK_COMMAND_DESCRIPTION })
-    await $.command.register({ name: 'agy-image', description: IMAGE_COMMAND_DESCRIPTION })
-    await $.command.register({ name: 'agy-review', description: REVIEW_COMMAND_DESCRIPTION })
-    await $.command.register({ name: 'agy-doctor', description: DOCTOR_COMMAND_DESCRIPTION })
+    await $.command.register({ name: 'antigravity-ask', description: ASK_COMMAND_DESCRIPTION })
+    await $.command.register({ name: 'antigravity-image', description: IMAGE_COMMAND_DESCRIPTION })
+    await $.command.register({ name: 'antigravity-review', description: REVIEW_COMMAND_DESCRIPTION })
+    await $.command.register({ name: 'antigravity-doctor', description: DOCTOR_COMMAND_DESCRIPTION })
     // Jobs outlive a reload and the session: watch this session's again and finish what others left, without holding
     // the start up.
     void depsOf($)
@@ -222,20 +222,20 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'mcp__antigravity__jobs' }, async $ => ({ result: await runner.report(await depsOf($)) }))
 
-  on('command.run', { command: 'agy-ask' }, async ($, e) => {
+  on('command.run', { command: 'antigravity-ask' }, async ($, e) => {
     const request = commandRequestOf(e.args, ASK_USAGE, defaultModel)
     const checked = await readyOf($, request)
     if (typeof checked === 'string') return { text: checked }
     return askCommandAnswer(await runNow($, checked))
   })
 
-  on('command.run', { command: 'agy-image' }, async ($, e) => {
+  on('command.run', { command: 'antigravity-image' }, async ($, e) => {
     const checked = await readyOf($, commandRequestOf(e.args, IMAGE_USAGE, defaultModel, 'image'))
     if (typeof checked === 'string') return { text: checked }
     return imageCommandAnswer(await runNow($, checked))
   })
 
-  on('command.run', { command: 'agy-review' }, async ($, e) => {
+  on('command.run', { command: 'antigravity-review' }, async ($, e) => {
     const input = reviewCommandInput(e.args)
     if (!input) return { text: REVIEW_USAGE }
     const request = await reviewOf($, input)
@@ -245,7 +245,7 @@ export const register: Register = (on, options) => {
     return { text: 'ok' in job ? job.text : startedJob(job) }
   })
 
-  on('command.run', { command: 'agy-doctor' }, async $ => {
+  on('command.run', { command: 'antigravity-doctor' }, async $ => {
     const { home, artifactsRoot } = await folders($)
     const artifacts = artifactsRoot ? { path: artifactsRoot, exists: await $.fs.exists(artifactsRoot) } : { path: 'HOME is not set, so agy’s artifacts folder', exists: false }
     const checks = await diagnose({ agy: await agyOf($, home), run: processOf($), models: agy => modelsOf($, agy), artifacts })

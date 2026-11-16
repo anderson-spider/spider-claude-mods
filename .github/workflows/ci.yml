@@ -40,6 +40,8 @@ jobs:
         run: node --test scripts/*.test.mjs
       - name: codex computer use helper tests
         run: node --test plugins/codex/helper/test/*.test.mjs
+      - name: Skill script tests
+        run: node --test plugins/*/skills/*/scripts/*.test.mjs
 
   # The same tasks as `npm run check` (scripts/tasks/), which pick the tools from node_modules and run every plugin, the
   # unlisted ones included, then fail naming what failed. No task logs in. They run the CLI package.json pins;

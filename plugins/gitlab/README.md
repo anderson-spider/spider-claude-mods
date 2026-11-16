@@ -31,6 +31,10 @@ Every tool also takes `host`, a GitLab host name (`gitlab.example.com`, never a 
 - `mcp__gitlab__gitlab_label`: `list` the project's labels, its groups' included (name, colour, description; `search`); `create` one (`name`, `color` default `#428BCA`, `description`), which answers the existing label when the name is taken.
 - `mcp__gitlab__gitlab_user`: a user of the remote's host (or of `host`): the token's own user by default (or `username: "@me"`), else the one with `username` (id, username, name, state, URL).
 
+### Skill
+
+The `gitlab:gitlab` skill (`skills/gitlab/SKILL.md`) loads when you paste a GitLab URL or mention an MR, pipeline, job or CI failure (in English or Portuguese, such as "abre a MR" or "vê o pipeline"). It tells Claude to do GitLab work in the main agent with these tools: take the host, project and id from the URL, read before writing, apply only existing labels, open merge requests ready with a Conventional Commits title and a description in Brazilian Portuguese, write review findings as draft notes (through the separately installed `humanizer` skill when it is there) and never publish them for you, check a pipeline once instead of waiting unless asked, and show a refused call's error instead of guessing. For what the tools do not cover (issues, deleting a draft note, downloading artifacts) it falls back to the `glab` CLI when installed.
+
 Answers are compact JSON with the fields worth reading, not GitLab's full objects. Lists take `page` and `perPage` (at most 100) and answer `next` when GitLab has another page. The defaults are 20 merge requests, 10 pipelines, and 100 jobs, discussions, diff files, commits or labels.
 
 ### Guards

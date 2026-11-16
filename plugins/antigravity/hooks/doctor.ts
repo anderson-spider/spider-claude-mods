@@ -37,7 +37,7 @@ export type DoctorDeps = {
 }
 
 /**
- * What /agy-doctor checks, spending no quota: the executable, its version, the sign-in through `agy models`, the
+ * What /antigravity-doctor checks, spending no quota: the executable, its version, the sign-in through `agy models`, the
  * quota through `/usage`, which starts no model turn, and the artifacts folder image requests read. The probe keeps slash commands on: with
  * `--disable-slash-commands` it would be a real prompt.
  */

@@ -6,15 +6,18 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 
 | Plugin | What it does |
 | --- | --- |
-| [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, have it review the branch's changes in a throwaway worktree before a PR, or generate an image in a folder of its own, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. |
+| [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, have it review the branch's changes in a throwaway worktree before a PR, or generate an image in a folder of its own, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. Its skills `antigravity:code-review` and `antigravity:review-publish` verify each finding of a review against the code and post the confirmed ones as a pending GitHub review or GitLab draft notes. |
 | [codex](plugins/codex/README.md) | Lets Claude ask your Codex CLI for a second opinion (it reads the repository read-only and can search the web), have it review the branch's changes, or generate an image, and saves the result locally. On macOS it can also route native Mac app control through Codex computer use from the ChatGPT app instead of Claude's own computer use, asking before each new app. |
 | [file-explorer](plugins/file-explorer/README.md) | A file tree pane beside the conversation: git status per file and folder, a mark on each file Claude reads, edits, creates, removes, finds or commits, search across unopened folders, preview, and `@path` into the prompt. |
-| [gitlab](plugins/gitlab/README.md) | Opens, edits, comments on (directly or as draft notes to publish later), reviews and (when asked, behind guards) merges GitLab merge requests, lists yours across projects, lists open review threads, lists and creates labels, runs, retries and cancels pipelines and jobs, waits for and reads pipelines, jobs and job errors, lists a job's artifacts with their URLs, picking the host and its token from the git remote or a host you name. |
+| [gchat](plugins/gchat/README.md) | Skills that read, summarize and reply in Google Chat and post merge request review requests through Claude in Chrome, sending only a text and a recipient you approved; the default space and account come from plugin options. |
+| [github](plugins/github/README.md) | A skill for GitHub work with the `gh` CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments, never waiting on a run or writing what you did not ask for. |
+| [gitlab](plugins/gitlab/README.md) | Opens, edits, comments on (directly or as draft notes to publish later), reviews and (when asked, behind guards) merges GitLab merge requests, lists yours across projects, lists open review threads, lists and creates labels, runs, retries and cancels pipelines and jobs, waits for and reads pipelines, jobs and job errors, lists a job's artifacts with their URLs, picking the host and its token from the git remote or a host you name. The skill `gitlab:gitlab` has Claude work from a GitLab URL with these tools. |
 | [image-preview](plugins/image-preview/README.md) | Shows images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads under its row in the transcript, as the desktop app does. |
-| [session-hud](plugins/session-hud/README.md) | A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; with the `nextSteps` option on, up to four next prompts from a fork of the session to pick one into the prompt box; and `/session-panel`, a pane with the main session, every agent it ran (type, model, effort, time, latest tools and tokens) and the last 15 minutes by agent type, kept across a resume. |
+| [session-hud](plugins/session-hud/README.md) | A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; with the `nextSteps` option on, up to four next prompts from a fork of the session to pick one into the prompt box; and `/session-hud-panel`, a pane with the main session, every agent it ran (type, model, effort, time, latest tools and tokens) and the last 15 minutes by agent type, kept across a resume. |
 | [sonarqube](plugins/sonarqube/README.md) | Lets Claude diagnose SonarQube 9.x analyses through the read-only Web API: the quality gate of a branch or pull request, its measures and issues, an issue's rule, security hotspots, and the analyzed branches and pull requests, finding the project in `sonar-project.properties`, with the server and token from the `url` and `token` plugin options or the `SONARQUBE_*` or `SONAR_*` environment variables. |
 | [subagent-effort](plugins/subagent-effort/README.md) | Sets the reasoning effort of every native subagent call from Jev's rating of its task, held to a per-type cap (read-only agents such as Explore at medium by default), leaving the model as it was, and keeps local records to compare efforts. |
 | [tailscale](plugins/tailscale/README.md) | Lets Claude query and modify your tailnet through the Tailscale API, with the key in the sensitive `apiKey` plugin option. |
+| [verification-planning](plugins/verification-planning/README.md) | A skill that plans, before non-trivial coding work, the project-specific evidence that will establish or refute the change, and closes that path after implementation. |
 
 Each plugin README covers its setup, what it reads, sends and saves, and what its tests do and do not prove. Read it before sending private context or granting write access.
 
@@ -27,12 +30,15 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.322 
 /plugin install antigravity@spider-claude-mods
 /plugin install codex@spider-claude-mods
 /plugin install file-explorer@spider-claude-mods
+/plugin install gchat@spider-claude-mods
+/plugin install github@spider-claude-mods
 /plugin install gitlab@spider-claude-mods
 /plugin install image-preview@spider-claude-mods
 /plugin install session-hud@spider-claude-mods
 /plugin install sonarqube@spider-claude-mods
 /plugin install subagent-effort@spider-claude-mods
 /plugin install tailscale@spider-claude-mods
+/plugin install verification-planning@spider-claude-mods
 ```
 
 From a local copy: `/plugin marketplace add /path/to/claude-mods`.

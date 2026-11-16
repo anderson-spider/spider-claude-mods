@@ -32,6 +32,7 @@ const GIT_TIMEOUT_MS = 5_000
 
 /** The session panel's pane and command. */
 const PANE = 'session-panel'
+const COMMAND = 'session-hud-panel'
 /** The narrowest pane the panel is laid out for; a narrower one truncates it. */
 const PANE_MIN_COLUMNS = 20
 /** The most characters an `Svg` source may hold. */
@@ -228,7 +229,7 @@ async function settle($: Dollar, held: Held, unlisted: boolean): Promise<void> {
   for (const ending of roster.endingsOf((await read($, panelAtom)).agents, list, unlisted)) await endAgent($, held, ending.agentId, { reason: ending.reason, now })
 }
 
-/** `/session-panel clear`: the agents and the main session's figures forgotten, and this session's saved panel removed. */
+/** `/session-hud-panel clear`: the agents and the main session's figures forgotten, and this session's saved panel removed. */
 async function clearPanel($: Dollar, held: Held): Promise<string> {
   held.early.clear()
   held.restoredFor = await $.session.id()
@@ -253,7 +254,7 @@ async function togglePane($: Dollar): Promise<string> {
 
 /** The panel's part of a session start: its command, the clock and the saved panel. A reload keeps the state the host holds. */
 async function startPanel($: Dollar, held: Held): Promise<void> {
-  await $.command.register({ name: PANE, description: 'Toggle the session panel (open or close it), or clear what it shows', argumentHint: '[open|close|clear]' })
+  await $.command.register({ name: COMMAND, description: 'Toggle the session panel (open or close it), or clear what it shows', argumentHint: '[open|close|clear]' })
   ensureBeat($, held)
   const time = await $.clock.now()
   await update($, panelNowAtom, () => time)
@@ -409,13 +410,13 @@ export const register: Register = (on, options) => {
     }
     return result
   })
-  on('command.run', { command: PANE }, async ($, e) => {
+  on('command.run', { command: COMMAND }, async ($, e) => {
     const arg = e.args.trim()
     if (arg === '') return { text: await togglePane($) }
     if (arg === 'open') return { text: await openPane($) }
     if (arg === 'close') return { text: await closePane($) }
     if (arg === 'clear') return { text: await clearPanel($, held) }
-    return { text: 'Usage: /session-panel [open|close|clear]' }
+    return { text: 'Usage: /session-hud-panel [open|close|clear]' }
   })
   // Reads prepared atoms only; a failure draws one dim line instead of failing the pane.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

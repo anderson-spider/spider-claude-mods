@@ -1,0 +1,9 @@
+{
+  "name": "github",
+  "version": "0.0.0",
+  "description": "A skill for GitHub work with the gh CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments.",
+  "author": {
+    "name": "anderson-spider"
+  },
+  "license": "MIT"
+}

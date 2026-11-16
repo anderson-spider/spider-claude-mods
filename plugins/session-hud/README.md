@@ -11,7 +11,7 @@ A card above the prompt, laid out the same way in a terminal, on the desktop app
 
 ## Session panel
 
-`/session-panel` toggles a pane beside the conversation (`open`, `close`, or `clear` to forget what it shows). It opens only on that command. As cards, in a terminal as bordered lines and on the desktop as one drawing:
+`/session-hud-panel` toggles a pane beside the conversation (`open`, `close`, or `clear` to forget what it shows). It opens only on that command. As cards, in a terminal as bordered lines and on the desktop as one drawing:
 
 - **Session**: the model, its effort and whether a turn runs with its time; the context gauge against the compaction window and the tokens the main session's requests sent and wrote; the turns, edits, errors and the tokens the agents used.
 - **Agents · running**: every agent the session spawned, of any type, with its type, model, time and effort, then its latest three tools, how many calls it made and how many failed, the prompt of its last request and its tokens.

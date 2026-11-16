@@ -54,7 +54,7 @@ async function defaultBase(git: Git): Promise<ReviewTarget | undefined> {
 }
 
 /**
- * `/agy-review` arguments as review input: an optional `--base <branch>` or `--commit <ref>` (also with `=`) first,
+ * `/antigravity-review` arguments as review input: an optional `--base <branch>` or `--commit <ref>` (also with `=`) first,
  * then any text as the focus. Another flag, or a target flag without its value, is `undefined`, for the usage, so a
  * target the person meant is never sent to agy as focus.
  */

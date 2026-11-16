@@ -23,6 +23,16 @@
       "description": "File tree pane that follows Claude's reads, edits and searches, with git status, search, preview and path references"
     },
     {
+      "name": "gchat",
+      "source": "./plugins/gchat",
+      "description": "Skills that read, summarize and reply in Google Chat, and post GitLab merge request review requests to a space, through Claude in Chrome in the main agent, sending only a text and recipient you explicitly approved."
+    },
+    {
+      "name": "github",
+      "source": "./plugins/github",
+      "description": "A skill for GitHub work with the gh CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments."
+    },
+    {
       "name": "gitlab",
       "source": "./plugins/gitlab",
       "description": "Work on GitLab merge requests and pipelines of the current repository, picking the host and token from its git remote, or from a host you name."
@@ -35,7 +45,7 @@
     {
       "name": "session-hud",
       "source": "./plugins/session-hud",
-      "description": "A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; when turned on, next steps to tick and put in the prompt; and /session-panel, a pane with every agent the session ran and the last 15 minutes."
+      "description": "A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; when turned on, next steps to tick and put in the prompt; and /session-hud-panel, a pane with every agent the session ran and the last 15 minutes."
     },
     {
       "name": "sonarqube",
@@ -51,6 +61,11 @@
       "name": "tailscale",
       "source": "./plugins/tailscale",
       "description": "Read or change your tailnet through the Tailscale API using the apiKey plugin option."
+    },
+    {
+      "name": "verification-planning",
+      "source": "./plugins/verification-planning",
+      "description": "A skill that plans, before non-trivial coding work, the project-specific evidence that will establish or refute the change, and closes that path after implementation."
     }
   ]
 }
