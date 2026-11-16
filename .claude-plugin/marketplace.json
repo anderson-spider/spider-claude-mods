@@ -43,6 +43,11 @@
       "description": "See images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads drawn under its row in the transcript"
     },
     {
+      "name": "secrets",
+      "source": "./plugins/secrets",
+      "description": "Claude asks you for a token or password in a card and gets a private file it can use inside a command but not read, while a fence and a scrubber keep the value out of the conversation"
+    },
+    {
       "name": "session-hud",
       "source": "./plugins/session-hud",
       "description": "A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; the running subagents with their type, model and effort, and the tokens they used; what the last turn sent and added, edits and errors; when turned on, next steps to tick and put in the prompt; and /session-hud-panel, a pane with every agent the session ran and the last 15 minutes."
