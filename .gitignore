@@ -11,7 +11,7 @@ plugins/codex/helper/run/
 # Local state of the superpowers skills (brainstorm server, sdd)
 .superpowers/
 
-# Development tools installed by npm ci
+# Development tools installed by pnpm install
 node_modules/
 
 # Local Claude Code state a session may create in the checkout

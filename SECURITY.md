@@ -10,7 +10,7 @@ Include the affected plugin and version (`version` in its `plugin.json`), the Cl
 
 ## Scope
 
-In scope: the plugins under `plugins/`, the helper under `plugins/codex/helper/`, and the scripts under `scripts/` (including `bootstrap.sh`). Examples: a hook that sends a token or API key to a host other than its own, a tool input that escapes its path or API checks, a prompt injection that makes a plugin act without the user's request, or a helper route reachable by another local user.
+In scope: the plugins under `plugins/`, the helper under `plugins/codex/helper/`. Examples: a hook that sends a token or API key to a host other than its own, a tool input that escapes its path or API checks, a prompt injection that makes a plugin act without the user's request, or a helper route reachable by another local user.
 
 Out of scope: Claude Code itself (report to Anthropic), ChatGPT, Codex, GitLab, Tailscale and the other services the plugins call, and setups that put a secret in a repository's settings, which the plugins refuse.
 

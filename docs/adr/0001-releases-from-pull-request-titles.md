@@ -1,5 +1,7 @@
 # Releases come from pull request titles, through release-please
 
+Status: superseded. The release workflow, release-please and `scripts/check-release.mjs` were removed with the rest of the build tooling; versions and changelogs are raised by hand in the pull request that ships a change (root `AGENTS.md`, "Done for a plugin change").
+
 Plugin versions were edited by hand in every pull request, with a check that the version changed but not by how much, and nothing produced a changelog, a tag or a GitHub release. We decided that the squash commit's Conventional Commit title is the only input: release-please, in manifest mode, turns the titles on `main` into each plugin's next version, changelog, tag and release through one release pull request that merges by itself.
 
 ## Considered Options

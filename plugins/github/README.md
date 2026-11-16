@@ -25,6 +25,6 @@ The skill runs `gh` with your own login, so it can read and change whatever that
 
 ## Tests
 
-The plugin ships only a skill, so `claude plugin test` has nothing to run. `claude plugin validate --strict` and `scripts/check-consistency.mjs` check its manifest and frontmatter.
+The plugin ships only a skill, so `claude plugin test` has nothing to run. `claude plugin validate --strict` checks its manifest and frontmatter.
 
 For editing pointers and check commands, see [AGENTS.md](AGENTS.md).

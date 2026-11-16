@@ -45,17 +45,7 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.322 
 
 From a local copy: `/plugin marketplace add /path/to/claude-mods`.
 
-Computer use in codex also needs a local helper on the Mac: follow [its install steps](plugins/codex/README.md#install-the-helper), or use the one-step setup below. It replaces the former codex-computer-use plugin: uninstall that one with `/plugin uninstall codex-computer-use@spider-claude-mods`.
-
-### One step
-
-`scripts/bootstrap.sh` adds the marketplace and installs or updates every plugin. On macOS it also installs the helper of codex's computer use (a LaunchAgent); on Linux codex is installed without it, since computer use controls native Mac apps:
-
-```
-curl -fsSL https://raw.githubusercontent.com/anderson-spider/claude-mods/main/scripts/bootstrap.sh | sh
-```
-
-Add `-s -- --check` after `sh` for a dry run, or `-s -- --only tailscale,codex` to limit the plugins. It is safe to rerun, skips the helper when the ChatGPT app is missing and never sets secrets: use `claude plugin configure gitlab` for its `tokens` (or set `SPIDER_PLUGIN_OPTION_GITLAB_TOKENS`), `claude plugin configure tailscale` for its `apiKey` (or set `SPIDER_PLUGIN_OPTION_TAILSCALE_API_KEY`), and `claude plugin configure subagent-effort` for its `apiKey` (or set `SPIDER_PLUGIN_OPTION_SUBAGENT_EFFORT_API_KEY`, or `JEV_API_KEY`), and `claude plugin configure sonarqube` for its `url` and `token` (or set `SPIDER_PLUGIN_OPTION_SONARQUBE_URL` and `SPIDER_PLUGIN_OPTION_SONARQUBE_TOKEN`).
+Computer use in codex also needs a local helper on the Mac: follow [its install steps](plugins/codex/README.md#install-the-helper). It replaces the former codex-computer-use plugin: uninstall that one with `/plugin uninstall codex-computer-use@spider-claude-mods`.
 
 ### Update
 
@@ -66,11 +56,9 @@ claude plugin marketplace update spider-claude-mods
 claude plugin update <plugin>@spider-claude-mods
 ```
 
-Rerunning the one-step command does both for every plugin.
-
 ## Contributing
 
-Rules for changing the code and the done definition are in [AGENTS.md](AGENTS.md). Setup: Node 24 (`.nvmrc`), then `npm ci`, which installs the pinned Claude Code CLI and TypeScript; `npm run` puts them first on PATH.
+Rules for changing the code and the done definition are in [AGENTS.md](AGENTS.md). Setup: Node 24 (`.nvmrc`) and pnpm (`corepack enable`), then `pnpm install`, which installs the pinned Claude Code CLI and TypeScript.
 
 Pull requests from forks run CI without secrets and are merged only after a maintainer reads the whole diff: the code runs on every installed copy. Use placeholders, never real hosts, project names, paths or tokens, in code, tests and examples. Report vulnerabilities privately as [SECURITY.md](SECURITY.md) describes.
 
@@ -80,14 +68,15 @@ Load a plugin from its folder so edits reload automatically, with `claude --plug
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/claude-mods/plugins/<name>" } }
 ```
 
-| Task | What it does |
+| Command | What it does |
 | --- | --- |
-| `npm run plugin:new -- <name> [description]` | Scaffold a plugin that passes the consistency checks, then generate its typings. |
-| `npm run plugins:types [-- <name>...]` | Generate the `claude-code` typings the named plugins' (or every plugin's) `tsconfig.json` extends. |
-| `npm run check [-- <name>]` | The required CI checks in one run: no plugin version edited by hand among the committed, uncommitted and untracked changes against `origin/main` as last fetched (CI also checks the pull request title), then `plugins:validate`, `plugins:test` and `typecheck` (skipped for a plugin that ships only skills), for every plugin or one. Every step runs, and a summary names the failed ones. The output of a target that passes is hidden; `QUIET=0 npm run check` prints everything. |
-| `npm run plugins:validate [-- <name>]` | `validate --strict` the marketplace and every plugin, or one plugin, then `check-consistency`. |
-| `npm run typecheck [-- <name>]` | Run the pinned `tsc` on one plugin, or every plugin with TypeScript; a plugin without typings gets them copied from the main checkout, else generated (`plugins:types`). |
-| `npm run plugins:test [-- <name>]` | Script tests, every plugin's tests (a plugin that ships only skills has none), and, with the ChatGPT app installed, the codex computer use helper tests; with a name, only that plugin's tests and its helper's. |
+| `pnpm check` | `validate`, `test` and `typecheck` below, in that order. |
+| `pnpm validate` | `claude plugin validate --strict` on the marketplace and every plugin. |
+| `pnpm test` | `claude plugin test` on every plugin with hooks, plus antigravity's skill script tests. |
+| `pnpm typecheck` | `tsc` on every plugin with TypeScript. It needs the plugin's typings, which Claude Code writes when you load the plugin once with `claude --plugin-dir plugins/<name>`. |
+| `pnpm --filter <name> <command>` | One of the three above, on one plugin. |
+
+CI runs `pnpm validate` and `pnpm test` on every pull request.
 
 `/reload-plugins` and `claude plugin details` report `0 hooks` for every plugin here, because they count only `hooks.json` command hooks and these plugins ship hooks modules. `claude plugin validate plugins/<name>` lists a module's events and `$` calls; a module that fails to load leaves a line in `claude --debug`.
 

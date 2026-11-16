@@ -9,7 +9,7 @@ body:
     id: plugin
     attributes:
       label: Plugin
-      description: The plugin's name, or `installation` for bootstrap.sh and the marketplace.
+      description: The plugin's name, or `installation` for the marketplace.
       placeholder: gitlab
     validations:
       required: true

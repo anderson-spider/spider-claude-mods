@@ -1,18 +1,17 @@
 {
-  "name": "claude-mods",
+  "name": "spider-claude-mods",
   "private": true,
-  "description": "Development tools and tasks for the claude-mods marketplace; the plugins themselves do not use npm.",
+  "description": "Development tools for the spider-claude-mods marketplace: each plugin under plugins/ is a pnpm workspace package.",
   "license": "MIT",
+  "packageManager": "pnpm@10.28.0",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "check": "bash scripts/tasks/check.sh",
-    "plugins:validate": "bash scripts/tasks/plugins-validate.sh",
-    "plugins:test": "bash scripts/tasks/plugins-test.sh",
-    "typecheck": "bash scripts/tasks/typecheck.sh",
-    "plugins:types": "bash scripts/tasks/plugins-types.sh",
-    "plugin:new": "bash scripts/tasks/plugin-new.sh"
+    "validate": "claude plugin validate --strict . && pnpm -r validate",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm validate && pnpm test && pnpm typecheck"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "2.1.322",

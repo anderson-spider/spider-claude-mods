@@ -19,4 +19,4 @@ Usage/privacy: [README.md](README.md). A copy of [claude-image-view](https://git
 
 ## Checks
 
-[Root commands](../../AGENTS.md#commands); type-check with `npm run typecheck -- image-preview`.
+[Root commands](../../AGENTS.md#commands); type-check with `pnpm --filter image-preview typecheck`.

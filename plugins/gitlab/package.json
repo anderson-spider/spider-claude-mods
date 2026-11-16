@@ -1,0 +1,9 @@
+{
+  "name": "gitlab",
+  "private": true,
+  "scripts": {
+    "validate": "claude plugin validate --strict .",
+    "test": "claude plugin test .",
+    "typecheck": "tsc"
+  }
+}
