@@ -1,0 +1,28 @@
+{
+  "name": "gchat",
+  "version": "0.0.0",
+  "description": "Skills that read, summarize and reply in Google Chat, and post GitLab merge request review requests to a space, through Claude in Chrome in the main agent, sending only a text and recipient you explicitly approved.",
+  "author": {
+    "name": "anderson-spider"
+  },
+  "license": "MIT",
+  "userConfig": {
+    "reviewSpace": {
+      "type": "string",
+      "title": "Review request space",
+      "description": "Name of the Google Chat space that merge request review requests go to when you name no other, exactly as its header shows it. Leave it empty to be asked each time."
+    },
+    "accountIndex": {
+      "type": "number",
+      "title": "Google account index",
+      "description": "The number in chat.google.com/u/<n>/ for the Google account Chat should use (0 is the first account signed in to the browser).",
+      "default": 0,
+      "min": 0
+    },
+    "testSpace": {
+      "type": "string",
+      "title": "Test space",
+      "description": "Optional name of a Google Chat space you allow for test messages. The usual approval rules still apply there."
+    }
+  }
+}

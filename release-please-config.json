@@ -43,6 +43,12 @@
     "plugins/file-explorer": {
       "package-name": "file-explorer"
     },
+    "plugins/gchat": {
+      "package-name": "gchat"
+    },
+    "plugins/github": {
+      "package-name": "github"
+    },
     "plugins/gitlab": {
       "package-name": "gitlab"
     },
@@ -60,6 +66,9 @@
     },
     "plugins/tailscale": {
       "package-name": "tailscale"
+    },
+    "plugins/verification-planning": {
+      "package-name": "verification-planning"
     }
   }
 }

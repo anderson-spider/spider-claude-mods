@@ -20,6 +20,11 @@ for p in "${dirs[@]}"; do
   else
     echo "==> $n: skipped, skills only"
   fi
+  scripts=("${p}"skills/*/scripts/*.test.mjs)
+  if [ -e "${scripts[0]}" ]; then
+    echo "==> $n skill scripts"
+    run node --test "${scripts[@]}" || failed+=("$n-skill-scripts")
+  fi
 done
 if [ -z "$name" ] || [ "$name" = codex ]; then
   cua_node=/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node

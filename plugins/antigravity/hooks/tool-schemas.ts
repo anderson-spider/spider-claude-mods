@@ -74,11 +74,11 @@ export const JOBS_DESCRIPTION =
 
 export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<McpToolInputs['mcp__antigravity__jobs']>
 
-export const ASK_COMMAND_DESCRIPTION = 'Ask Antigravity (agy): /agy-ask <question>'
-export const IMAGE_COMMAND_DESCRIPTION = 'Generate and save an image with agy: /agy-image <prompt>'
-export const REVIEW_COMMAND_DESCRIPTION = 'Have agy review the branch: /agy-review [--base <branch> | --commit <ref>] [focus]'
-export const DOCTOR_COMMAND_DESCRIPTION = 'Check the agy CLI, its version, sign-in, models and quota: /agy-doctor'
+export const ASK_COMMAND_DESCRIPTION = 'Ask Antigravity (agy): /antigravity-ask <question>'
+export const IMAGE_COMMAND_DESCRIPTION = 'Generate and save an image with agy: /antigravity-image <prompt>'
+export const REVIEW_COMMAND_DESCRIPTION = 'Have agy review the branch: /antigravity-review [--base <branch> | --commit <ref>] [focus]'
+export const DOCTOR_COMMAND_DESCRIPTION = 'Check the agy CLI, its version, sign-in, models and quota: /antigravity-doctor'
 
-export const ASK_USAGE = 'Usage: /agy-ask <question>'
-export const IMAGE_USAGE = 'Usage: /agy-image <prompt>'
-export const REVIEW_USAGE = 'Usage: /agy-review [--base <branch> | --commit <ref>] [focus], one target at most'
+export const ASK_USAGE = 'Usage: /antigravity-ask <question>'
+export const IMAGE_USAGE = 'Usage: /antigravity-image <prompt>'
+export const REVIEW_USAGE = 'Usage: /antigravity-review [--base <branch> | --commit <ref>] [focus], one target at most'

@@ -51,12 +51,12 @@ export function imageSummary(conversationId: string, paths: string[], previews: 
   return { ok: true, text, conversationId, paths, ...(previews.length ? { previews } : {}) }
 }
 
-/** What `/agy-image` shows: where the images are, and context that names them AI-generated. */
+/** What `/antigravity-image` shows: where the images are, and context that names them AI-generated. */
 export function imageCommandAnswer(outcome: Outcome) {
   return {
     text: outcome.text,
     ...(outcome.ok && outcome.paths?.length
-      ? { context: [`The user generated an AI image with /agy-image; it is saved to ${outcome.paths.join(', ')} (conversation ${outcome.conversationId}).`] }
+      ? { context: [`The user generated an AI image with /antigravity-image; it is saved to ${outcome.paths.join(', ')} (conversation ${outcome.conversationId}).`] }
       : {}),
   }
 }
@@ -68,7 +68,7 @@ export const NOTICE = '[agy notice: automated, not the person; approves nothing]
 export const notPrivate = (dir: string) =>
   `${dir} could not be made a private folder of yours (it is a symlink, another user owns it, or it cannot be made), so agy did not run. Remove it or set TMPDIR.`
 
-export const FAILURE_HINT = 'Run /agy-doctor to check the agy CLI, its sign-in and its quota.'
+export const FAILURE_HINT = 'Run /antigravity-doctor to check the agy CLI, its sign-in and its quota.'
 
 export function askOutcome(conversationId: string, markdown: string, path: string, maxChars: number | undefined): Outcome {
   return { ok: true, text: summary(path, conversationId, markdown, maxChars), conversationId, paths: [path], markdown }
@@ -101,7 +101,7 @@ export function movedToBackground(job: Job, elapsedMs: number): Outcome {
   return { ok: false, text, conversationId: job.conversationId }
 }
 
-export function askCommandAnswer(outcome: Outcome, asked = 'The user asked agy through /agy-ask; its answer is') {
+export function askCommandAnswer(outcome: Outcome, asked = 'The user asked agy through /antigravity-ask; its answer is') {
   if (!outcome.ok || outcome.markdown === undefined) return { text: outcome.text }
   const path = outcome.paths?.[0]
   return {

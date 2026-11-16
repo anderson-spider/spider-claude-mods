@@ -8,12 +8,15 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 - Second opinions and reviews from another model family through Google's Antigravity CLI (agy): `plugins/antigravity/AGENTS.md`.
 - Second opinions and images through the Codex CLI, and native Mac app control through Codex computer use: `plugins/codex/AGENTS.md`.
 - File tree pane with git status and Claude's activity: `plugins/file-explorer/AGENTS.md`.
+- Google Chat skills (read, reply, MR review requests) through Claude in Chrome: `plugins/gchat/AGENTS.md`.
+- GitHub work skill with the gh CLI: `plugins/github/AGENTS.md`.
 - GitLab merge requests and pipelines of the current repository: `plugins/gitlab/AGENTS.md`.
 - Thumbnails of pasted images above the prompt: `plugins/image-preview/AGENTS.md`.
 - Session card above the prompt: `plugins/session-hud/AGENTS.md`.
 - SonarQube 9.x Web API tools (quality gate, measures, issues, rules, hotspots, branches): `plugins/sonarqube/AGENTS.md`.
 - Jev-routed reasoning effort for native subagent calls: `plugins/subagent-effort/AGENTS.md`.
 - Tailscale API tools: `plugins/tailscale/AGENTS.md`.
+- Verification planning skill for non-trivial changes: `plugins/verification-planning/AGENTS.md`.
 - Hooks authoring or debugging: load the `plugin-authoring` skill first. The `claude-code` module is host-provided, not on npm.
 
 ## Commands
@@ -73,6 +76,7 @@ Nobody edits a plugin's `version` or `CHANGELOG.md`: `.github/workflows/release.
 ## Conventions
 
 - README, docs, code comments and user-facing plugin messages in English.
+- Names a person types or Claude calls start with the plugin's full name: mod commands are `<plugin>-<action>` (`$.command.register` refuses `:`), skills are `skills/<skill>/` shown as `<plugin>:<skill>`, never the marketplace's name. Why: `docs/adr/0002-command-and-skill-names-carry-the-plugin-name.md`.
 - Conventional Commits in English for commits and PR titles; English PR descriptions (`.github/pull_request_template.md`).
 - Docs describe current behavior and how to use or contribute; history lives in git, and a rule explaining one line of code goes in a comment there.
 - Issues live in this repository's GitHub Issues; use the `gh` CLI.

@@ -532,7 +532,7 @@ test('with nothing to fork the section never shows', { options: { nextSteps: tru
   await ui.unmount()
 })
 
-const panel = ($: Engine, args = '') => $.command.run({ command: 'session-panel', args } as never) as Promise<{ text?: string }>
+const panel = ($: Engine, args = '') => $.command.run({ command: 'session-hud-panel', args } as never) as Promise<{ text?: string }>
 const spawnAgent = ($: Engine, subagentType = 'Explore', resume?: string) =>
   $.agent.spawn({ prompt: 'private task', subagentType, description: 'private description', ...(resume ? { resume: { agentId: resume } } : {}) } as never) as Promise<{ agentId?: string }>
 const endAgent = ($: Engine, agentId: string, reason = 'answer') => $.turn.complete({ turnId: 'ta', agentId, answer: 'private', durationMs: 1, isAborted: reason === 'aborted', reason } as never)
@@ -543,18 +543,18 @@ const paneText = async ($: Engine, columns = 100) => {
   return text
 }
 
-test('/session-panel toggles the pane, open opens, close closes, and anything else shows the usage', async ($, on) => {
+test('/session-hud-panel toggles the pane, open opens, close closes, and anything else shows the usage', async ($, on) => {
   const { opened, commands } = world(on)
   await start($)
   await flush()
-  expect(commands).toContain('session-panel')
+  expect(commands).toContain('session-hud-panel')
   expect((await panel($)).text).toBe('Session panel open.')
   expect(opened).toEqual(['session-panel'])
   expect((await panel($)).text).toBe('Session panel closed.')
   expect(opened).toEqual([])
   expect((await panel($, 'open')).text).toBe('Session panel open.')
   expect((await panel($, 'close')).text).toBe('Session panel closed.')
-  expect((await panel($, 'nonsense')).text).toBe('Usage: /session-panel [open|close|clear]')
+  expect((await panel($, 'nonsense')).text).toBe('Usage: /session-hud-panel [open|close|clear]')
 })
 
 test('the panel lists an agent of any type from its spawn, running with its model, effort, tools and tokens, then finished; no task, path or money', async ($, on) => {
@@ -702,7 +702,7 @@ test("a resume in this process brings back the resumed session's panel on the fi
   expect(await paneText($)).toMatch(/Explore/)
 })
 
-test('/session-panel clear forgets the agents and turns and removes the saved panel; the pane stays open', async ($, on) => {
+test('/session-hud-panel clear forgets the agents and turns and removes the saved panel; the pane stays open', async ($, on) => {
   const { disk, opened } = world(on)
   await start($)
   await flush()
