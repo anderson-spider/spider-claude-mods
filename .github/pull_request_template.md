@@ -1,4 +1,4 @@
-<!-- Title: Conventional Commits, in English (e.g. `feat(tailscale): add ...`). It becomes the commit and the changelog line, and its type picks the next version: fix, perf, refactor or revert for a patch, feat for a minor, and chore, docs, test, ci, build or style when no shipped file changed. Write the description in English. -->
+<!-- Title: Conventional Commits, in English (e.g. `feat(tailscale): add ...`). A pull request that ships a plugin change also raises that plugin's `version` and adds a `CHANGELOG.md` line. Write the description in English. -->
 
 ## Summary
 
@@ -10,8 +10,9 @@
 
 ## Testing
 
-<!-- e.g. `claude plugin validate .` and `claude plugin test plugins/<name>` -->
+<!-- e.g. `pnpm --filter <name> test` and `pnpm --filter <name> typecheck` -->
 
 ## Checklist
 
 - [ ] README/AGENTS.md updated if needed
+- [ ] Plugin `version` and `CHANGELOG.md` raised if a shipped file changed

@@ -1,0 +1,10 @@
+{
+  "name": "codex",
+  "private": true,
+  "scripts": {
+    "validate": "claude plugin validate --strict .",
+    "test": "claude plugin test .",
+    "test:helper": "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node --test helper/test/*.test.mjs",
+    "typecheck": "tsc"
+  }
+}

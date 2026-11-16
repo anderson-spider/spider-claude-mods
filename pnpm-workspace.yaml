@@ -1,0 +1,6 @@
+packages:
+  - plugins/*
+
+# The Claude Code package installs its native binary in a postinstall script, which pnpm runs only when allowed.
+onlyBuiltDependencies:
+  - "@anthropic-ai/claude-code"

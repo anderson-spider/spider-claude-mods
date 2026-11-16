@@ -37,6 +37,6 @@ The skills are instructions only. In Chrome they open `chat.google.com`, read th
 
 ## Tests
 
-The plugin ships only skills, so `claude plugin test` has nothing to run. `claude plugin validate --strict` and `scripts/check-consistency.mjs` check its manifest, frontmatter and the block the skills share.
+The plugin ships only skills, so `claude plugin test` has nothing to run. `claude plugin validate --strict` checks its manifest and frontmatter.
 
 For editing pointers and check commands, see [AGENTS.md](AGENTS.md).

@@ -31,15 +31,9 @@ It needs a local helper (a per-user LaunchAgent) that talks to Codex, and the [C
 
 ### Install the helper
 
-One command installs or updates the plugin and the helper:
+From a clone of the repository, run `plugins/codex/helper/install.sh` (`--check` only checks the prerequisites). The helper goes to `~/.claude/mcp/codex-cu` and starts at login; rerun the install after updating the plugin so the helper matches it. The script does not edit Claude settings. To remove it, run `~/.claude/mcp/codex-cu/uninstall.sh`: it unloads the LaunchAgent and keeps the code, approvals and logs.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/anderson-spider/claude-mods/main/scripts/bootstrap.sh | sh -s -- --only codex
-```
-
-Add `--check` after `--only codex` for a dry run that changes nothing. Or, from a clone of the repository, run `plugins/codex/helper/install.sh` (`--check` only checks the prerequisites). The helper goes to `~/.claude/mcp/codex-cu` and starts at login; rerun the install after updating the plugin so the helper matches it. Neither script edits Claude settings. To remove it, run `~/.claude/mcp/codex-cu/uninstall.sh`: it unloads the LaunchAgent and keeps the code, approvals and logs.
-
-**Coming from the `codex-computer-use` plugin:** it is now part of this plugin. `scripts/bootstrap.sh` uninstalls the old plugin; by hand, run `/plugin uninstall codex-computer-use@spider-claude-mods`. The helper keeps its LaunchAgent, folder and approvals, so it needs no reinstall. The tool is now `mcp__codex__computer_use`, and computer use starts off: turn it on with `/codex-cu on`.
+**Coming from the `codex-computer-use` plugin:** it is now part of this plugin. Uninstall the old one with `/plugin uninstall codex-computer-use@spider-claude-mods`. The helper keeps its LaunchAgent, folder and approvals, so it needs no reinstall. The tool is now `mcp__codex__computer_use`, and computer use starts off: turn it on with `/codex-cu on`.
 
 ### Use
 

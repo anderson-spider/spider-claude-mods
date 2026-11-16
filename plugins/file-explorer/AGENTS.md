@@ -32,4 +32,4 @@ Usage, keys, settings and limits: [README.md](README.md).
 
 ## Checks
 
-[Root commands](../../AGENTS.md#commands); type-check with `npm run typecheck -- file-explorer`. `tests/host.ts` is the host fake (`world`, `start`, `pane`, `rows`, `cursor`, `segmentsOf`, `key`): an in-memory file system where `dir/` names a folder and `name -> target` a link, and a scripted git.
+[Root commands](../../AGENTS.md#commands); type-check with `pnpm --filter file-explorer typecheck`. `tests/host.ts` is the host fake (`world`, `start`, `pane`, `rows`, `cursor`, `segmentsOf`, `key`): an in-memory file system where `dir/` names a folder and `name -> target` a link, and a scripted git.

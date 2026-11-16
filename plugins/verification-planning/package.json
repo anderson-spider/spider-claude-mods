@@ -1,0 +1,7 @@
+{
+  "name": "verification-planning",
+  "private": true,
+  "scripts": {
+    "validate": "claude plugin validate --strict ."
+  }
+}

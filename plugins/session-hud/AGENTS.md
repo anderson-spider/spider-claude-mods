@@ -32,4 +32,4 @@ Usage/privacy: [README.md](README.md).
 
 ## Checks
 
-[Root commands](../../AGENTS.md#commands); type-check with `npm run typecheck -- session-hud`. `tests/host.ts` is the host fake (`world`, `start`, `step`, `band`).
+[Root commands](../../AGENTS.md#commands); type-check with `pnpm --filter session-hud typecheck`. `tests/host.ts` is the host fake (`world`, `start`, `step`, `band`).

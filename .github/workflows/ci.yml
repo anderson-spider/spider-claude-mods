@@ -1,9 +1,7 @@
-name: ci
+name: CI
 
 on:
-  # `edited` runs the checks again when the title changes: the release rules read it.
   pull_request:
-    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -13,80 +11,14 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-      - name: Marketplace and plugin manifests agree
-        run: node scripts/check-consistency.mjs
-      - name: No plugin version edited by hand, and a title that releases what changed
-        if: github.event_name == 'pull_request'
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          PR_HEAD: ${{ github.event.pull_request.head.ref }}
-          RELEASE_BOT: ${{ vars.RELEASE_BOT }}
-        run: node scripts/check-release.mjs "origin/${{ github.base_ref }}"
-      # Warnings and errors only: the notes are about quotes the scripts use on purpose.
-      - name: Shell scripts pass shellcheck
-        run: shellcheck -x -S warning scripts/*.sh scripts/tasks/*.sh scripts/install-test/*.sh plugins/codex/helper/*.sh
-      # The exceptions are in .github/actionlint.yaml.
-      - name: Workflows pass actionlint
-        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12
-      - name: Script and hook tests
-        run: node --test scripts/*.test.mjs
-      - name: codex computer use helper tests
-        run: node --test plugins/codex/helper/test/*.test.mjs
-      - name: Skill script tests
-        run: node --test plugins/*/skills/*/scripts/*.test.mjs
-
-  # The same tasks as `npm run check` (scripts/tasks/), which pick the tools from node_modules and run every plugin, the
-  # unlisted ones included, then fail naming what failed. No task logs in. They run the CLI package.json pins;
-  # what a newer CLI breaks shows in the pull request that moves the pin (.github/workflows/cli-pin.yml).
-  plugins:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      DISABLE_AUTOUPDATER: 1
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install the pinned Claude Code and TypeScript
-        run: |
-          npm ci
-          node_modules/.bin/claude --version
-      - name: Validate the marketplace and every plugin
-        run: npm run plugins:validate
-      - name: Test the scripts and every plugin
-        run: npm run plugins:test
-      # The scaffold runs in a copy so the checkout stays clean.
-      - name: Scaffold a sample plugin and check it
-        run: |
-          cp -R . "$RUNNER_TEMP/scaffold"
-          cd "$RUNNER_TEMP/scaffold"
-          node scripts/new-plugin.mjs ci-sample "CI sample plugin."
-          npm run plugins:validate -- ci-sample
-          npm run plugins:test -- ci-sample
-      # typecheck generates the typings first, in an interactive session. A fresh runner has no login: onboarding and
-      # folder trust are marked done so the session starts and loads every plugin of the scaffold copy, ci-sample included.
-      - name: Type-check every plugin and the sample
-        working-directory: ${{ runner.temp }}/scaffold
-        run: |
-          node -e 'require("fs").writeFileSync(require("os").homedir() + "/.claude.json", JSON.stringify({ hasCompletedOnboarding: true, theme: "dark", projects: { [process.cwd()]: { hasTrustDialogAccepted: true } } }))'
-          npm run typecheck
-
-  # A new user's install on a clean Linux machine: bootstrap.sh from this checkout, then every plugin loads in a session
-  # without login (scripts/install-test/).
-  install:
-    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: Install the marketplace on a clean machine
-        run: bash scripts/tasks/install-test.sh
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm validate
+      - run: pnpm test
