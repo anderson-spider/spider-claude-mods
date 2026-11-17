@@ -8,11 +8,6 @@
   },
   "plugins": [
     {
-      "name": "antigravity",
-      "source": "./plugins/antigravity",
-      "description": "Ask Google's Antigravity CLI (agy) for a second opinion or a review of the branch's changes from another model family, read-only, or an image, and save the result locally."
-    },
-    {
       "name": "file-explorer",
       "source": "./plugins/file-explorer",
       "description": "File tree pane that follows Claude's reads, edits and searches, with git status, search, preview and path references"
@@ -36,11 +31,6 @@
       "name": "image-preview",
       "source": "./plugins/image-preview",
       "description": "See images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads drawn under its row in the transcript"
-    },
-    {
-      "name": "orchestrator",
-      "source": "./plugins/orchestrator",
-      "description": "Delegate tasks to another CLI's agent as a subagent, as T3 Code does: Antigravity's agy over ACP, in its own session, under a runtime mode the plugin enforces, with a shared daemon that wakes the session when a task ends."
     },
     {
       "name": "secrets",
