@@ -11,7 +11,7 @@ Skills that read, summarize and reply in Google Chat, and post GitLab merge requ
 - Claude Code (or Cowork) with the [Claude in Chrome](https://claude.com/chrome) extension connected (`/chrome`), signed in to Google Chat in that Chrome. The skills use only its `mcp__claude-in-chrome__*` tools and refuse any other browser, computer use or a Chat API.
 - The main agent: the skills do not run in a subagent, which has no Claude in Chrome tools.
 - The `chrome-browser` skill (Anthropic's, shipped with Claude in Chrome) and the `humanizer` skill, installed separately, for drafting.
-- For review requests, the `gitlab` plugin of this marketplace, whose `mcp__gitlab__*` tools read the merge request.
+- For review requests, the `gitlab` plugin of this marketplace, whose `mcp__plugin_gitlab_gitlab__*` tools read the merge request.
 
 ## Setup
 
