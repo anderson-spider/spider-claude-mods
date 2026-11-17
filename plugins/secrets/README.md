@@ -8,7 +8,7 @@ Claude asks you for a token or password in a card and gets a private file it can
 
 ## Use
 
-When Claude needs a secret only you have (an API token, a `sudo` password, a pairing code), it calls `mcp__secrets__request_secret` instead of asking in chat. A card opens in a pane with what it is for, the steps to find it, the page, and what a valid value looks like. Paste the value and press Enter, or press **decline**.
+When Claude needs a secret only you have (an API token, a `sudo` password, a pairing code), it calls `mcp__plugin_secrets_secrets__request_secret` instead of asking in chat. A card opens in a pane with what it is for, the steps to find it, the page, and what a valid value looks like. Paste the value and press Enter, or press **decline**.
 
 ```
 ╭──────────────────────────────────────────────────────╮
@@ -37,10 +37,12 @@ CF_API_TOKEN="$(cat ~/.claude/secrets/CF_API_TOKEN.<random>)" npx wrangler deplo
 
 A file is deleted 24 hours after it was written. `/secrets` opens the pane yourself; closing it while a request waits declines it. A terminal too narrow for the pane shows the card above the prompt instead; the request looks again for about a second first, since a surface can seat the pane just after it was opened, and tells Claude the card is above the prompt only if the pane is still undrawn.
 
+The plugin works in Code Mode (`CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1`): the tool comes from an MCP server in the plugin, the fence is a `PreToolUse` command hook, which checks each tool call Code Mode's code makes, and the hooks module registers no event that turns Code Mode off. The server and the fence run on `node` (22.18 or later) from your `PATH`.
+
 ## What keeps the value out of the conversation
 
-1. **The fence.** Claude's `Read`, `Edit`, `Write`, `MultiEdit` and `NotebookEdit` cannot open the folder, `Grep` and `Glob` cannot search it or a folder above it, and a `Bash` command may name a saved file only inside `$(cat <file>)` or `$(< <file>)`. `cat <file>`, `ls`, `cp` and the like are refused, and so is tracing (`set -x`, `bash -x`) a command that uses one. The folder is `~/.claude/secrets`, or `secrets` under `CLAUDE_CONFIG_DIR`.
-2. **The scrubber.** Any saved value of 8 or more characters that reaches a message, a tool result or a prompt is replaced with `[secret:NAME]` before it is stored or sent. That catches the indirect leaks, such as a script that prints its environment. The fence is best effort; the scrubber is the guarantee.
+1. **The fence.** Claude's `Read`, `Edit`, `Write`, `MultiEdit` and `NotebookEdit` cannot open the folder, `Grep` and `Glob` cannot search it or a folder above it, and a `Bash` command may name a saved file only inside `$(cat <file>)` or `$(< <file>)`. `cat <file>`, `ls`, `cp` and the like are refused, and so is tracing (`set -x`, `bash -x`) a command that uses one. Any of these tools, and `SendMessage` to another agent, is also refused when its input holds a saved value. The folder is `~/.claude/secrets`, or `secrets` under `CLAUDE_CONFIG_DIR`.
+2. **The scrubber.** Any saved value of 8 or more characters that reaches a message, a tool result (Code Mode's code output included) or a prompt is replaced with `[secret:NAME]` in the row before it is stored and sent to Claude. That catches the indirect leaks, such as a script that prints its environment. The fence is best effort; the scrubber is the guarantee.
 
 ## Limits
 
@@ -49,7 +51,9 @@ A file is deleted 24 hours after it was written. `/secrets` opens the pane yours
 - The fence reads the command's text: a glob or a variable that builds the folder's path (`cat ~/.claude/s*/*`) is not caught. The scrubber is what stops the value then.
 - Do not paste a secret into the chat box: it is scrubbed only once saved through a card.
 - A file saved by another session is scrubbed too, from the next hour or session start on.
-- The pane draws on the terminal and desktop surfaces. Elsewhere the tool answers, the fence and scrubber work, but there is no card.
+- The transcript file keeps a tool's raw output in a side field (`toolUseResult`) that hooks cannot rewrite: a command that prints a value leaves it there, on your disk, though Claude reads only the scrubbed message.
+- The fence fails open: without `node`, or when the hook errors or passes its 10 seconds, the call goes on, and the scrubber still holds.
+- The pane draws on the terminal and desktop surfaces. Elsewhere there is no card: when none is drawn within 5 seconds, the tool withdraws the request and tells Claude no card could be shown.
 
 ## Privacy
 
@@ -57,4 +61,4 @@ Values never leave the machine: they are written to the folder above and read ba
 
 ## Tests
 
-Pure logic tests call `hooks/{store,guard,scrub,request}.ts` directly; host tests run the plugin against a fake host (`tests/host.ts`) with no network and mount the card on the terminal and desktop surfaces. For editing pointers and check commands, see [AGENTS.md](AGENTS.md).
+Pure logic tests call `hooks/{store,guard,scrub,request}.ts` directly; host tests run the plugin against a fake host (`tests/host.ts`) with no network and mount the card on the terminal and desktop surfaces; Node tests (`tests/node/`) drive the MCP server and run the fence against a temporary home folder. For editing pointers and check commands, see [AGENTS.md](AGENTS.md).

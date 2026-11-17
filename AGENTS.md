@@ -31,7 +31,7 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 ## Code rules
 
 - Registration: one entry module (`register.tsx`) in `hooks.json`. Keep `on(...)` and `$.noun.method(...)` calls visible to the engine's source analysis: pass `$` only to a top-level function in the same file, never across an import. Subfolder registrars may own their hooks and `$` calls; pure modules take injected host access. Tests mirror modules.
-- Tool inputs: each `mcp__<plugin>__<name>` entry in `types/index.d.ts` must match its `inputSchema` (`SchemaFor`, `hooks/schema.ts`; keep that file and `tests/schema-types.ts` identical in every plugin that has them, but for the import path in `tests/schema-types.ts`; gitlab keeps them in `server/` and its tool inputs in `server/inputs.ts`, by short tool name; codex's computer use tool has its keys checked in `hooks/computer-use/prompts.ts` instead).
+- Tool inputs: each `mcp__<plugin>__<name>` entry in `types/index.d.ts` must match its `inputSchema` (`SchemaFor`, `hooks/schema.ts`; keep that file and `tests/schema-types.ts` identical in every plugin that has them, but for the import path in `tests/schema-types.ts`; gitlab keeps them in `server/` and its tool inputs in `server/inputs.ts`, by short tool name; secrets checks its one MCP server tool in `server/tool.mjs` with a JSDoc `@satisfies`; codex's computer use tool has its keys checked in `hooks/computer-use/prompts.ts` instead).
 
 ## Done for a plugin change
 

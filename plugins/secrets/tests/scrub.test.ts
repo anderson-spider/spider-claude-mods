@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { buildIndex, isScrubbable, scrub, scrubBlock } from '../hooks/scrub'
+import { buildIndex, carries, isScrubbable, scrub, scrubBlock } from '../hooks/scrub'
 
 const index = buildIndex(
   new Map([
@@ -44,4 +44,12 @@ test('scrubBlock rewrites text and tool result blocks, nested ones too, and leav
   })
   const same = { type: 'tool_result', tool_use_id: 't', content: [clean] }
   expect(scrubBlock(same, index)).toBe(same)
+})
+
+test('carries finds a saved value at any depth of a tool input, and ignores values too short to scrub', () => {
+  const values = ['cf-token-0123456789', 'short']
+  expect(carries({ to: 'helper', message: 'use cf-token-0123456789 for it' }, values)).toBe(true)
+  expect(carries({ edits: [{ new_string: 'x' }, { new_string: 'TOKEN=cf-token-0123456789' }] }, values)).toBe(true)
+  expect(carries({ message: 'a short word' }, values)).toBe(false)
+  expect(carries({ message: 'nothing here' }, [])).toBe(false)
 })

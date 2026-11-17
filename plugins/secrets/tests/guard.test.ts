@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { ancestors, bashReason, forms, toolReason } from '../hooks/guard'
+import { DENY, ancestors, bashReason, denyText, fenceReason, forms, toolReason } from '../hooks/guard'
 
 const HOME = '/home/me'
 const DIR = '/home/me/.claude/secrets'
@@ -108,4 +108,13 @@ test('a recursive search from a folder above the secrets folder is refused, one 
   ]) {
     expect(bashReason(command, spellings, above)).toBeUndefined()
   }
+})
+
+test('fenceReason checks a Bash command by its text and the other tools by their paths', () => {
+  expect(fenceReason('Bash', { command: `cat ${FILE}` }, DIR, HOME, '/proj')).toBe('it touches the secrets folder')
+  expect(fenceReason('Read', { file_path: FILE }, DIR, HOME, '/proj')).toBe(`it opens ${FILE}`)
+  expect(fenceReason('Bash', { command: `TOKEN="$(cat ${FILE})" wrangler deploy` }, DIR, HOME, '/proj')).toBeUndefined()
+  expect(fenceReason('SendMessage', { to: 'helper', message: 'deploy is done' }, DIR, HOME, '/proj')).toBeUndefined()
+  expect(denyText('it opens x')).toBe(`${DENY} (Blocked because it opens x.)`)
+  expect(DENY).toContain('mcp__plugin_secrets_secrets__request_secret')
 })

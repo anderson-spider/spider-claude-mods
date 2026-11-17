@@ -1,6 +1,7 @@
-// The fence: keeps the model's own tools away from the saved secret files. Best effort, like
-// any command check: the scrubber (scrub.ts) is what keeps a value out of the conversation.
-// A file may be used inside a command, as "$(cat FILE)", and in no other way.
+// The fence: keeps the model's own tools away from the saved secret files, and a saved value out of their input.
+// Best effort, like any command check: the scrubber (scrub.ts) is what keeps a value out of the conversation.
+// A file may be used inside a command, as "$(cat FILE)", and in no other way. Pure: fence/main.ts runs it as a
+// PreToolUse command hook, so it holds in Code Mode too.
 
 const FILE_TOOLS = ['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']
 const SEARCH_TOOLS = ['Grep', 'Glob']
@@ -8,7 +9,7 @@ const SEARCH_TOOLS = ['Grep', 'Glob']
 /** The deny text: says what to do instead, so the model does not look for another way in. */
 export const DENY =
   'The secrets folder is private. Use a saved secret only inside a command, as "$(cat <file>)": ' +
-  'never read, print, copy or search it. Ask the user again with mcp__secrets__request_secret if you lost the path.'
+  'never read, print, copy or search it. Ask the user again with mcp__plugin_secrets_secrets__request_secret if you lost the path.'
 
 const TRACES = /(?:^|[\s;&|(])(?:set\s+-[a-z]*x|(?:ba|z|da)?sh\s+(?:-[a-z]+\s+)*-[a-z]*x)\b/
 
@@ -111,3 +112,13 @@ export function toolReason(
   }
   return undefined
 }
+
+/** Why the fence keeps `tool` with `input` out of the folder, or undefined. */
+export function fenceReason(tool: string, input: Record<string, unknown>, dir: string, home: string | undefined, cwd: string | undefined): string | undefined {
+  return tool === 'Bash' && typeof input.command === 'string'
+    ? bashReason(input.command, forms(dir, home), ancestors(dir, home))
+    : toolReason(tool, input, dir, home, cwd)
+}
+
+/** The deny text the model reads for a reason. */
+export const denyText = (reason: string) => `${DENY} (Blocked because ${reason}.)`

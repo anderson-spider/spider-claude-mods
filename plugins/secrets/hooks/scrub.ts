@@ -46,3 +46,16 @@ export function scrubBlock(block: Block, index: Index): Block {
   }
   return block
 }
+
+/** Whether any text in `input`, at any depth, holds one of the saved values long enough to be scrubbed. */
+export function carries(input: unknown, values: Iterable<string>): boolean {
+  const live = [...values].filter(isScrubbable)
+  if (live.length === 0) return false
+  const walk = (value: unknown): boolean => {
+    if (typeof value === 'string') return live.some((secret) => value.includes(secret))
+    if (Array.isArray(value)) return value.some(walk)
+    if (value && typeof value === 'object') return Object.values(value).some(walk)
+    return false
+  }
+  return walk(input)
+}

@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
-import { NAME, TTL_MS, fileName, isExpired, nameOf, randomSuffix, secretsDir, writeArgv } from '../hooks/store'
+import { NAME } from '../hooks/request'
+import { TTL_MS, fileName, isExpired, nameOf, randomSuffix, secretsDir, writeArgv } from '../hooks/store'
 
 test('secretsDir sits beside the settings: CLAUDE_CONFIG_DIR first, else ~/.claude', () => {
   expect(secretsDir({ home: '/home/me' })).toBe('/home/me/.claude/secrets')
