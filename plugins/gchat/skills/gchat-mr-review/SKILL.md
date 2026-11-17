@@ -39,7 +39,7 @@ before any other step.
 
 ## 1. MR data
 
-Read the MR with the `mcp__gitlab__*` tools of the `gitlab` plugin, as the
+Read the MR with the `mcp__plugin_gitlab_gitlab__*` tools of the `gitlab` plugin, as the
 `gitlab:gitlab` skill describes, which also explains how to pass `host`, `project`
 and `iid` from a URL. If those tools are missing, ask the user to install the
 `gitlab` plugin or to paste the title, link and description.
