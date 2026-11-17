@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "validate": "claude plugin validate --strict .",
-    "test": "claude plugin test . && node --test skills/review-publish/scripts/*.test.mjs tests/node/*.test.mjs",
+    "test": "claude plugin test . && node --test tests/node/*.test.mjs",
     "typecheck": "tsc && tsc -p tsconfig.node.json"
   }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0 (2026-11-17)
+
+### ⚠ BREAKING CHANGES
+
+* the skills `antigravity:code-review` and `antigravity:review-publish` are removed: the plugin ships its tools and commands only, and a review is asked of the `review` tool directly
+
 ## 1.0.0 (2026-11-17)
 
 ### ⚠ BREAKING CHANGES
