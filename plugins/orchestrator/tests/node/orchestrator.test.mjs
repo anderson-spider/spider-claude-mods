@@ -21,7 +21,9 @@ let worlds = 0
 
 /**
  * An orchestrator whose turns are released by the test: each started turn waits until `finish` resolves it.
- * @param {{ ownerAlive?: boolean }} [opts]
+ * Each new agent session is `agent-session-<turn>`; a resumed one keeps its id. lateSession: the session id arrives
+ * only when the turn ends.
+ * @param {{ ownerAlive?: boolean, lateSession?: boolean }} [opts]
  */
 async function world(opts = {}) {
   const stateDir = join(root, `w${++worlds}`)
@@ -29,12 +31,16 @@ async function world(opts = {}) {
   await store.init()
   /** @type {{ input: TurnInput, resolve: (result: TurnResult) => void }[]} */
   const turns = []
+  /** @type {string[]} */
+  const sessions = []
   let ids = 0
   const orchestrator = createOrchestrator({
     store,
     runTurn: (input) => new Promise((resolve) => {
       turns.push({ input, resolve })
-      input.onUpdate?.({ sessionId: 'agent-session', executedModel: 'gemini-4-argon-medium' })
+      const sessionId = input.resumeSessionId ?? `agent-session-${turns.length}`
+      sessions.push(sessionId)
+      if (!opts.lateSession) input.onUpdate?.({ sessionId, executedModel: 'gemini-4-argon-medium' })
       input.signal?.addEventListener('abort', () => resolve({ status: 'cancelled', summary: '', executedModel: 'gemini-4-argon-medium', refused: [] }))
     }),
     probe: async () => ({ models: [{ id: 'gemini-4-argon-medium', name: 'Gemini 4 Argon' }], currentModel: 'gemini-4-argon-medium', efforts: ['low', 'medium', 'high'] }),
@@ -52,7 +58,8 @@ async function world(opts = {}) {
   }
   /** @param {number} index @param {Partial<TurnResult>} result */
   const finish = async (index, result) => {
-    turns[index]?.resolve({ status: 'completed', summary: 'All good.', executedModel: 'gemini-4-argon-medium', refused: [], ...result })
+    if (opts.lateSession) turns[index]?.input.onUpdate?.({ sessionId: sessions[index] })
+    turns[index]?.resolve({ status: 'completed', summary: 'All good.', executedModel: 'gemini-4-argon-medium', refused: [], sessionId: sessions[index], ...result })
     for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 5))
   }
   const inbox = async (sessionId = 'sess-1') => {
@@ -67,6 +74,7 @@ test('an async delegation returns at once with next; its end leaves the parent o
   const w = await world()
   const result = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'Review the parser\nin src/parse.ts', role: 'review', effort: 'high' }))
   assert.equal(result.taskId, 'task_test0001')
+  assert.equal(result.threadId, 'thread_test0001')
   assert.equal(result.title, 'Review the parser')
   assert.equal(result.workState, 'working')
   assert.equal(result.runtimeMode, 'auto-accept-edits')
@@ -85,7 +93,7 @@ test('an async delegation returns at once with next; its end leaves the parent o
   await w.finish(0, { summary: 'One bug at line 3.', refused: [{ kind: 'execute', title: 'npm test', reason: 'needs approval in auto-accept-edits' }] })
   const notices = await w.inbox()
   assert.equal(notices.length, 1)
-  assert.match(notices[0].text, /^Delegated task task_test0001 \("Review the parser"\) on agy \(gemini-4-argon-medium\) completed\. Its result:\n\nOne bug at line 3\.\n\nRefused actions \(auto-accept-edits\): npm test \(needs approval in auto-accept-edits\)$/)
+  assert.match(notices[0].text, /^Delegated task task_test0001 \(thread thread_test0001\) \("Review the parser"\) on agy \(gemini-4-argon-medium\) completed\. Its result:\n\nOne bug at line 3\.\n\nRefused actions \(auto-accept-edits\): npm test \(needs approval in auto-accept-edits\)$/)
 
   // Reading the result first takes the notice back.
   const ended = /** @type {any} */ (await w.orchestrator.status(caller(), { taskId: 'task_test0001' }))
@@ -183,8 +191,11 @@ test('capabilities list agy with its models and efforts, and the runtime modes u
     defaultModel: 'gemini-4-argon-medium',
     options: [{ id: 'effort', values: ['low', 'medium', 'high'] }],
   })
-  assert.deepEqual(found.runtimeModes, ['approval-required', 'auto-accept-edits'])
+  assert.deepEqual(found.runtimeModes, ['read-only', 'approval-required', 'auto-accept-edits'])
   assert.equal(found.defaultRuntimeMode, 'auto-accept-edits')
+  assert.deepEqual(found.threadSendModes, ['auto', 'queue', 'restart'])
+  const narrow = /** @type {any} */ (await w.orchestrator.capabilities({ ...caller(), settings: { ...SETTINGS, maxRuntimeMode: 'read-only' } }))
+  assert.deepEqual(narrow.runtimeModes, ['read-only'])
 })
 
 test('a provider that is not ready fails the task with why, and the parent hears of it', async () => {
@@ -207,4 +218,241 @@ test('a provider that is not ready fails the task with why, and the parent hears
   assert.equal(result.status, 'failed')
   assert.equal(result.error, "agy's orchestrator profile sets hooks")
   assert.equal(promptOf({ ...result, task: 'x', role: 'general', cwd: '/p', runtimeMode: 'full-access' }).endsWith('You may edit files and run commands. You cannot ask questions: decide, and say what you assumed. End with your result.'), true)
+})
+
+const settle = async () => { for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 5)) }
+/** @param {string} sessionId @param {import('../../daemon/policy.mjs').RuntimeMode} maxRuntimeMode */
+const narrowed = (sessionId, maxRuntimeMode) => ({ ...caller(sessionId), settings: { ...SETTINGS, maxRuntimeMode } })
+
+test('a read-only delegation tells the child it reads only', async () => {
+  const w = await world()
+  const result = /** @type {any} */ (await w.orchestrator.delegate(narrowed('sess-1', 'read-only'), { task: 'Look' }))
+  assert.equal(result.runtimeMode, 'read-only')
+  await w.started()
+  assert.equal(w.turns[0]?.input.runtimeMode, 'read-only')
+  assert.match(w.turns[0]?.input.prompt ?? '', /Read only: do not edit files or run commands/)
+})
+
+test('thread_send on an ended thread resumes its agent session with the message alone; the first result stays', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'Review the parser', title: 'Review' }))
+  await w.started()
+  await w.finish(0, { summary: 'One bug.' })
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'Is the bug in the tests too?' }))
+  assert.equal(sent.taskId, 'task_test0002')
+  assert.equal(sent.threadId, first.threadId)
+  assert.equal(sent.delivery, 'started')
+  assert.equal(sent.title, 'Is the bug in the tests too?')
+  assert.equal(sent.runtimeMode, 'auto-accept-edits')
+  assert.equal(sent.next, RUNNING_TASK_NEXT)
+  await w.started(2)
+  assert.equal(w.turns[1]?.input.resumeSessionId, 'agent-session-1')
+  assert.equal(w.turns[1]?.input.prompt, 'Is the bug in the tests too?')
+  assert.equal(w.turns[1]?.input.cwd, '/proj')
+  await w.finish(1, { summary: 'No.' })
+  const earlier = /** @type {any} */ (await w.orchestrator.status(caller(), { taskId: first.taskId }))
+  assert.equal(earlier.summary, 'One bug.')
+  assert.equal(earlier.status, 'completed')
+  const later = /** @type {any} */ (await w.orchestrator.status(caller(), { taskId: sent.taskId }))
+  assert.equal(later.summary, 'No.')
+  assert.equal(later.threadId, first.threadId)
+  assert.equal((await w.store.loadThread(first.threadId))?.agentSessionId, 'agent-session-1')
+})
+
+test('thread_send while a task runs queues the follow-up, which resumes the session once the first one ends', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'Step one' }))
+  await w.started()
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'Then step two', mode: 'queue' }))
+  assert.equal(sent.delivery, 'queued')
+  assert.equal(sent.status, 'queued')
+  assert.equal(sent.workState, 'queued')
+  assert.equal(w.orchestrator.busy(), 2)
+  await settle()
+  assert.equal(w.turns.length, 1)
+  await w.finish(0, { summary: 'Step one done.' })
+  await w.started(2)
+  assert.equal(w.turns[1]?.input.resumeSessionId, 'agent-session-1')
+  assert.equal(w.turns[1]?.input.prompt, 'Then step two')
+  assert.equal((await w.store.load(sent.taskId))?.status, 'running')
+})
+
+test('a follow-up queued before the first turn has an agent session still resumes the one it opens', async () => {
+  const w = await world({ lateSession: true })
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'Step one' }))
+  await w.started()
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'Then step two' }))
+  assert.equal(sent.delivery, 'queued')
+  await w.finish(0, {})
+  await w.started(2)
+  assert.equal(w.turns[1]?.input.resumeSessionId, 'agent-session-1')
+  assert.equal(w.turns[1]?.input.prompt, 'Then step two')
+})
+
+test('restart interrupts the running task with no notice and runs the new one on the same session', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'Wrong direction' }))
+  await w.started()
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'Stop; do this instead', mode: 'restart' }))
+  assert.equal(sent.delivery, 'restarted')
+  await w.started(2)
+  const replaced = /** @type {any} */ (await w.orchestrator.status(caller(), { taskId: first.taskId }))
+  assert.equal(replaced.status, 'interrupted')
+  assert.equal(replaced.error, 'Replaced by a thread_send restart.')
+  assert.equal(w.turns[1]?.input.resumeSessionId, 'agent-session-1')
+  await w.finish(1, { summary: 'Done instead.' })
+  const notices = await w.inbox()
+  assert.deepEqual(notices.map((notice) => notice.taskId), [sent.taskId])
+})
+
+test('freshContext starts a new agent session with the full brief, which later follow-ups resume', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'First brief', role: 'review' }))
+  await w.started()
+  await w.finish(0, {})
+  await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'Whole new brief', freshContext: true })
+  await w.started(2)
+  assert.equal(w.turns[1]?.input.resumeSessionId, undefined)
+  assert.equal(w.turns[1]?.input.prompt, promptOf(/** @type {any} */ ({ task: 'Whole new brief', role: 'review', cwd: '/proj', runtimeMode: 'auto-accept-edits' })))
+  await w.finish(1, {})
+  await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'And then?' })
+  await w.started(3)
+  assert.equal(w.turns[2]?.input.resumeSessionId, 'agent-session-2')
+})
+
+test('thread_send refuses steer, an unknown or foreign thread, a bad mode, an empty message and a lowered ceiling', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  /** @param {Record<string, unknown>} input @param {import('../../daemon/orchestrator.mjs').Caller} [who] */
+  const code = async (input, who = caller()) => /** @type {any} */ (await w.orchestrator.threadSend(who, { threadId: first.threadId, message: 'm', ...input })).error?.code
+  assert.equal(await code({ mode: 'steer' }), 'invalid_input')
+  assert.equal(await code({ mode: 'later' }), 'invalid_input')
+  assert.equal(await code({ message: '  ' }), 'invalid_input')
+  assert.equal(await code({ threadId: 'thread_nope0001' }), 'thread_not_found')
+  assert.equal(await code({ threadId: '../tasks/x' }), 'thread_not_found')
+  assert.equal(await code({ threadId: undefined }), 'thread_not_found')
+  assert.equal(await code({}, caller('sess-2')), 'thread_not_found')
+  assert.equal(await code({}, narrowed('sess-1', 'read-only')), 'runtime_mode_escalation_denied')
+  await w.started()
+  await settle()
+  assert.equal(w.turns.length, 1)
+  assert.equal(w.orchestrator.busy(), 1)
+})
+
+test('a thread_send retry with the same clientRequestId returns the same task and runs once', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  await w.started()
+  await w.finish(0, {})
+  const once = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'm', clientRequestId: 'follow-1' }))
+  const again = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'm', clientRequestId: 'follow-1' }))
+  assert.equal(again.taskId, once.taskId)
+  await w.started(2)
+  await settle()
+  assert.equal(w.turns.length, 2)
+})
+
+test('task_cancel of a queued task takes it off the queue: it never runs and sends no notice', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  await w.started()
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'later' }))
+  assert.deepEqual(await w.orchestrator.cancel(caller(), { taskId: sent.taskId }), { taskId: sent.taskId, status: 'cancelled' })
+  assert.equal(w.orchestrator.busy(), 1)
+  await w.finish(0, {})
+  await settle()
+  assert.equal(w.turns.length, 1)
+  assert.deepEqual((await w.inbox()).map((notice) => notice.taskId), [first.taskId])
+  assert.equal(/** @type {any} */ (await w.orchestrator.status(caller(), { taskId: sent.taskId })).status, 'cancelled')
+})
+
+test('a daemon stopping starts no queued task', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  await w.started()
+  await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'later' })
+  await w.orchestrator.stopAll()
+  await settle()
+  assert.equal(w.turns.length, 1)
+})
+
+test('a stopping daemon refuses new calls and starts no turn', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  await w.started()
+  const stopped = w.orchestrator.stopAll()
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'more' }))
+  const delegated = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'y' }))
+  await stopped
+  await settle()
+  assert.equal(sent.error?.code, 'orchestrator_stopping')
+  assert.equal(delegated.error?.code, 'orchestrator_stopping')
+  assert.equal(w.turns.length, 1)
+})
+
+test('two restarts in a row run in the order they were sent', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  await w.started()
+  const queued = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'queued', mode: 'queue' }))
+  // The fake turn ends at once on abort, so hold both restarts in one tick, before the first task's end runs.
+  const [r1, r2] = /** @type {any[]} */ (await Promise.all([
+    w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'restart one', mode: 'restart' }),
+    w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'restart two', mode: 'restart' }),
+  ]))
+  assert.equal(r1.delivery, 'restarted')
+  await w.started(2)
+  assert.equal(w.turns[1]?.input.prompt, 'restart one')
+  await w.finish(1, {})
+  await w.started(3)
+  assert.equal(w.turns[2]?.input.prompt, 'restart two')
+  await w.finish(2, {})
+  await w.started(4)
+  assert.equal(w.turns[3]?.input.prompt, 'queued')
+  assert.ok(['restarted', 'queued'].includes(r2.delivery))
+  assert.equal(queued.delivery, 'queued')
+})
+
+test('a thread_send retry carries its delivery; a clientRequestId another call used is refused', async () => {
+  const w = await world()
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x', clientRequestId: 'round-1' }))
+  const other = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'y' }))
+  await w.started(2)
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'm', clientRequestId: 'follow-1' }))
+  assert.equal(sent.delivery, 'queued')
+  const again = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'm', clientRequestId: 'follow-1' }))
+  assert.equal(again.taskId, sent.taskId)
+  assert.equal(again.delivery, 'queued')
+  assert.equal(again.next, RUNNING_TASK_NEXT)
+  /** @param {Record<string, unknown>} input */
+  const code = async (input) => /** @type {any} */ (await w.orchestrator.threadSend(caller(), { message: 'm', ...input })).error?.code
+  assert.equal(await code({ threadId: first.threadId, clientRequestId: 'round-1' }), 'invalid_input')
+  assert.equal(await code({ threadId: other.threadId, clientRequestId: 'follow-1' }), 'invalid_input')
+  assert.equal(/** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'z', clientRequestId: 'follow-1' })).error?.code, 'invalid_input')
+  assert.equal(w.orchestrator.busy(), 3)
+})
+
+test('thread_send on a thread whose task another live daemon runs fails thread_busy and starts nothing', async () => {
+  const w = await world({ ownerAlive: true })
+  const first = /** @type {any} */ (await w.orchestrator.delegate(caller(), { task: 'x' }))
+  await w.started()
+  await w.finish(0, {})
+  const base = { parentSessionId: 'sess-1', title: 't', role: 'general', task: 't', cwd: '/proj', providerInstanceId: 'agy', model: null, options: {}, runtimeMode: 'auto-accept-edits', isolation: 'shared', createdAt: 1, summary: null, executedModel: null, refused: [], delivered: false }
+  await w.store.save(/** @type {any} */ ({ ...base, taskId: 'task_else0001', threadId: first.threadId, status: 'running', ownerPid: 99 }))
+  const sent = /** @type {any} */ (await w.orchestrator.threadSend(caller(), { threadId: first.threadId, message: 'm' }))
+  assert.equal(sent.error?.code, 'thread_busy')
+  await settle()
+  assert.equal(w.turns.length, 1)
+  assert.equal(w.orchestrator.busy(), 0)
+})
+
+test('on start, a queued follow-up a dead daemon left ends as interrupted with one notice', async () => {
+  const w = await world()
+  const base = { parentSessionId: 'sess-1', title: 'q', role: 'general', task: 'q', cwd: '/proj', providerInstanceId: 'agy', model: null, options: {}, runtimeMode: 'auto-accept-edits', isolation: 'shared', createdAt: 1, summary: null, executedModel: null, refused: [], delivered: false }
+  await w.store.save(/** @type {any} */ ({ ...base, taskId: 'task_queu0002', threadId: 'thread_queu0001', status: 'queued', ownerPid: 99 }))
+  await w.orchestrator.recover()
+  assert.equal((await w.store.load('task_queu0002'))?.status, 'interrupted')
+  const notices = await w.inbox()
+  assert.equal(notices.length, 1)
+  assert.match(notices[0].text, /task_queu0002 \(thread thread_queu0001\) \("q"\) on agy interrupted/)
 })

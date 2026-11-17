@@ -26,6 +26,14 @@ test('reads pass in every mode; full-access passes everything; approval-required
   }
 })
 
+test('read-only passes reads and refuses everything else at once, inside the folder too', () => {
+  const cwd = join(root, 'work')
+  for (const kind of ['read', 'search', 'think']) assert.equal(dispositionOf('read-only', cwd, { kind }), 'allow')
+  for (const kind of ['edit', 'delete', 'move', 'execute', 'fetch', 'other', undefined]) {
+    assert.equal(dispositionOf('read-only', cwd, { kind, locations: [{ path: join(cwd, 'src', 'a.ts') }] }), 'deny')
+  }
+})
+
 test('auto-accept-edits passes a mutation only inside the work folder, symlinks resolved, and asks for commands', () => {
   const cwd = join(root, 'work')
   const at = (/** @type {string[]} */ ...paths) => paths.map((path) => ({ path }))

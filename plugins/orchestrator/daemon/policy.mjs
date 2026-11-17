@@ -1,12 +1,12 @@
 // What the client answers an agent's permission request, by runtime mode, ported from T3 Code's ACP client policy
 // (packages/provider-acp/src/server/clientPolicy.ts): reads always pass, a mutation in auto-accept-edits passes only
 // inside the work folder (symlinks resolved, failing closed), full-access passes everything, and the rest would need a
-// person's approval. Pure but for the file system's realpath, which is injected in tests.
+// person's approval. read-only, narrower than T3 Code's modes, refuses all but reads with no one asked. Pure but for the file system's realpath, which is injected in tests.
 import { lstatSync, realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 
 /** The runtime modes, narrowest first: a child may never run in a broader one than its ceiling. */
-export const RUNTIME_MODES = /** @type {const} */ (['approval-required', 'auto-accept-edits', 'full-access'])
+export const RUNTIME_MODES = /** @type {const} */ (['read-only', 'approval-required', 'auto-accept-edits', 'full-access'])
 
 /** @typedef {typeof RUNTIME_MODES[number]} RuntimeMode */
 /** @typedef {'allow' | 'ask' | 'deny'} Disposition */
@@ -87,6 +87,7 @@ function writesInside(cwd, locations, canonical) {
 export function dispositionOf(mode, cwd, toolCall, canonical = canonicalPath) {
   const kind = typeof toolCall?.kind === 'string' ? toolCall.kind : 'other'
   if (READ_KINDS.has(kind)) return 'allow'
+  if (mode === 'read-only') return 'deny'
   if (mode === 'full-access') return 'allow'
   if (mode === 'auto-accept-edits' && MUTATION_KINDS.has(kind)) return writesInside(cwd, toolCall?.locations, canonical) ? 'allow' : 'deny'
   return 'ask'
