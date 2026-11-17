@@ -6,7 +6,7 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 
 | Plugin | What it does |
 | --- | --- |
-| [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, have it review the branch's changes in a throwaway worktree before a PR, or generate an image in a folder of its own, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. Its skills `antigravity:code-review` and `antigravity:review-publish` verify each finding of a review against the code and post the confirmed ones as a pending GitHub review or GitLab draft notes. |
+| [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, have it review the branch's changes in a throwaway worktree before a PR, or generate an image in a folder of its own, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. |
 | [file-explorer](plugins/file-explorer/README.md) | A file tree pane beside the conversation: git status per file and folder, a mark on each file Claude reads, edits, creates, removes, finds or commits, search across unopened folders, preview, and `@path` into the prompt. |
 | [gchat](plugins/gchat/README.md) | Skills that read, summarize and reply in Google Chat and post merge request review requests through Claude in Chrome, sending only a text and a recipient you approved; the default space and account come from plugin options. |
 | [github](plugins/github/README.md) | A skill for GitHub work with the `gh` CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments, never waiting on a run or writing what you did not ask for. |
@@ -71,7 +71,7 @@ Load a plugin from its folder so edits reload automatically, with `claude --plug
 | --- | --- |
 | `pnpm check` | `validate`, `test` and `typecheck` below, in that order. |
 | `pnpm validate` | `claude plugin validate --strict` on the marketplace and every plugin. |
-| `pnpm test` | `claude plugin test` on every plugin with hooks, plus the Node tests of antigravity (its skill script and MCP server) and orchestrator (its MCP server, daemon and ACP client). |
+| `pnpm test` | `claude plugin test` on every plugin with hooks, plus the Node tests of antigravity (its MCP server and job files) and orchestrator (its MCP server, daemon and ACP client). |
 | `pnpm typecheck` | `tsc` on every plugin with TypeScript. It needs the plugin's typings, which Claude Code writes when you load the plugin once with `claude --plugin-dir plugins/<name>`. |
 | `pnpm --filter <name> <command>` | One of the three above, on one plugin. |
 
