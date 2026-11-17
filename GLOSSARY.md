@@ -16,26 +16,22 @@ _Avoid_: Bump, deploy, publish
 The pull request, kept open by the release app, that holds the next release of every plugin with unreleased changes; merging it publishes them.
 _Avoid_: Version PR, bump PR
 
-## Codex
+## Second opinions
 
 **Ask**:
-A request that sends Codex a question, with optional files, and returns its written answer.
+A request that sends agy a question, with optional files, and returns its written answer.
 _Avoid_: Query, prompt
 
 **Review**:
-A request that has Codex review one review target of the current repository and returns its findings as written.
+A request that has agy review one review target of the current repository and returns its findings as written.
 _Avoid_: Code review, advisor, audit
 
 **Review target**:
 The changes a review covers: the branch against its base, a single commit, the uncommitted changes, or free instructions.
 _Avoid_: Scope, diff
 
-**Thread**:
-One Codex conversation, named by its id; a follow-up ask continues it.
-_Avoid_: Session, conversation id
-
 **Run**:
-One execution of Codex for an ask, an image request or a review.
+One execution of agy for an ask, an image request or a review.
 _Avoid_: Execution, call
 
 **Job**:
@@ -46,22 +42,10 @@ _Avoid_: Task, background run
 The state of a job that ended without an answer that can be recovered.
 _Avoid_: Failed, orphaned
 
-**Computer use**:
-Claude controlling native Mac apps through Codex's desktop server, one approved app at a time.
-_Avoid_: CUA, codex-cu, desktop control
-
-**Helper**:
-The per-user macOS background service that holds computer use sessions, app ownership and app approvals between Claude sessions.
-_Avoid_: Daemon, bridge, server
-
-**App approval**:
-The person's yes to letting computer use drive one named app, which expires.
-_Avoid_: Permission, grant
-
 ## Antigravity
 
 **Conversation**:
-One agy conversation, named by its id; a follow-up ask continues it. The Codex counterpart is the thread.
+One agy conversation, named by its id; a follow-up ask continues it.
 _Avoid_: Thread, session
 
 **Review worktree**:

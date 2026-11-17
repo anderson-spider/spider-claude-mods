@@ -20,8 +20,6 @@ importers:
 
   plugins/antigravity: {}
 
-  plugins/codex: {}
-
   plugins/file-explorer: {}
 
   plugins/gchat: {}
