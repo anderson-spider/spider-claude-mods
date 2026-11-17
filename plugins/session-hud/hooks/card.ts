@@ -1,9 +1,9 @@
 // Pure updates of the card from what the host reported. register.tsx owns every `$` call and passes the figures in.
-import type { SessionHudAgent, SessionHudCard, SessionHudLimit, SessionHudTurn, SessionHudWorkspace } from '../types'
+import type { SessionHudCard, SessionHudLimit, SessionHudTurn, SessionHudWorkspace } from '../types'
 import { sameWorkspace } from './workspace'
 import { cacheShare } from './usage'
 
-export const EMPTY: SessionHudCard = { limits: [], edits: 0, errors: 0, turns: 0, agents: [], history: [] }
+export const EMPTY: SessionHudCard = { limits: [], edits: 0, errors: 0, turns: 0, history: [] }
 
 /** The turns the card keeps: the last one in figures, and the one before it for what was sent in between. */
 export const HISTORY = 2
@@ -89,67 +89,24 @@ export function completed(card: SessionHudCard, durationMs: unknown): SessionHud
 
 const EDITS: ReadonlySet<string> = new Set(['Write', 'Edit', 'NotebookEdit'])
 
-/** A main-session tool call, after its result: a successful edit or an error counts; anything else leaves the card as it is. */
-export function tooled(card: SessionHudCard, tool: unknown, result: { isError?: boolean; deny?: string }): SessionHudCard {
-  if (result.isError === true) return { ...card, errors: card.errors + 1 }
-  if (result.deny === undefined && typeof tool === 'string' && EDITS.has(tool)) return { ...card, edits: card.edits + 1 }
-  return card
+/** A tool call as the transcript holds it: its id, the tool, and once answered the text the model read and whether it was an error. */
+export type ToolUse = { tool_use_id: string; tool: string; text?: string; isError?: true }
+
+/** The answered calls among `uses` whose id is not in `seen`, each once: a call still in flight waits for a later reading. */
+export function unseen(uses: readonly ToolUse[], seen: ReadonlySet<string>): ToolUse[] {
+  const fresh = new Map<string, ToolUse>()
+  for (const use of uses) if (typeof use.tool_use_id === 'string' && use.text !== undefined && !seen.has(use.tool_use_id)) fresh.set(use.tool_use_id, use)
+  return [...fresh.values()]
 }
 
-const named = (s: unknown): s is string => typeof s === 'string' && s.length > 0
-const agentsOf = (card: SessionHudCard): SessionHudAgent[] => (Array.isArray(card.agents) ? card.agents : [])
-
-type Known = { model?: unknown; effort?: unknown; type?: unknown }
-
-/** The agent `id` is tracked; each of `model`, `effort` and `type` that is a name replaces what was known, and one that is not keeps it. */
-function tracked(card: SessionHudCard, id: unknown, known: Known): SessionHudCard {
-  if (!named(id)) return card
-  const agents = agentsOf(card)
-  const at = agents.findIndex(agent => agent.id === id)
-  const old: SessionHudAgent = at < 0 ? { id } : agents[at]!
-  const next: SessionHudAgent = { ...old }
-  for (const key of ['model', 'effort', 'type'] as const) if (named(known[key])) next[key] = known[key]
-  if (at < 0) return { ...card, agents: [...agents, next] }
-  if (next.model === old.model && next.effort === old.effort && next.type === old.type) return card
-  return { ...card, agents: agents.map((agent, i) => (i === at ? next : agent)) }
-}
-
-/** A subagent started (`agent.spawn`'s `agentId`, the `model` it answers and the `subagentType` asked for): it runs as that type on that model. */
-export const spawned = (card: SessionHudCard, agentId: unknown, model: unknown, type?: unknown): SessionHudCard => tracked(card, agentId, { model, type })
-
-/** An agent's turn began: a resumed agent or a teammate waking runs again, its model unknown until it steps. */
-export const agentBegan = (card: SessionHudCard, agentId: unknown): SessionHudCard => tracked(card, agentId, {})
-
-/** A tracked agent's step: the model that answered (`usage.model`, else the one the request named) is the one it runs on, at the effort the request asked for. A step adds no agent: one enters through its spawn or its turn's start, which the host skips together with its steps, so a late step cannot bring back an agent that ended. */
-export const agentStepped = (card: SessionHudCard, agentId: unknown, model: unknown, effort?: unknown): SessionHudCard =>
-  agentsOf(card).some(agent => agent.id === agentId) ? tracked(card, agentId, { model, effort }) : card
-
-/** A subagent or teammate step, tracked or not: the tokens its request processed (input, cache read and written, output) join the session's agent total; usage with a part that is not a count adds nothing. */
-export function agentUsed(card: SessionHudCard, usage: StepUsage | null): SessionHudCard {
-  if (!usage) return card
-  const parts = [usage.input_tokens, usage.cache_read_input_tokens, usage.cache_creation_input_tokens, usage.output_tokens ?? 0]
-  if (!parts.every(count)) return card
-  const total = (count(card.agentTokens) ? card.agentTokens : 0) + parts.reduce((a, b) => a + b, 0)
-  return { ...card, agentTokens: total }
-}
-
-/** An agent's turn ended: it no longer runs (a teammate goes idle until its next turn). */
-export function agentEnded(card: SessionHudCard, agentId: unknown): SessionHudCard {
-  const agents = agentsOf(card)
-  return named(agentId) && agents.some(agent => agent.id === agentId) ? { ...card, agents: agents.filter(agent => agent.id !== agentId) } : card
-}
-
-const STOPPED: ReadonlySet<string> = new Set(['idle', 'completed', 'failed', 'killed'])
-
-/** `$.agent.list()`'s word on each agent: one it lists as idle or ended no longer runs, and one still running gets the type it lists when its own is unknown. One it does not list (a workflow's) stays; the list adds none. */
-export function reconciled(card: SessionHudCard, list: readonly { id: unknown; status: unknown; type?: unknown }[]): SessionHudCard {
-  const stopped = new Set(list.filter(info => named(info.id) && typeof info.status === 'string' && STOPPED.has(info.status)).map(info => info.id))
-  const agents = agentsOf(card)
-  const typed = agents.filter(agent => !stopped.has(agent.id)).map(agent => {
-    const listed = agent.type === undefined ? list.find(info => info.id === agent.id && named(info.type)) : undefined
-    return listed ? { ...agent, type: listed.type as string } : agent
-  })
-  return typed.length === agents.length && typed.every((agent, i) => agent === agents[i]) ? card : { ...card, agents: typed }
+/** Answered main-session tool calls: each error counts, and each edit that did not end in one; anything else leaves the card as it is. */
+export function counted(card: SessionHudCard, uses: readonly ToolUse[]): SessionHudCard {
+  let { edits, errors } = card
+  for (const use of uses) {
+    if (use.isError === true) errors++
+    else if (EDITS.has(use.tool)) edits++
+  }
+  return edits === card.edits && errors === card.errors ? card : { ...card, edits, errors }
 }
 
 /** Where the session works, as last read; an unchanged reading leaves the card as it was, and none clears it. */

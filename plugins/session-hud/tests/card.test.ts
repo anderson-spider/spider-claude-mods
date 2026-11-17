@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { EMPTY, HISTORY, agentBegan, agentEnded, agentStepped, agentUsed, began, cacheUsed, compactedNow, completed, located, measured, reconciled, spawned, stepped, switched, timed, tooled, touchedCache, windowed } from '../hooks/card'
+import { EMPTY, HISTORY, began, cacheUsed, compactedNow, completed, counted, located, measured, stepped, switched, timed, touchedCache, unseen, windowed } from '../hooks/card'
 
 test('a workspace reading replaces the last, an unchanged one leaves the card as it was, and none clears it', () => {
   const card = located(EMPTY, { repo: 'mods', branch: 'main' })
@@ -32,65 +32,21 @@ test('the compaction window is kept when positive, and the turn start is cleared
   expect(completed(running, Number.NaN)).toEqual({ ...EMPTY, turns: 1 })
 })
 
-test('a turn keeps its duration and counts; an edit or an error counts, a refused edit and a plain call do not', () => {
+test('a turn keeps its duration and counts; an edit counts unless it ended in an error, any error counts, a plain call does not', () => {
   expect(completed(EMPTY, 5_000)).toMatchObject({ lastTurnMs: 5_000, turns: 1 })
   expect(completed(EMPTY, Number.NaN)).toEqual({ ...EMPTY, turns: 1 })
-  expect(tooled(EMPTY, 'Edit', {})).toMatchObject({ edits: 1, errors: 0 })
-  expect(tooled(EMPTY, 'Write', { deny: 'no' })).toEqual(EMPTY)
-  expect(tooled(EMPTY, 'Bash', { isError: true })).toMatchObject({ edits: 0, errors: 1 })
-  expect(tooled(EMPTY, 'Read', {})).toEqual(EMPTY)
+  const uses = [
+    { tool_use_id: 'a', tool: 'Edit', text: 'ok' }, { tool_use_id: 'b', tool: 'Write', text: 'denied', isError: true as const },
+    { tool_use_id: 'c', tool: 'Bash', text: 'failed', isError: true as const }, { tool_use_id: 'd', tool: 'NotebookEdit', text: 'ok' },
+  ]
+  expect(counted(EMPTY, uses)).toMatchObject({ edits: 2, errors: 2 })
+  expect(counted(EMPTY, [{ tool_use_id: 'r', tool: 'Read', text: 'text' }])).toBe(EMPTY)
 })
 
-test('a spawned agent runs on its model; a turn start adds one unknown, a step names the model that answered and adds none, its end removes it', () => {
-  const one = spawned(EMPTY, 'a1', 'claude-sonnet-4-5')
-  expect(one.agents).toEqual([{ id: 'a1', model: 'claude-sonnet-4-5' }])
-  expect(spawned(one, 'a1', 'haiku').agents).toEqual([{ id: 'a1', model: 'haiku' }])
-  expect(agentBegan(one, 'a1')).toBe(one)
-  const two = agentBegan(one, 'a2')
-  expect(two.agents).toEqual([{ id: 'a1', model: 'claude-sonnet-4-5' }, { id: 'a2' }])
-  expect(agentStepped(two, 'a2', 'claude-haiku-4-5').agents).toEqual([{ id: 'a1', model: 'claude-sonnet-4-5' }, { id: 'a2', model: 'claude-haiku-4-5' }])
-  expect(agentStepped(two, 'a3', 'claude-opus-5-5')).toBe(two)
-  expect(agentStepped(agentEnded(two, 'a2'), 'a2', 'claude-haiku-4-5').agents).toEqual([{ id: 'a1', model: 'claude-sonnet-4-5' }])
-  expect(agentStepped(two, 'a1', undefined)).toBe(two)
-  expect(agentEnded(two, 'a1').agents).toEqual([{ id: 'a2' }])
-  expect(agentEnded(two, 'gone')).toBe(two)
-})
-
-test('ids and models that are not strings are left out', () => {
-  for (const bad of [undefined, 3, '', null]) {
-    expect(spawned(EMPTY, bad, 'claude-sonnet-4-5')).toEqual(EMPTY)
-    expect(agentBegan(EMPTY, bad)).toEqual(EMPTY)
-    expect(agentEnded(spawned(EMPTY, 'a1', 'haiku'), bad).agents).toHaveLength(1)
-  }
-  expect(spawned(EMPTY, 'a1', 42).agents).toEqual([{ id: 'a1' }])
-  expect(agentStepped(spawned(EMPTY, 'a1', 'haiku'), 'a1', Number.NaN).agents).toEqual([{ id: 'a1', model: 'haiku' }])
-})
-
-test('the agent list removes the agents it shows idle or ended, keeps the ones it does not list and adds none', () => {
-  const card = ['run', 'wait', 'idle', 'done', 'fail', 'kill', 'flow'].reduce((c, id) => spawned(c, id, 'haiku'), EMPTY)
-  const list = [{ id: 'run', status: 'running' }, { id: 'wait', status: 'waiting' }, { id: 'idle', status: 'idle' },
-    { id: 'done', status: 'completed' }, { id: 'fail', status: 'failed' }, { id: 'kill', status: 'killed' }, { id: 'new', status: 'running' }]
-  expect(reconciled(card, list).agents.map(agent => agent.id)).toEqual(['run', 'wait', 'flow'])
-  expect(reconciled(card, [])).toBe(card)
-})
-
-test('a spawn names the type, a step the model and effort; a part that is not a name keeps what was known', () => {
-  const one = spawned(EMPTY, 'a1', 'claude-opus-5-5', 'codex:codex-rescue')
-  expect(one.agents).toEqual([{ id: 'a1', model: 'claude-opus-5-5', type: 'codex:codex-rescue' }])
-  const withEffort = agentStepped(one, 'a1', 'claude-opus-5-5', 'high')
-  expect(withEffort.agents).toEqual([{ id: 'a1', model: 'claude-opus-5-5', type: 'codex:codex-rescue', effort: 'high' }])
-  expect(agentStepped(withEffort, 'a1', 'claude-opus-5-5', 'high')).toBe(withEffort)
-  expect(agentStepped(withEffort, 'a1', undefined, 3)).toBe(withEffort)
-  expect(spawned(withEffort, 'a1', undefined, 42)).toBe(withEffort)
-})
-
-test('the agent list names the type of a running agent without one, never replaces a known type, and leaves the card as it was when it has nothing to add', () => {
-  const card = spawned(spawned(EMPTY, 'typed', 'haiku', 'Explore'), 'bare', 'haiku')
-  const list = [{ id: 'typed', status: 'running', type: 'general-purpose' }, { id: 'bare', status: 'running', type: 'Plan' }]
-  expect(reconciled(card, list).agents).toEqual([{ id: 'typed', model: 'haiku', type: 'Explore' }, { id: 'bare', model: 'haiku', type: 'Plan' }])
-  const named = reconciled(card, list)
-  expect(reconciled(named, list)).toBe(named)
-  expect(reconciled(card, [{ id: 'bare', status: 'running', type: 7 }])).toBe(card)
+test('only answered calls not seen before are counted, each once', () => {
+  const uses = [{ tool_use_id: 'a', tool: 'Edit', text: 'ok' }, { tool_use_id: 'b', tool: 'Edit' }, { tool_use_id: 'c', tool: 'Bash', text: 'x' }, { tool_use_id: 'a', tool: 'Edit', text: 'ok' }]
+  expect(unseen(uses, new Set(['c'])).map(use => use.tool_use_id)).toEqual(['a'])
+  expect(unseen([{ tool_use_id: 7, tool: 'Edit', text: 'ok' }] as never, new Set())).toEqual([])
 })
 
 test('a turn keeps its first prompt and its last prompt plus output, and joins the history when it ends, the last two kept', () => {
@@ -128,13 +84,4 @@ test('a compaction marks the next turn to join the history, once, and waits thro
   expect(marked.history).toEqual([{ before: 10, after: 11, output: 1, compacted: true }])
   expect(marked.compacted).toBeUndefined()
   expect(completed(stepped(began(marked), 'high', usage), 1).history[1]).toEqual({ before: 10, after: 11, output: 1 })
-})
-
-test('every agent step adds what its request processed to the agents total, and usage that is not a count adds nothing', () => {
-  const usage = { model: 'claude-haiku-4-5', input_tokens: 1_000, output_tokens: 700, cache_read_input_tokens: 300, cache_creation_input_tokens: 0 }
-  const once = agentUsed(EMPTY, usage)
-  expect(once).toEqual({ ...EMPTY, agentTokens: 2_000 })
-  expect(agentUsed(once, { ...usage, output_tokens: undefined })).toMatchObject({ agentTokens: 3_300 })
-  expect(agentUsed(once, null)).toBe(once)
-  for (const bad of [-1, Number.NaN, '5']) expect(agentUsed(once, { ...usage, input_tokens: bad } as never)).toBe(once)
 })

@@ -1,13 +1,13 @@
 import { expect, test } from 'claude-code/testing'
 import type { SessionHudCard } from '../types'
-import { agentCells, agentTokenCells, cacheCells, contextOf, headCells, modelName, shownLimits, turnCells, workspaceCells } from '../hooks/view'
+import { cacheCells, contextOf, headCells, modelName, shownLimits, turnCells, workspaceCells } from '../hooks/view'
 import type { Row } from '../hooks/view'
 
 const now = Date.parse('2026-10-13T12:00:00Z')
 const full: SessionHudCard = {
   model: 'claude-opus-5-5', effort: 'medium', context: { tokens: 200_000, window: 1_000_000, percent: 20 }, cache: 95,
   limits: [{ kind: 'seven_day', percentUsed: 60 }, { kind: 'five_hour', percentUsed: 74 }],
-  lastTurnMs: 5_000, edits: 2, errors: 1, turns: 0, agents: [], history: [],
+  lastTurnMs: 5_000, edits: 2, errors: 1, turns: 0, history: [],
 }
 const text = (row: Row) => row.map(s => s.text).join('')
 
@@ -27,8 +27,8 @@ test('while a turn runs the dot turns yellow and the turn time counts; between t
 })
 
 test('what the host has not reported is left out instead of drawn as zero', () => {
-  const bare: SessionHudCard = { limits: [], edits: 0, errors: 0, turns: 0, agents: [], history: [] }
-  expect([headCells(bare, now, false), cacheCells(bare), agentCells(bare)]).toEqual([[], [], []])
+  const bare: SessionHudCard = { limits: [], edits: 0, errors: 0, turns: 0, history: [] }
+  expect([headCells(bare, now, false), cacheCells(bare)]).toEqual([[], []])
   expect(contextOf(bare)).toBeUndefined()
   expect(text(turnCells(bare))).toBe('0 edits · 0 errors')
   expect(text(turnCells(full))).toBe('last turn 5s · 2 edits · 1 error')
@@ -46,30 +46,6 @@ test('a spend limit and malformed figures never reach the screen as numbers', ()
   expect(cacheCells(card)).toEqual([])
   expect(text(turnCells(card))).toBe('last turn 5s · 0 edits · 0 errors')
   expect(shownLimits(card).map(limit => limit.kind)).toEqual(['five_hour', 'seven_day'])
-})
-
-test('the running agents are grouped by type, model and effort, the most first; none running draws nothing', () => {
-  const sonnet = 'claude-sonnet-4-5', haiku = 'claude-haiku-4-5-20251001'
-  const row = (agents: SessionHudCard['agents']) => agentCells({ ...full, agents })
-  expect(text(row([{ id: 'a', model: sonnet }, { id: 'b', model: haiku }, { id: 'c', model: sonnet }]))).toBe('3 agents: Sonnet 4.5 ×2, Haiku 4.5')
-  expect(text(row([{ id: 'a', model: 'claude-opus-5-5' }]))).toBe('1 agent: Opus 5.5')
-  expect(text(row([{ id: 'a', model: haiku }, { id: 'b', model: sonnet }]))).toBe('2 agents: Haiku 4.5, Sonnet 4.5')
-  expect(row([{ id: 'a', model: sonnet }]).filter(s => s.style === 'model').map(s => s.text)).toEqual(['Sonnet 4.5'])
-  expect(text(row([{ id: 'a', type: 'codex:codex-rescue', model: 'claude-opus-5-5', effort: 'high' }, { id: 'b', type: 'codex:codex-rescue', model: 'claude-opus-5-5', effort: 'high' },
-    { id: 'c', type: 'Explore', model: haiku, effort: 'medium' }]))).toBe('3 agents: codex:codex-rescue Opus 5.5 · high ×2, Explore Haiku 4.5 · medium')
-  expect(row([])).toEqual([])
-})
-
-test('an agent whose model or type is unknown or not a name is drawn as ?, and an unknown effort is left out', () => {
-  const drawn = text(agentCells({ ...full, agents: [{ id: 'a' }, { id: 'b', model: '/Users/me/secret' }, { id: 'c', model: 'claude-sonnet-4-5' }] }))
-  expect(drawn).toBe('3 agents: ? ×2, Sonnet 4.5')
-  expect(text(agentCells({ ...full, agents: [{ id: 'a', type: '/Users/me secret', model: 'claude-sonnet-4-5', effort: 'loud' }] }))).toBe('1 agent: ? Sonnet 4.5')
-})
-
-test('what the agents used is a token total, left out before any usage and never drawn from a malformed figure', () => {
-  expect(text(agentTokenCells({ ...full, agentTokens: 1_234_567 }))).toBe('agents used 1.2M tokens')
-  expect(text(agentTokenCells({ ...full, agentTokens: 42_000 }))).toBe('agents used 42k tokens')
-  for (const bad of [undefined, 0, -5, Number.NaN, '9000']) expect(agentTokenCells({ ...full, agentTokens: bad } as never)).toEqual([])
 })
 
 test('the workspace names the repository and its folder, the branch and a worktree; nothing before the first reading', () => {

@@ -9,24 +9,24 @@ const at = (ms: number) => new Date(now + ms).toISOString()
 const card: SessionHudCard = {
   model: 'claude-opus-5-5', effort: 'medium', context: { tokens: 236_000, window: 1_000_000, percent: 24 }, contextWindow: 500_000, cache: 96,
   cacheUsedAt: now - 40_000, limits: [{ kind: 'seven_day', percentUsed: 19, resetsAt: at(131 * HOUR) }, { kind: 'five_hour', percentUsed: 31, resetsAt: at(224 * 60_000) }],
-  lastTurnMs: 70_000, edits: 4, errors: 0, turns: 12, agents: [{ id: 'a', model: 'claude-haiku-4-5' }],
+  lastTurnMs: 70_000, edits: 4, errors: 0, turns: 12,
   history: [{ before: 120_000, after: 175_000, output: 1_000 }, { before: 181_000, after: 236_000, output: 2_100 }],
 }
 const piece = (part: Piece) => ('text' in part ? part.text : `[${part.alt}]`)
 const view = (changes: Partial<SessionHudCard> = {}, draw: Draw = 'svg') => layoutView({ card: { ...card, ...changes }, now, working: false, palette: 'mockup', draw })
 const text = (line: Group[]) => line.map(group => (group === 'spacer' ? '|' : group.map(piece).join(''))).join(' ')
 
-test('the card holds the head with the agents, the context with the last turn, the cache, both windows and the turn, and no money', () => {
+test('the card holds the head, the context with the last turn, the cache, both windows and the turn, and no money', () => {
   const lines = view().map(text)
   expect(lines).toEqual([
-    '● Opus 5.5 · medium | 1 agent: Haiku 4.5',
+    '● Opus 5.5 · medium',
     'ctx [context 47% used] 47%  236k / 500k | +6k sent · ▲ +55k in turn · 2k out',
     'cache 96% · used 40s ago',
     '5h [5h 31% used] 31% ▲6  3h 44m · 100% in 2h 49m 7d [7d 19% used] 19%  5d 11h · ~86% at reset',
     'last turn 1m · 12 turns · 4 edits · 0 errors',
   ])
   expect(lines.join('\n')).not.toContain('$')
-  const bare: SessionHudCard = { limits: [], edits: 0, errors: 0, turns: 0, agents: [], history: [] }
+  const bare: SessionHudCard = { limits: [], edits: 0, errors: 0, turns: 0, history: [] }
   for (const draw of ['svg', 'cells'] as const) expect(layoutView({ card: bare, now, palette: 'mockup', draw })).toEqual([])
 })
 
@@ -57,15 +57,15 @@ test('malformed turns and a light theme never reach the drawing as numbers or th
 test('each window and each part of the context line is a group of its own, so a narrow card wraps between them', () => {
   for (const draw of ['svg', 'cells'] as const) {
     const lines = view({}, draw)
-    expect(lines.map(line => line.length)).toEqual([3, 3, 1, 2, 1])
-    expect([lines[0]![1], lines[1]![1]]).toEqual(['spacer', 'spacer'])
+    expect(lines.map(line => line.length)).toEqual([1, 3, 1, 2, 1])
+    expect(lines[1]![1]).toBe('spacer')
   }
 })
 
 test('the terminal card holds the same lines as the desktop, with text bars and no drawing', () => {
   const lines = view({}, 'cells')
   expect(lines.map(text)).toEqual([
-    '● Opus 5.5 · medium | 1 agent: Haiku 4.5',
+    '● Opus 5.5 · medium',
     'ctx ━━━━━━━━━━━━ 47%  236k / 500k | +6k sent · ▲ +55k in turn · 2k out',
     'cache 96% · used 40s ago',
     '5h ━━━│━━━━━━━━ 31% ▲6  3h 44m · 100% in 2h 49m 7d ━━━│━━━━━━━━ 19%  5d 11h · ~86% at reset',
