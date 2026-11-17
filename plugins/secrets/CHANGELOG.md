@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0 (2026-11-17)
+
+### ⚠ BREAKING CHANGES
+
+* the tool is named `mcp__plugin_secrets_secrets__request_secret` instead of `mcp__secrets__request_secret`, so permission rules need the new name, and the plugin needs `node` 22.18 or later on `PATH` ([#445](https://github.com/anderson-spider/spider-claude-mods/pull/445))
+
+### Features
+
+* serve `request_secret` from an MCP server of the plugin, with the requests in a file queue the hooks module shows as a card, and fence tool calls with a `PreToolUse` command hook, so Code Mode stays available ([#445](https://github.com/anderson-spider/spider-claude-mods/pull/445))
+
 ## [1.0.1](https://github.com/anderson-spider/spider-claude-mods/compare/secrets-v1.0.0...secrets-v1.0.1) (2026-11-16)
 
 
