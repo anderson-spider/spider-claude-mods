@@ -1,13 +1,13 @@
 ---
 name: code-review
-description: "Review the commits since a fixed point (branch, tag or commit) with Gemini through this plugin's mcp__antigravity__review tool, then verify every finding against the code before reporting. Use when the user wants to review a branch or a PR/MR, asks to \"review since X\", or before opening a PR/MR."
+description: "Review the commits since a fixed point (branch, tag or commit) with Gemini through this plugin's mcp__plugin_antigravity_antigravity__review tool, then verify every finding against the code before reporting. Use when the user wants to review a branch or a PR/MR, asks to \"review since X\", or before opening a PR/MR."
 ---
 
 # Code review
 
 Gemini reviews the diff between `HEAD` and a fixed point; you **verify** every finding against the code and report the verdicts. The reviewer comes from another model family than the author, so it does not share the author's assumptions; verification filters the false positives an outsider brings.
 
-Run this in the main agent: the review tool is this plugin's `mcp__antigravity__review` (load it with ToolSearch when it is deferred).
+Run this in the main agent: the review tool is this plugin's `mcp__plugin_antigravity_antigravity__review` (load it with ToolSearch when it is deferred).
 
 **Non-interactive mode** runs the whole review on stated defaults. It is on when the request says so ("sem perguntas", "roda direto", "no questions"). Each step states its non-interactive default in place of the question; every default you take goes in the report header, so none is silent. A bad ref or an empty diff still ends the review with an error.
 
@@ -29,7 +29,7 @@ The reviewer takes one extra sentence, `focus`. Look for what the change was mea
 
 ### 3. Run the reviewer
 
-Call `mcp__antigravity__review` with:
+Call `mcp__plugin_antigravity_antigravity__review` with:
 
 - `base`: the fixed point.
 - `model`: `gemini-4-hydrogen-high`. Send no `effort`: the id carries it.

@@ -1,6 +1,6 @@
 // Fakes of what the runner is handed: the runs it starts detached (each launch plays the next script into a memory
 // folder; a script with a gate keeps running until released, and `dead` makes its process vanish without an exit
-// status), `$.store` in memory, and the git workspaces with the worktrees they made and removed.
+// status), a job store in memory, and the git workspaces with the worktrees they made and removed.
 import type { JobStore, RunFiles, RunState, Workspace, Workspaces } from '../hooks/model'
 
 export type Run = { stdout: string; exit?: number; stderr?: string; gate?: Promise<unknown> }
@@ -40,7 +40,7 @@ export function fakeRuns(scripts: Run[]) {
   return { files, launched, states, dead, stopped, removed }
 }
 
-/** `$.store` in memory. */
+/** A job store in memory. */
 export function memoryStore(init: Record<string, unknown> = {}) {
   const data = new Map<string, unknown>(Object.entries(init))
   const store: JobStore = {

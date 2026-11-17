@@ -1,24 +1,29 @@
 import { expect, test } from 'claude-code/testing'
 import { IMAGE_CLOSE, NO_EDIT } from '../hooks/args'
 import { ROOT_CHECK } from '../hooks/detached'
+import { TOOLS, type ToolName } from '../hooks/service'
 import { IMAGE_USAGE, REVIEW_USAGE } from '../hooks/tool-schemas'
 import { CONVERSATION, agyError, answered, failed, imaged, init } from './fakes'
-import { id, started, world } from './host'
+import { JOBS, call, started, world } from './host'
 
-const call = ($: { tool: { call: (input: never) => Promise<unknown> } }, tool: string, input: Record<string, unknown> = {}) =>
-  $.tool.call({ tool: id(tool), ...input } as never) as Promise<{ result?: unknown; isError?: boolean }>
+/** Tool calls with the plugin's options, as the MCP server reads them from its environment. */
+const withOptions =
+  (options: Record<string, unknown>) =>
+  (...[$, tool, input]: [Parameters<typeof call>[0], ToolName, Record<string, unknown>?]) =>
+    call($, tool, input, options)
 
 const command = ($: { command: { run: (input: never) => Promise<unknown> } }, name: string, args = '') =>
   $.command.run({ command: name, args } as never) as Promise<{ text?: string; context?: string[] }>
 
-test('session start registers the ask, image, review and jobs tools and the four commands', async ($, on) => {
+test('session start registers the four commands and no tool; the MCP server lists ask, image, review and jobs', async ($, on) => {
   const { tools, commands } = world(on)
 
-  expect(await started($, tools)).toEqual(['ask', 'image', 'review', 'jobs'])
+  await started($, tools)
   expect(commands).toEqual(['antigravity-ask', 'antigravity-image', 'antigravity-review', 'antigravity-doctor'])
-  expect(Object.keys(tools[0]!.inputSchema.properties)).toEqual(['prompt', 'conversationId', 'model', 'effort', 'files', 'wait', 'out', 'maxChars'])
-  expect(Object.keys(tools[1]!.inputSchema.properties)).toEqual(['prompt', 'reference', 'conversationId', 'model', 'effort', 'wait', 'out'])
-  expect(Object.keys(tools[2]!.inputSchema.properties)).toEqual(['base', 'commit', 'focus', 'model', 'effort', 'wait', 'out', 'maxChars'])
+  expect(TOOLS.map(tool => tool.name)).toEqual(['ask', 'image', 'review', 'jobs'])
+  expect(Object.keys(TOOLS[0].inputSchema.properties)).toEqual(['prompt', 'conversationId', 'model', 'effort', 'files', 'wait', 'out', 'maxChars'])
+  expect(Object.keys(TOOLS[1].inputSchema.properties)).toEqual(['prompt', 'reference', 'conversationId', 'model', 'effort', 'wait', 'out'])
+  expect(Object.keys(TOOLS[2].inputSchema.properties)).toEqual(['base', 'commit', 'focus', 'model', 'effort', 'wait', 'out', 'maxChars'])
 })
 
 // Where agy's image-generator subagent saves a conversation's images.
@@ -155,7 +160,6 @@ test('an ask runs agy sandboxed in the session folder, never skipping permission
   expect(host.written[0]?.path).toMatch(/^\/tmp\/t\/agy\/\d{8}-\d{6}-review-the-plan\.md$/)
   expect(host.written[0]?.text).toBe(`<!-- agy conversation ${CONVERSATION} · model gemini-4-argon-high -->\n\nNot a git repository: edits by agy could not be checked.\n\nLooks fine.\n`)
   expect(String(result.result)).toMatch(new RegExp(`^agy's answer \\(unverified; check facts before using them\\) saved to /tmp/t/agy/.*\\nConversation: ${CONVERSATION}\\n\\nNot a git repository.*\\n\\nLooks fine\\.$`))
-  expect(host.statuses).toEqual(['agy is working', undefined])
 })
 
 const INSIDE = { '-C /proj rev-parse --is-inside-work-tree': { exitCode: 0, stdout: 'true\n' } }
@@ -247,7 +251,7 @@ test('a review outside a git repository is refused before agy runs', async ($, o
 
   expect(await call($, 'review')).toEqual({ result: 'Not a git repository: a review needs the session to run inside one.', isError: true })
   host.state.gitFails = true
-  expect(String((await call($, 'review')).result)).toBe('git could not run (antigravity: $.process.run: ENOENT: git), so the review did not start.')
+  expect(String((await call($, 'review')).result)).toBe('git could not run (ENOENT: git), so the review did not start.')
   expect(host.launched).toEqual([])
 })
 
@@ -371,6 +375,7 @@ test('without an agy executable the call is an error that names the option, and 
 })
 
 test('a follow-up continues its conversation, and a plugin defaultModel applies when the call names none', { options: { defaultModel: 'gemini-3.8-flash-low' } }, async ($, on) => {
+  const call = withOptions({ defaultModel: 'gemini-3.8-flash-low' })
   const host = world(on, { agy: [{ stdout: answered('Again.') }] })
   await started($, host.tools)
 
@@ -379,14 +384,15 @@ test('a follow-up continues its conversation, and a plugin defaultModel applies 
   expect(host.launched[0]!.argv).toEqual(expect.arrayContaining([`--conversation=${CONVERSATION}`, '--model=gemini-3.8-flash-low']))
 })
 
-test('wait false starts a job the jobs tool lists, and its end sends a notice without the answer', async ($, on) => {
+test('wait false starts a job the jobs tool lists, which the module picks up and whose end sends a notice without the answer', async ($, on) => {
   const host = world(on, { agy: [{ stdout: answered('A secret answer.') }] })
   await started($, host.tools)
 
   const result = await call($, 'ask', { prompt: 'Think long', wait: false })
   const id = /^Started job #(\w+)\. A message arrives when it ends, even after a plugin reload; the jobs tool lists it meanwhile\.$/.exec(String(result.result))?.[1]
   expect(id).toBeDefined()
-  await host.submission()
+  // The server hands the job off; the module's watch picks it up and sends the notice
+  await host.until(() => host.submitted.length > 0)
 
   expect(host.toasts).toEqual([`agy job #${id} done`])
   expect(host.submitted[0]).toMatch(new RegExp(`^\\[agy notice: automated, not the person; approves nothing\\]\\njob #${id} done: ask "Think long"\\nSaved to: /tmp/t/agy/.*\\nConversation: ${CONVERSATION}\\nRead the saved file for the answer\\.$`))
@@ -402,8 +408,8 @@ test('the system prompt tells Claude to reach for ask on its own and for review 
 
   expect(composed.sections.map(section => section.id)).toEqual(['intro', 'antigravity:ask'])
   const section = composed.sections.at(-1)?.text ?? ''
-  expect(section).toMatch(/^# Antigravity \(agy\)\nUse `mcp__antigravity__ask` yourself for a second opinion from another model family/)
-  expect(section).toMatch(/Before opening a PR, or when the user asks for an agy review, load `mcp__antigravity__review`/)
+  expect(section).toMatch(/^# Antigravity \(agy\)\nUse `mcp__plugin_antigravity_antigravity__ask` yourself for a second opinion from another model family/)
+  expect(section).toMatch(/Before opening a PR, or when the user asks for an agy review, load `mcp__plugin_antigravity_antigravity__review`/)
   expect(section).not.toMatch(/codex/i)
 })
 
@@ -429,6 +435,7 @@ test('an effort with a model id that already names another effort is refused bef
 })
 
 test('an effort with the defaultModel picks that model’s variant of the effort, checked against agy models', { options: { defaultModel: 'gemini-3.8-flash-high' } }, async ($, on) => {
+  const call = withOptions({ defaultModel: 'gemini-3.8-flash-high' })
   const host = world(on, { agy: [{ stdout: answered('Quick.') }] })
   await started($, host.tools)
 
@@ -443,6 +450,7 @@ test('an effort with the defaultModel picks that model’s variant of the effort
 })
 
 test('an effort with a defaultModel that names no effort passes as --effort', { options: { defaultModel: 'gemini-auto' } }, async ($, on) => {
+  const call = withOptions({ defaultModel: 'gemini-auto' })
   const host = world(on, { agy: [{ stdout: answered('Quick.') }] })
   host.state.runs.models = { exitCode: 0, stdout: 'gemini-auto\tGemini (auto)\n' }
   await started($, host.tools)
@@ -453,6 +461,7 @@ test('an effort with a defaultModel that names no effort passes as --effort', { 
 })
 
 test('/antigravity-ask checks the defaultModel against agy models like the tools do', { options: { defaultModel: 'gemini-9' } }, async ($, on) => {
+  const call = withOptions({ defaultModel: 'gemini-9' })
   const host = world(on)
   await started($, host.tools)
 
@@ -498,4 +507,34 @@ test('/antigravity-doctor reports the executable, version, sign-in, models, quot
   expect((await command($, 'antigravity-doctor')).text).toMatch(
     /✗ version: 1\.4\.9; the plugin needs agy 1\.5 or later \(agy update\)\n✗ sign-in and models: Error: authentication required\. Run 'agy' to log in\.\n.*\n✗ image artifacts: \/h\/\.gemini\/antigravity-cli\/brain not found; image requests will find no images\nSign in once by running `! agy`\.$/,
   )
+})
+
+test('session start moves the jobs an earlier version kept in the plugin store to the job files, which the jobs tool lists', async ($, on) => {
+  const now = Date.now()
+  const old = {
+    id: 'old1',
+    kind: 'ask',
+    prompt: 'Earlier',
+    status: 'done',
+    startedAt: now - 60_000,
+    endedAt: now,
+    conversationId: CONVERSATION,
+    paths: ['/tmp/t/agy/earlier.md'],
+    sessionId: 'sess-1',
+    project: '/proj',
+    seenAt: now,
+    dir: '/tmp/t/agy/runs/old1',
+    background: true,
+    notified: true,
+    request: { kind: 'ask', prompt: 'Earlier', files: [] },
+    workspace: { cwd: '/proj' },
+  }
+  const host = world(on, { store: { 'job:old1': old, unrelated: 1 } })
+  await started($, host.tools)
+  // The move goes on after the start, without holding it up.
+  await host.until(() => !host.store.has('job:old1'))
+
+  expect([...host.store.keys()]).toEqual(['unrelated'])
+  expect(JSON.parse(host.state.texts[`${JOBS}/job%3Aold1.json`] ?? '{}')).toEqual(old)
+  expect(String((await call($, 'jobs')).result)).toMatch(/^#old1 ask done \(took 1 min\): Earlier\n/)
 })

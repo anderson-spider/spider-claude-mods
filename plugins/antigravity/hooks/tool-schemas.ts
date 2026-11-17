@@ -1,6 +1,37 @@
-import type { McpToolInputs } from 'claude-code'
 import type { Effort } from '../types'
 import { allOf, type SchemaFor } from './schema'
+
+// What the model sends to each tool of the MCP server, as mcp__plugin_antigravity_antigravity__<name>.
+export type AskInput = {
+  prompt: string
+  conversationId?: string
+  model?: string
+  effort?: Effort
+  files?: string[]
+  wait?: boolean
+  out?: string
+  maxChars?: number
+}
+export type ImageInput = {
+  prompt: string
+  reference?: string
+  conversationId?: string
+  model?: string
+  effort?: Effort
+  wait?: boolean
+  out?: string
+}
+export type ReviewInput = {
+  base?: string
+  commit?: string
+  focus?: string
+  model?: string
+  effort?: Effort
+  wait?: boolean
+  out?: string
+  maxChars?: number
+}
+export type JobsInput = {}
 
 /** The reasoning efforts `agy --effort` takes. */
 export const EFFORTS = allOf<Effort>()('low', 'medium', 'high', 'xhigh', 'max')
@@ -25,7 +56,7 @@ const WAIT = {
   description: 'Default true. false starts a background job; completion sends a message. Use jobs to check it.',
 } as const
 
-// Each inputSchema satisfies SchemaFor of its McpToolInputs entry in types/index.d.ts: tsc fails when they differ.
+// Each inputSchema satisfies SchemaFor of its input type above: tsc fails when they differ.
 export const ASK_INPUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -39,7 +70,7 @@ export const ASK_INPUT_SCHEMA = {
     maxChars: { type: 'number', description: 'Inline excerpt length; default 3000. The file keeps the full answer.' },
   },
   required: ['prompt'],
-} satisfies SchemaFor<McpToolInputs['mcp__antigravity__ask']>
+} satisfies SchemaFor<AskInput>
 
 export const IMAGE_INPUT_SCHEMA = {
   type: 'object',
@@ -53,7 +84,7 @@ export const IMAGE_INPUT_SCHEMA = {
     out: { type: 'string', description: 'Absolute image output path, inside the project or the answers folder and outside .git; several images add -1, -2.' },
   },
   required: ['prompt'],
-} satisfies SchemaFor<McpToolInputs['mcp__antigravity__image']>
+} satisfies SchemaFor<ImageInput>
 
 export const REVIEW_INPUT_SCHEMA = {
   type: 'object',
@@ -67,12 +98,12 @@ export const REVIEW_INPUT_SCHEMA = {
     out: { type: 'string', description: 'Absolute Markdown output path, inside the project or the answers folder and outside .git.' },
     maxChars: { type: 'number', description: 'Inline excerpt length; default 3000. The file keeps the full review.' },
   },
-} satisfies SchemaFor<McpToolInputs['mcp__antigravity__review']>
+} satisfies SchemaFor<ReviewInput>
 
 export const JOBS_DESCRIPTION =
   'Find the background agy requests of this project, of every session, which outlive a plugin reload: status, conversation id and saved files, newest first. Local only; runs nothing.'
 
-export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<McpToolInputs['mcp__antigravity__jobs']>
+export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<JobsInput>
 
 export const ASK_COMMAND_DESCRIPTION = 'Ask Antigravity (agy): /antigravity-ask <question>'
 export const IMAGE_COMMAND_DESCRIPTION = 'Generate and save an image with agy: /antigravity-image <prompt>'
