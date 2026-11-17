@@ -1,10 +1,6 @@
 # Typings that Claude Code writes when it loads each plugin
 plugins/*/.claude-plugin/types/
 
-# State and socket of the codex computer use helper, if it runs straight from the folder
-plugins/codex/helper/state/
-plugins/codex/helper/run/
-
 # Local review and test reports
 .reports/
 

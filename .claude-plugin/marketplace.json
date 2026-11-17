@@ -13,11 +13,6 @@
       "description": "Ask Google's Antigravity CLI (agy) for a second opinion or a review of the branch's changes from another model family, read-only, or an image, and save the result locally."
     },
     {
-      "name": "codex",
-      "source": "./plugins/codex",
-      "description": "Ask Codex for a second opinion, a review of the branch's changes or requested images and, on macOS, control native Mac apps through Codex computer use; save results locally."
-    },
-    {
       "name": "file-explorer",
       "source": "./plugins/file-explorer",
       "description": "File tree pane that follows Claude's reads, edits and searches, with git status, search, preview and path references"

@@ -7,7 +7,6 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 | Plugin | What it does |
 | --- | --- |
 | [antigravity](plugins/antigravity/README.md) | Lets Claude ask your Antigravity CLI (`agy`) for a second opinion from another model family, have it review the branch's changes in a throwaway worktree before a PR, or generate an image in a folder of its own, and saves the result locally; agy runs sandboxed, is told not to edit, and any edit it makes is reported. Its skills `antigravity:code-review` and `antigravity:review-publish` verify each finding of a review against the code and post the confirmed ones as a pending GitHub review or GitLab draft notes. |
-| [codex](plugins/codex/README.md) | Lets Claude ask your Codex CLI for a second opinion (it reads the repository read-only and can search the web), have it review the branch's changes, or generate an image, and saves the result locally. On macOS it can also route native Mac app control through Codex computer use from the ChatGPT app instead of Claude's own computer use, asking before each new app. |
 | [file-explorer](plugins/file-explorer/README.md) | A file tree pane beside the conversation: git status per file and folder, a mark on each file Claude reads, edits, creates, removes, finds or commits, search across unopened folders, preview, and `@path` into the prompt. |
 | [gchat](plugins/gchat/README.md) | Skills that read, summarize and reply in Google Chat and post merge request review requests through Claude in Chrome, sending only a text and a recipient you approved; the default space and account come from plugin options. |
 | [github](plugins/github/README.md) | A skill for GitHub work with the `gh` CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments, never waiting on a run or writing what you did not ask for. |
@@ -29,7 +28,6 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.322 
 ```
 /plugin marketplace add anderson-spider/claude-mods
 /plugin install antigravity@spider-claude-mods
-/plugin install codex@spider-claude-mods
 /plugin install file-explorer@spider-claude-mods
 /plugin install gchat@spider-claude-mods
 /plugin install github@spider-claude-mods
@@ -45,7 +43,6 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.322 
 
 From a local copy: `/plugin marketplace add /path/to/claude-mods`.
 
-Computer use in codex also needs a local helper on the Mac: follow [its install steps](plugins/codex/README.md#install-the-helper). It replaces the former codex-computer-use plugin: uninstall that one with `/plugin uninstall codex-computer-use@spider-claude-mods`.
 
 ### Update
 
@@ -86,7 +83,6 @@ Unit tests run against host fakes: a Claude Code update can break a plugin witho
 
 These projects inspired or are the base of plugins in this marketplace:
 
-- [claude-mods-computer-use-threads](https://github.com/promptadvisers/claude-mods-computer-use-threads) by Prompt Advisers: the Codex computer-use bridge behind codex's [computer use](plugins/codex/README.md#computer-use-macos).
 - [claude-image-view](https://github.com/jarrodwatts/claude-image-view) by Jarrod Watts (MIT): [image-preview](plugins/image-preview/README.md) is a copy of it with fixes.
 
 ## License
