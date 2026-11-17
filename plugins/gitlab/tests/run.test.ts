@@ -1,5 +1,5 @@
-import { expect, test } from 'claude-code/testing'
-import { id, started, world } from './host'
+import { expect } from './expect.ts'
+import { hostTest as test, id, started, world } from './host.ts'
 
 const MR = id('gitlab_mr')
 const WORK = 'glpat-work-123'
@@ -22,7 +22,7 @@ const CALLS: Record<string, Record<string, unknown>> = {
 const call = (name: string) => ({ tool: id(name), ...CALLS[name] }) as never
 const text = (result: { result?: unknown }) => String(result.result)
 
-test('session start registers the six tools, with a guarded merge and no generic API tool', ON, async ($, on) => {
+test('the server lists the six tools, with a guarded merge and no generic API tool', ON, async ($, on) => {
   const { tools } = world(on)
 
   expect(await started($, tools)).toEqual(Object.keys(CALLS))
@@ -311,7 +311,7 @@ test("an SSH alias remote uses its real host's token, found through ssh -G, and 
   expect(sent).toHaveLength(1)
 })
 
-test('wait sleeps through a host process between polls, so the hook spends none of its own time', ON, async ($, on) => {
+test('wait sleeps 15 seconds between polls through the clock, which keeps the call alive', ON, async ($, on) => {
   const pipelineUrl = `${WORK_API}/pipelines/90`
   const running = { text: JSON.stringify({ id: 90, status: 'running', ref: 'main', sha: 'abcdef0123', web_url: 'u' }) }
   const { runs } = world(on, {

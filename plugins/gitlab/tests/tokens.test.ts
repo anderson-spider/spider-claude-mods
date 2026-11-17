@@ -1,5 +1,5 @@
-import { expect, test } from 'claude-code/testing'
-import { DEFAULT_HOST_ENV, ENV_NAME, offText, parseTokens, resolveDefaultHost, resolveToken, type Off, type TokenIo } from '../hooks/tokens'
+import { expect, test } from './expect.ts'
+import { DEFAULT_HOST_ENV, ENV_NAME, offText, parseTokens, resolveDefaultHost, resolveToken, type Off, type TokenIo } from '../server/tokens.ts'
 
 const OPTION = 'gitlab.com=glpat-personal, gitlab.example.com=glpat-work'
 

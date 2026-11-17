@@ -1,10 +1,10 @@
 // gitlab_label: the project's labels (its own and its groups'), and creating one. Deleting a label is not offered.
-import type { McpToolInputs } from 'claude-code'
-import { GitlabError } from './api'
-import { InputError, clip, items, json, more, need, paging, str, type Ctx } from './context'
+import type { ToolInputs } from './inputs.ts'
+import { GitlabError } from './api.ts'
+import { InputError, clip, items, json, more, need, paging, str, type Ctx } from './context.ts'
 
-export type LabelAction = McpToolInputs['mcp__gitlab__gitlab_label']['action']
-export type LabelInput = { [K in keyof McpToolInputs['mcp__gitlab__gitlab_label']]?: unknown }
+export type LabelAction = ToolInputs['gitlab_label']['action']
+export type LabelInput = { [K in keyof ToolInputs['gitlab_label']]?: unknown }
 
 type Label = { id: number; name: string; color?: string; description?: string | null }
 

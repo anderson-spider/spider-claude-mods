@@ -1,8 +1,8 @@
 // gitlab_mr: list, read, create, change and merge merge requests. Merging is guarded: an explicit iid and head sha,
 // the token's own MR (else allowOthers), no draft, conflict or blocking discussion, and no protected target other
 // than main, master or develop (else allowProtectedTarget).
-import type { McpToolInputs } from 'claude-code'
-import { GitlabError } from './api'
+import type { ToolInputs } from './inputs.ts'
+import { GitlabError } from './api.ts'
 import {
   InputError,
   bool,
@@ -21,11 +21,11 @@ import {
   writable,
   type Ctx,
   type User,
-} from './context'
-import { requireLabels } from './labels'
+} from './context.ts'
+import { requireLabels } from './labels.ts'
 
-export type MrAction = McpToolInputs['mcp__gitlab__gitlab_mr']['action']
-export type MrInput = { [K in keyof McpToolInputs['mcp__gitlab__gitlab_mr']]?: unknown }
+export type MrAction = ToolInputs['gitlab_mr']['action']
+export type MrInput = { [K in keyof ToolInputs['gitlab_mr']]?: unknown }
 
 type Pipeline = { id: number; status: string; sha?: string; web_url?: string }
 type Mr = {

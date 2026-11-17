@@ -1,5 +1,5 @@
-import { expect, test } from 'claude-code/testing'
-import { NO_REMOTE, currentBranch, hostName, locate, parseRemote, projectPath, sshHostname, type Git, type Ssh } from '../hooks/remote'
+import { expect, test } from './expect.ts'
+import { NO_REMOTE, currentBranch, hostName, locate, parseRemote, projectPath, sshHostname, type Git, type Ssh } from '../server/remote.ts'
 
 test('parseRemote reads SSH, scp-like and https remotes, with nested groups', () => {
   expect(parseRemote('git@gitlab.com:anderson-spider/tools.git')).toEqual({ host: 'gitlab.com', project: 'anderson-spider/tools', ssh: true })

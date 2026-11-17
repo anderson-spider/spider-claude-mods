@@ -1,12 +1,12 @@
 // gitlab_pipeline: the pipelines of a merge request or branch, their jobs and artifacts, waiting for one to end, and
 // running, retrying, cancelling or playing them. Downloading artifacts is not offered: the answer gives their URL, never the token.
-import type { McpToolInputs } from 'claude-code'
-import { GitlabError } from './api'
-import { failureSnippet } from './joblog'
-import { InputError, NoMrError, bool, clip, id, items, json, more, mrIid, need, paging, str, writable, type Ctx } from './context'
+import type { ToolInputs } from './inputs.ts'
+import { GitlabError } from './api.ts'
+import { failureSnippet } from './joblog.ts'
+import { InputError, NoMrError, bool, clip, id, items, json, more, mrIid, need, paging, str, writable, type Ctx } from './context.ts'
 
-export type PipelineAction = McpToolInputs['mcp__gitlab__gitlab_pipeline']['action']
-export type PipelineInput = { [K in keyof McpToolInputs['mcp__gitlab__gitlab_pipeline']]?: unknown }
+export type PipelineAction = ToolInputs['gitlab_pipeline']['action']
+export type PipelineInput = { [K in keyof ToolInputs['gitlab_pipeline']]?: unknown }
 
 type Pipeline = { id: number; status: string; ref: string; sha: string; source?: string; created_at?: string; web_url: string }
 type Job = {

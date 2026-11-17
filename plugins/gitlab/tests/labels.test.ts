@@ -1,7 +1,7 @@
-import { expect, test } from 'claude-code/testing'
-import { GitlabError } from '../hooks/api'
-import { label, requireLabels } from '../hooks/labels'
-import { fakeCtx, paged } from './fake-api'
+import { expect, test } from './expect.ts'
+import { GitlabError } from '../server/api.ts'
+import { label, requireLabels } from '../server/labels.ts'
+import { fakeCtx, paged } from './fake-api.ts'
 
 const BUG = { id: 1, name: 'bug', color: '#d9534f', description: 'Something broke' }
 

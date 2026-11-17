@@ -23,7 +23,7 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 ## Commands
 
 - Setup: Node 24 (`.nvmrc`; any version manager that reads it works) and pnpm (`corepack enable` gives the version `packageManager` in `package.json` names), then `pnpm install`. The root `package.json` and `pnpm-lock.yaml` pin the Claude Code CLI and TypeScript; pnpm puts them on PATH for every script.
-- Each folder under `plugins/` is a workspace package (`pnpm-workspace.yaml`) whose `package.json` holds only its scripts: `validate` (`claude plugin validate --strict .`), `test` (`claude plugin test .`, absent for a plugin that ships only skills) and `typecheck` (`tsc`, only with a `tsconfig.json`).
+- Each folder under `plugins/` is a workspace package (`pnpm-workspace.yaml`) whose `package.json` holds only its scripts: `validate` (`claude plugin validate --strict .`), `test` (`claude plugin test .`, absent for a plugin that ships only skills; gitlab, an MCP server with no hooks, runs `node --test`) and `typecheck` (`tsc`, only with a `tsconfig.json`).
 - From the root: `pnpm validate` (the marketplace, then every plugin), `pnpm test`, `pnpm typecheck`, and `pnpm check` for all three. One plugin: `pnpm --filter <name> test` (or `validate`, `typecheck`).
 - Typings: `tsconfig.json` extends the git-ignored `.claude-plugin/types/`, which Claude Code writes when an interactive session loads the plugin from its folder. Before the first `pnpm typecheck` of a plugin, and after a Claude Code update or a change to your MCP integrations, open `claude --plugin-dir plugins/<name>` once and `/exit`.
 - codex's computer use helper runs on the ChatGPT app's Node: `pnpm --filter codex test:helper`, on a Mac with that app.
@@ -31,7 +31,7 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 ## Code rules
 
 - Registration: one entry module (`register.tsx`) in `hooks.json`. Keep `on(...)` and `$.noun.method(...)` calls visible to the engine's source analysis: pass `$` only to a top-level function in the same file, never across an import. Subfolder registrars may own their hooks and `$` calls; pure modules take injected host access. Tests mirror modules.
-- Tool inputs: each `mcp__<plugin>__<name>` entry in `types/index.d.ts` must match its `inputSchema` (`SchemaFor`, `hooks/schema.ts`; keep that file and `tests/schema-types.ts` identical in every plugin that has them; codex's computer use tool has its keys checked in `hooks/computer-use/prompts.ts` instead).
+- Tool inputs: each `mcp__<plugin>__<name>` entry in `types/index.d.ts` must match its `inputSchema` (`SchemaFor`, `hooks/schema.ts`; keep that file and `tests/schema-types.ts` identical in every plugin that has them, but for the import path in `tests/schema-types.ts`; gitlab keeps them in `server/` and its tool inputs in `server/inputs.ts`, by short tool name; codex's computer use tool has its keys checked in `hooks/computer-use/prompts.ts` instead).
 
 ## Done for a plugin change
 

@@ -1,8 +1,8 @@
 // gitlab_user: who the token belongs to, or a user of the remote's host by username.
-import type { McpToolInputs } from 'claude-code'
-import { InputError, json, str, type Ctx } from './context'
+import type { ToolInputs } from './inputs.ts'
+import { InputError, json, str, type Ctx } from './context.ts'
 
-export type UserInput = { [K in keyof McpToolInputs['mcp__gitlab__gitlab_user']]?: unknown }
+export type UserInput = { [K in keyof ToolInputs['gitlab_user']]?: unknown }
 
 type User = { id: number; username: string; name?: string; state?: string; web_url?: string; bot?: boolean }
 

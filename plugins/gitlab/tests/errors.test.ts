@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
-import { GitlabError } from '../hooks/api'
-import { errorText } from '../hooks/errors'
+import { expect, test } from './expect.ts'
+import { GitlabError } from '../server/api.ts'
+import { errorText } from '../server/errors.ts'
 
 const say = (status: number, method = 'GET', message = 'x') => errorText(new GitlabError(status, message, method), 'team/app', 'gitlab.example.com')
 

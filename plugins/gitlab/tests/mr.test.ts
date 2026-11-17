@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
-import { mr, statusView, summary, withDraft } from '../hooks/mr'
-import { ME, MR, THEIRS, fakeCtx, paged } from './fake-api'
+import { expect, test } from './expect.ts'
+import { mr, statusView, summary, withDraft } from '../server/mr.ts'
+import { ME, MR, THEIRS, fakeCtx, paged } from './fake-api.ts'
 
 const OPEN_FOR_BRANCH = 'GET /merge_requests'
 
@@ -199,7 +199,7 @@ test('list with allProjects reads the global endpoint, names each project, and w
   const mine = JSON.parse(await mr(ctx, { action: 'list', allProjects: true }))
   await mr(ctx, { action: 'list', allProjects: true, reviewer: '@me' })
 
-  expect(mine).toEqual({ mergeRequests: [expect.objectContaining({ iid: 7, ref: 'team/app!7' })] })
+  expect(mine).toMatchObject({ mergeRequests: [{ iid: 7, ref: 'team/app!7' }] })
   expect(calls[0]?.query?.scope).toBeUndefined()
   expect(calls.at(-1)?.query).toMatchObject({ scope: 'all', reviewer_username: 'ann' })
   expect(calls.every((c) => c.path.startsWith('ROOT'))).toBe(true)
