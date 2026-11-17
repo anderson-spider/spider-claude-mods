@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 (2026-11-17)
+
+### Bug Fixes
+
+* name the gitlab tools by their MCP server name in gchat-mr-review ([#443](https://github.com/anderson-spider/spider-claude-mods/pull/443))
+
 ## 1.0.0 (2026-11-16)
 
 
