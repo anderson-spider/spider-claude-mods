@@ -18,6 +18,7 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 - Jev-routed reasoning effort for native subagent calls: `plugins/subagent-effort/AGENTS.md`.
 - Tailscale API tools: `plugins/tailscale/AGENTS.md`.
 - Verification planning skill for non-trivial changes: `plugins/verification-planning/AGENTS.md`.
+- The project's terms (shipped file, release, release pull request, the codex and antigravity requests): `GLOSSARY.md`. Use them as defined there, and add a term there when a new one settles.
 - Hooks authoring or debugging: load the `plugin-authoring` skill first. The `claude-code` module is host-provided, not on npm.
 
 ## Commands
