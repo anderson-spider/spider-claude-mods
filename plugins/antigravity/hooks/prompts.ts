@@ -21,7 +21,7 @@ export const REVIEW_DESCRIPTION =
   "Have the user's Antigravity CLI (agy) review the changes of the session's git repository, when the user asks for an agy review or a second opinion on a diff, or before opening a PR. " +
   'Give one target at most: base (a branch) or commit (a sha); with none it reviews the branch against the default branch. ' +
   "It runs in a throwaway worktree, so the user's checkout is never touched; uncommitted changes are not reviewed. " +
-  'Returns a Markdown file, the conversation id and findings ranked P0 to P3 with file:line; follow up with the ask tool on that conversationId. ' +
+  'Returns a Markdown file, a JSON file of the same findings, the conversation id and findings ranked P0 to P3 with file:line; follow up with the ask tool on that conversationId. ' +
   BOUNDARIES
 
 // The names Claude Code gives the MCP server's tools (.mcp.json names the server antigravity).

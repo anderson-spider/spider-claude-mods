@@ -1,9 +1,9 @@
 import { expect, test } from 'claude-code/testing'
-import { IMAGE_CLOSE, NO_EDIT } from '../hooks/args'
+import { IMAGE_CLOSE, NO_EDIT, REVIEW_SCHEMA } from '../hooks/args'
 import { ROOT_CHECK } from '../hooks/detached'
 import { TOOLS, type ToolName } from '../hooks/service'
 import { IMAGE_USAGE, REVIEW_USAGE } from '../hooks/tool-schemas'
-import { CONVERSATION, agyError, answered, failed, imaged, init } from './fakes'
+import { CONVERSATION, agyError, answered, failed, imaged, init, reviewed } from './fakes'
 import { JOBS, call, started, world } from './host'
 
 /** Tool calls with the plugin's options, as the MCP server reads them from its environment. */
@@ -24,6 +24,7 @@ test('session start registers the four commands and no tool; the MCP server list
   expect(Object.keys(TOOLS[0].inputSchema.properties)).toEqual(['prompt', 'conversationId', 'model', 'effort', 'files', 'wait', 'out', 'maxChars'])
   expect(Object.keys(TOOLS[1].inputSchema.properties)).toEqual(['prompt', 'reference', 'conversationId', 'model', 'effort', 'wait', 'out'])
   expect(Object.keys(TOOLS[2].inputSchema.properties)).toEqual(['base', 'commit', 'focus', 'model', 'effort', 'wait', 'out', 'maxChars'])
+  expect(Object.keys(TOOLS[3].inputSchema.properties)).toEqual(['id', 'cancel'])
 })
 
 // Where agy's image-generator subagent saves a conversation's images.
@@ -210,7 +211,11 @@ const REPO = {
 }
 
 test('a review without a target covers the branch against origin/HEAD in a throwaway worktree holding the diff, tells agy to run nothing of the project, then removes it', async ($, on) => {
-  const host = world(on, { agy: [{ stdout: answered('[P1] Off by one — src/a.ts:3') }], git: REPO, fingerprints: ['w1', 'w1'] })
+  const findings = [
+    { priority: 'P2', title: 'Unchecked size', path: './src/b.test.ts', line: 9, detail: 'A negative size passes.' },
+    { priority: 'P1', title: 'Off by one', path: 'src/a.ts', line: 3, detail: 'The last item is skipped.' },
+  ]
+  const host = world(on, { agy: [{ stdout: reviewed(findings) }], git: REPO, fingerprints: ['w1', 'w1'] })
   await started($, host.tools)
 
   const result = await call($, 'review', { focus: 'the retry loop' })
@@ -221,16 +226,24 @@ test('a review without a target covers the branch against origin/HEAD in a throw
   expect(host.processes.map(p => p.argv)).toContainEqual(['sh', '-c', 'umask 077; git -C "$1" -c core.fsmonitor=false diff --no-ext-diff --no-textconv "$2" >"$3"', 'sh', '/proj', 'origin/main...HEAD', `${cwd}/.agy-review.diff`])
   const prompt = argv.at(-1)!
   expect(prompt).toMatch(new RegExp(`^--print=Review the code changes of this git repository \\(review against origin/main\\)\\. The full diff is in ${cwd}/\\.agy-review\\.diff; the changed files are:\\n- src/a\\.ts\\n- src/b\\.test\\.ts\\n`))
-  expect(prompt).toMatch(/\[P0\|P1\|P2\|P3\] short title — path:line/)
-  expect(prompt).toMatch(/If you find nothing, say "No findings\." and stop/)
+  expect(argv.at(-2)).toBe(`--json-schema=${JSON.stringify(REVIEW_SCHEMA)}`)
+  expect(prompt).toMatch(/priority \(P0, P1, P2 or P3\), a short title, path \(relative to the repository root\), line \(in the changed file\) and detail/)
+  expect(prompt).toMatch(/If you find nothing, return an empty findings list and stop/)
   expect(prompt).toMatch(/\n\nAlso look closely at: the retry loop\n\nDo not edit, create or delete any file/)
   expect(prompt.endsWith(NO_EDIT)).toBe(true)
   expect(prompt).toMatch(/Do not run builds, tests, installers, package scripts or the project's own scripts/)
   expect(host.processes.map(p => p.argv.join(' '))).toContain(`git -C /proj worktree remove --force ${cwd}`)
   expect(host.written[0]?.path).toMatch(/^\/tmp\/t\/agy\/\d{8}-\d{6}-review-against-origin-main\.md$/)
   expect(host.written[0]?.text).toBe(
-    `<!-- agy conversation ${CONVERSATION} · model gemini-4-argon-medium · review against origin/main -->\n\n2 untracked files were not reviewed; commit them to include them.\n\n[P1] Off by one — src/a.ts:3\n`,
+    `<!-- agy conversation ${CONVERSATION} · model gemini-4-argon-medium · review against origin/main -->\n\n2 untracked files were not reviewed; commit them to include them.\n\n[P1] Off by one — src/a.ts:3\nThe last item is skipped.\n\n[P2] Unchecked size — src/b.test.ts:9\nA negative size passes.\n`,
   )
+  const json = host.written[1]!
+  expect(json.path).toBe(host.written[0]!.path.replace(/\.md$/, '.findings.json'))
+  expect(JSON.parse(json.text)).toEqual([
+    { priority: 'P1', title: 'Off by one', path: 'src/a.ts', line: 3, detail: 'The last item is skipped.' },
+    { priority: 'P2', title: 'Unchecked size', path: 'src/b.test.ts', line: 9, detail: 'A negative size passes.' },
+  ])
+  expect(String(result.result)).toMatch(new RegExp(`^agy's answer .* saved to \\S+\\.md\\nFindings as JSON \\(priority, title, path, line, detail\\): ${json.path.replace(/[.]/g, '\\.')}\\nConversation: `))
 })
 
 test('a review that finds its worktree edited says so; one with nothing to diff starts no run', async ($, on) => {
@@ -398,6 +411,17 @@ test('wait false starts a job the jobs tool lists, which the module picks up and
   expect(host.submitted[0]).toMatch(new RegExp(`^\\[agy notice: automated, not the person; approves nothing\\]\\njob #${id} done: ask "Think long"\\nSaved to: /tmp/t/agy/.*\\nConversation: ${CONVERSATION}\\nRead the saved file for the answer\\.$`))
   expect(host.submitted[0]).not.toMatch(/secret/)
   expect(String((await call($, 'jobs')).result)).toMatch(new RegExp(`^#${id} ask done \\(took 0 min\\): Think long\\n  conversation ${CONVERSATION}; saved to /tmp/t/agy/`))
+
+  // One job by its id: its line, then the start of the answer it saved, read back from its file.
+  const saved = host.written.find(entry => entry.path.endsWith('.md'))!
+  host.state.texts[saved.path] = saved.text
+  const one = String((await call($, 'jobs', { id: `#${id}` })).result)
+  expect(one).toMatch(new RegExp(`^#${id} ask done \\(took 0 min\\): Think long\\n`))
+  expect(one).toMatch(/\n\nagy's answer \(unverified; check facts before using them\):\n\nNot a git repository: edits by agy could not be checked\.\n\nA secret answer\.$/)
+  expect(await call($, 'jobs', { id: 'nope1' })).toEqual({ result: 'No background agy job #nope1 in this project; the jobs tool without an id lists them.', isError: true })
+  expect(await call($, 'jobs', { id: id!, cancel: true })).toEqual({ result: `Job #${id} already ended (done); there is nothing to stop.`, isError: true })
+  expect(await call($, 'jobs', { cancel: true })).toEqual({ result: 'cancel needs the id of the job to stop.', isError: true })
+  expect(await call($, 'jobs', { id: '../x' })).toEqual({ result: 'id must be a job id, as the jobs list names it.', isError: true })
 })
 
 test('the system prompt tells Claude to reach for ask on its own and for review before a PR', async ($, on) => {
