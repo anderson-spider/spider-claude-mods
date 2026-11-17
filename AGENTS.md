@@ -1,57 +1,41 @@
 # AGENTS.md
 
-Claude Code **function hooks mods** marketplace. User-facing setup is in [README.md](README.md); this file holds the rules for changing the code.
-
-## Where to look
-
-- Plugin work: read `plugins/<name>/AGENTS.md` before changing files under `plugins/<name>/`. Keep plugin guidance there: a plugin-root `CLAUDE.md` draws a validation warning.
-- Second opinions and reviews from another model family through Google's Antigravity CLI (agy): `plugins/antigravity/AGENTS.md`.
-- File tree pane with git status and Claude's activity: `plugins/file-explorer/AGENTS.md`.
-- Google Chat skills (read, reply, MR review requests) through Claude in Chrome: `plugins/gchat/AGENTS.md`.
-- GitHub work skill with the gh CLI: `plugins/github/AGENTS.md`.
-- GitLab merge requests and pipelines of the current repository: `plugins/gitlab/AGENTS.md`.
-- Thumbnails of pasted images above the prompt: `plugins/image-preview/AGENTS.md`.
-- Delegated tasks to another CLI's agent (agy over ACP) as subagents, after T3 Code's orchestrator: `plugins/orchestrator/AGENTS.md`.
-- Secrets Claude asks for in a private card, kept out of the conversation: `plugins/secrets/AGENTS.md`.
-- Session card above the prompt: `plugins/session-hud/AGENTS.md`.
-- SonarQube 9.x Web API tools (quality gate, measures, issues, rules, hotspots, branches): `plugins/sonarqube/AGENTS.md`.
-- Jev-routed reasoning effort for native subagent calls: `plugins/subagent-effort/AGENTS.md`.
-- Tailscale API tools: `plugins/tailscale/AGENTS.md`.
-- Verification planning skill for non-trivial changes: `plugins/verification-planning/AGENTS.md`.
-- Hooks authoring or debugging: load the `plugin-authoring` skill first. The `claude-code` module is host-provided, not on npm.
+Claude Code plugin marketplace; one plugin per `plugins/<name>/`. Most are function hooks mods, an early-access API that may change between Claude Code versions. Before changing a plugin, read its `AGENTS.md`; plugin guidance lives there because a plugin-root `CLAUDE.md` draws a validation warning. Use the terms in `GLOSSARY.md`.
 
 ## Commands
 
-- Setup: Node 24 (`.nvmrc`; any version manager that reads it works) and pnpm (`corepack enable` gives the version `packageManager` in `package.json` names), then `pnpm install`. The root `package.json` and `pnpm-lock.yaml` pin the Claude Code CLI and TypeScript; pnpm puts them on PATH for every script.
-- Each folder under `plugins/` is a workspace package (`pnpm-workspace.yaml`) whose `package.json` holds only its scripts: `validate` (`claude plugin validate --strict .`), `test` (`claude plugin test .`, absent for a plugin that ships only skills; gitlab, an MCP server with no hooks, runs `node --test`) and `typecheck` (`tsc`, only with a `tsconfig.json`).
-- From the root: `pnpm validate` (the marketplace, then every plugin), `pnpm test`, `pnpm typecheck`, and `pnpm check` for all three. One plugin: `pnpm --filter <name> test` (or `validate`, `typecheck`).
-- Typings: `tsconfig.json` extends the git-ignored `.claude-plugin/types/`, which Claude Code writes when an interactive session loads the plugin from its folder. Before the first `pnpm typecheck` of a plugin, and after a Claude Code update or a change to your MCP integrations, open `claude --plugin-dir plugins/<name>` once and `/exit`.
+- Setup: Node from `.nvmrc`, `corepack enable`, `pnpm install` (pins the Claude Code CLI and TypeScript). Root: `pnpm check` = `validate` + `test` + `typecheck`; one plugin: `pnpm --filter <name> <script>`.
+- One Node test: `node --test --test-name-pattern=<regex> <file>` from the plugin folder.
+- Typecheck needs the git-ignored `.claude-plugin/types/`, which only an interactive session writes: run `claude --plugin-dir plugins/<name>` and `/exit` before the first typecheck, after a Claude Code update, or after an MCP integration change. That is also why CI skips typecheck.
+- `/reload-plugins` and `claude plugin details` report `0 hooks` for module plugins (they count only `hooks.json` command hooks); `claude plugin validate plugins/<name>` lists a module's events and `$` calls; a module that fails to load leaves a line in `claude --debug`.
+- Tests run against host fakes, so a Claude Code update can break a plugin with every test green. Check real behavior with `claude --plugin-dir plugins/<name>`.
 
 ## Code rules
 
-- Registration: one entry module (`register.tsx`) in `hooks.json`. Keep `on(...)` and `$.noun.method(...)` calls visible to the engine's source analysis: pass `$` only to a top-level function in the same file, never across an import. Subfolder registrars may own their hooks and `$` calls; pure modules take injected host access. Tests mirror modules.
-- Tool inputs: each `mcp__<plugin>__<name>` entry in `types/index.d.ts` must match its `inputSchema` (`SchemaFor`, `hooks/schema.ts`; keep that file and `tests/schema-types.ts` identical in every plugin that has them, but for the import path in `tests/schema-types.ts`; gitlab keeps them in `server/` and its tool inputs in `server/inputs.ts`, by short tool name; secrets checks its one MCP server tool in `server/tool.mjs` with a JSDoc `@satisfies`).
+- Hooks work: load the `plugin-authoring` skill first. The `claude-code` module is host-provided, not on npm.
+- The engine finds `on(...)` and `$.noun.method(...)` calls by source analysis: pass `$` only to top-level functions of the same file, never across an import, and write `$.env.get` names as literals. Pure modules take injected host access.
+- Any module hook on tool calls (`tool.call`, `tool.run`, `tool.check`, `tool.judge`, `agent.spawn`, `agent.offer`, `session.send`, classic `PreToolUse`/`PostToolUse` inside a module) turns Code Mode off. Plugins that must keep Code Mode expose tools through an MCP server or read the transcript instead.
+- `claude plugin validate` type-checks any TypeScript a plugin runs as hooks-module code, without Node types; Node-side code is therefore JSDoc-typed `.mjs` checked by `tsconfig.node.json` (gitlab instead runs `.ts` through Node's type stripping).
+- MCP servers get plugin options as `SPIDER_<PLUGIN>_OPTION_*` from `${user_config.*}` in `.mcp.json` and delete them from their environment, so child processes do not inherit them.
+- `hooks/schema.ts` and `tests/schema-types.ts` (gitlab: `server/`) are identical copies in every plugin that has them, except the import path in `tests/schema-types.ts`: edit one, copy to all. Each tool's `inputSchema` must satisfy `SchemaFor` of its input type.
+- Credentials: an option or environment source counts only whole, never mixed with another; a source the project or local settings declare is refused, since anyone with commit access could plant it; messages name the option or variable, never the value.
+- Names a person types or Claude calls start with the plugin's full name, never the marketplace's: commands `<plugin>-<action>` (`$.command.register` refuses `:`), skills shown as `<plugin>:<skill>` without repeating the plugin name.
+- Placeholders only (`gitlab.example.com/group/project`), never real hosts, projects, paths or tokens: the code runs on every installed copy.
 
 ## Done for a plugin change
 
-1. `pnpm --filter <name> validate` and `pnpm --filter <name> test` pass, and so does `pnpm --filter <name> typecheck` when the plugin has TypeScript.
-2. A plugin that ships the change has its `version` in `.claude-plugin/plugin.json` raised (semver: patch for a fix, minor for a feature) and a line in its `CHANGELOG.md`; installed copies update only when the version changes.
-3. The root README and the plugin's AGENTS.md match the new behavior.
+1. `validate` and `test` pass for the plugin, and `typecheck` when it has TypeScript.
+2. A change to a shipped file (anything in the plugin folder except tests and docs) raises `version` in `.claude-plugin/plugin.json` (semver) and adds a `CHANGELOG.md` line; installed copies update only when the version changes.
+3. The root `README.md`, the plugin's `README.md` and its `AGENTS.md` match the new behavior.
 
 ## Adding or removing a plugin
 
-- `claude plugin init <name>` in `plugins/` scaffolds a plugin; add its `package.json` with the scripts above, an entry in `.claude-plugin/marketplace.json` with the manifest's description, a row and install line in the root README, and a line under "Where to look" here. A plugin that ships only skills has no `hooks/` and no `tsconfig.json`.
-- Unlisted plugins: a name in `.claude-plugin/unlisted.json` (a JSON array) has no marketplace entry, README row or install line, and is still validated and tested. Load it with `--plugin-dir` or `CLAUDE_CODE_PLUGIN_DIRS`, which reads its options from `pluginConfigs["<name>@inline"]`.
-- Removing a plugin: its folder, its marketplace entry, its README row and install line, and its line here.
-
-## CI
-
-- `.github/workflows/ci.yml` runs on every pull request and push to `main`: `pnpm install --frozen-lockfile`, `pnpm validate` and `pnpm test`, with Node from `.nvmrc`. Typecheck stays local, since the typings need an interactive session.
+- Add: `claude plugin init <name>` in `plugins/`; a `package.json` with only `validate`, `test` and `typecheck` scripts; a `.claude-plugin/marketplace.json` entry with the manifest's description; a README row and install line.
+- Unlisted: a name in `.claude-plugin/unlisted.json` gets no marketplace entry, README row or install line, and is still validated and tested; load it with `--plugin-dir` or `CLAUDE_CODE_PLUGIN_DIRS`, with options under `pluginConfigs["<name>@inline"]`.
+- Remove: the folder, the marketplace entry, the README row and install line.
 
 ## Conventions
 
-- README, docs, code comments and user-facing plugin messages in English.
-- Names a person types or Claude calls start with the plugin's full name: mod commands are `<plugin>-<action>` (`$.command.register` refuses `:`), skills are `skills/<skill>/` shown as `<plugin>:<skill>`, never the marketplace's name.
-- Conventional Commits in English for commits and PR titles; English PR descriptions (`.github/pull_request_template.md`).
-- Docs describe current behavior and how to use or contribute; history lives in git, and a rule explaining one line of code goes in a comment there.
-- Issues live in this repository's GitHub Issues; use the `gh` CLI.
+- English for code, comments, docs and plugin messages; Conventional Commits for commits and PR titles; PR bodies follow `.github/pull_request_template.md`. A breaking rename ships under a `!` title.
+- Docs state current behavior; history lives in git. A rule that explains one line of code goes in a comment there.
+- Issues: this repository's GitHub Issues, through `gh`.

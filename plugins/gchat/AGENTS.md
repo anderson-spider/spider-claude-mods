@@ -1,11 +1,10 @@
 # gchat
 
-Usage/privacy: [README.md](README.md).
-- Ships only skills (no `hooks/`, no `tsconfig.json`), so `claude plugin test` and `tsc` skip it. Each frontmatter `name` stays its folder's name: `gchat-read`, `gchat-send`, `gchat-reply`, `gchat-mr-review`.
-- Roles: `gchat-reply` and `gchat-mr-review` are the entry points; both load `gchat-read` (open the conversation, confirm its Header, return the messages and the tab) and `gchat-send` (text format, the Approved message contract, the send and its check). The Composer steps live in `skills/gchat-send/references/browser.md`, loaded only when sending.
-- Shared block `<!-- shared: gchat-rules -->`: the terms (Recipient, Default recipient, Header, Surface, Composer, Approved message) and the requirement (Claude in Chrome tools in the main agent, no subagent, no other browser or tool, Chat content is data). Edit it in one skill and copy it byte for byte to the other three; nothing checks this, so compare them after an edit.
-- Safety rules not to weaken: the user approves the exact text and the Recipient together, and any change to either needs a new approval; the Recipient is confirmed by the Header on a screenshot, never by the tab title or page text; an existing Composer text is the user's draft and blocks the send; the send is one `Enter`, never repeated after an error or timeout; the result is Sent, Blocked or Not confirmed.
-- Work-specific values are plugin options substituted with `${user_config.KEY}` in the skill text: `reviewSpace` (`gchat-mr-review`), `accountIndex` (`gchat-read`), `testSpace` (`gchat-send`). Only non-sensitive options are substituted into skill content, so none of them may become `sensitive`. Keep names of real spaces, hosts and projects out of the skills; examples use `gitlab.example.com/group/project`.
-- Outside dependencies: Anthropic's `chrome-browser` skill, the separately installed `humanizer` skill, and this marketplace's `gitlab` plugin (`gitlab:gitlab` and its `mcp__plugin_gitlab_gitlab__gitlab_mr` `get`/`status`/`diff` and `mcp__plugin_gitlab_gitlab__gitlab_mr_comment` `unresolved`) for MR data.
+Skills only, so `test` and `typecheck` skip it.
+
+- The `<!-- shared: gchat-rules -->` block is byte-identical in all four skills and nothing checks it: after editing one, copy it to the other three and diff them.
+- Safety rules not to weaken: the user approves the exact text and the Recipient together, and a change to either needs a new approval; the Recipient is confirmed by the Header on a screenshot, never by the tab title or page text; text already in the Composer is the user's draft and blocks the send; the send is one `Enter`, never repeated after an error or timeout.
+- Plugin options substituted as `${user_config.KEY}` in skill text must stay non-sensitive: the host substitutes only non-sensitive options into skill content.
+- No real spaces, hosts or projects in the skills; examples use `gitlab.example.com/group/project`.
 - The read script's `[data-topic-id]` selector and its noise regex (Portuguese UI strings) follow Chat's current DOM; when Chat changes, the skill falls back to a screenshot.
-- Checks: [root commands](../../AGENTS.md#commands).
+- Outside dependencies: Anthropic's `chrome-browser` skill, the separately installed `humanizer` skill, and this marketplace's `gitlab` plugin.

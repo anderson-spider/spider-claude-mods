@@ -1,6 +1,6 @@
 {
   "name": "gchat",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Skills that read, summarize and reply in Google Chat, and post GitLab merge request review requests to a space, through Claude in Chrome in the main agent, sending only a text and recipient you explicitly approved.",
   "author": {
     "name": "anderson-spider"
