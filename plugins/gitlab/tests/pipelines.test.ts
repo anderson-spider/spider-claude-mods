@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
-import { POLL_MS, pipeline, variables } from '../hooks/pipelines'
-import { MR, THEIRS, fakeCtx, paged } from './fake-api'
+import { expect, test } from './expect.ts'
+import { POLL_MS, pipeline, variables } from '../server/pipelines.ts'
+import { MR, THEIRS, fakeCtx, paged } from './fake-api.ts'
 
 const P = (id: number, status: string) => ({ id, status, ref: 'feature/x', sha: 'abcdef0123', source: 'push', web_url: `u/${id}` })
 const JOBS = [

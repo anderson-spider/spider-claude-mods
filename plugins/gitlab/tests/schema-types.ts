@@ -1,6 +1,6 @@
 // Type-level cases for hooks/schema.ts, checked by tsc only (no test runner loads this file). Each `@ts-expect-error`
 // line must fail to compile; the lines without one must compile. Every plugin's copy is byte-for-byte this template.
-import { allOf, type SchemaFor } from '../hooks/schema'
+import { allOf, type SchemaFor } from '../server/schema.ts'
 
 type Input = { text: string; mode?: 'plain' | 'upper'; on?: boolean; count?: number; tags?: string[]; body?: unknown }
 type NoneRequired = { text?: string }

@@ -1,11 +1,11 @@
 // gitlab_mr_comment: read and write a merge request's discussions, directly or as draft notes published later; writes
 // only on the token's own MR unless allowOthers. Deleting a comment or a draft is not offered.
-import type { McpToolInputs } from 'claude-code'
-import { GitlabError } from './api'
-import { InputError, bool, clip, id, items, json, more, mrIid, need, paging, str, writable, type Ctx, type User } from './context'
+import type { ToolInputs } from './inputs.ts'
+import { GitlabError } from './api.ts'
+import { InputError, bool, clip, id, items, json, more, mrIid, need, paging, str, writable, type Ctx, type User } from './context.ts'
 
-export type CommentAction = McpToolInputs['mcp__gitlab__gitlab_mr_comment']['action']
-export type CommentInput = { [K in keyof McpToolInputs['mcp__gitlab__gitlab_mr_comment']]?: unknown }
+export type CommentAction = ToolInputs['gitlab_mr_comment']['action']
+export type CommentInput = { [K in keyof ToolInputs['gitlab_mr_comment']]?: unknown }
 
 type Note = {
   id: number

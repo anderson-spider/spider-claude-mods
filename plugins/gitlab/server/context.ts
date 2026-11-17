@@ -1,6 +1,6 @@
 // What every tool shares: the API of the chosen project, the current branch, the token's user, input checks, paging,
 // the guard on other people's merge requests and output size.
-import type { Api, Page, Query } from './api'
+import type { Api, Page, Query } from './api.ts'
 
 export type User = { id?: number; username?: string }
 

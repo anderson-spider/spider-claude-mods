@@ -1,7 +1,7 @@
 // A fake GitLab API for the pure tool tests: records each call and answers from a route table keyed `METHOD path`.
-import type { Api, Page, Query } from '../hooks/api'
-import { GitlabError } from '../hooks/api'
-import { makeCtx, type Ctx } from '../hooks/context'
+import type { Api, Page, Query } from '../server/api.ts'
+import { GitlabError } from '../server/api.ts'
+import { makeCtx, type Ctx } from '../server/context.ts'
 
 export type Call = { method: string; path: string; query?: Query; body?: Record<string, unknown> }
 type Answer = string | number | boolean | null | readonly unknown[] | { [key: string]: unknown } | ((call: Call) => unknown)

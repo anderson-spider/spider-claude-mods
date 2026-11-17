@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
-import { comment, discussionView, unresolvedView } from '../hooks/comments'
-import { MR, THEIRS, fakeCtx, paged } from './fake-api'
+import { expect, test } from './expect.ts'
+import { comment, discussionView, unresolvedView } from '../server/comments.ts'
+import { MR, THEIRS, fakeCtx, paged } from './fake-api.ts'
 
 const thread = (id: string, resolved: boolean) => ({
   id,

@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
-import { user } from '../hooks/users'
-import { fakeCtx } from './fake-api'
+import { expect, test } from './expect.ts'
+import { user } from '../server/users.ts'
+import { fakeCtx } from './fake-api.ts'
 
 const ANN = { id: 1, username: 'ann', name: 'Ann Lee', state: 'active', web_url: 'https://gitlab.example.com/ann', email: 'ann@example.com' }
 

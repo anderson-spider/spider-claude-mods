@@ -1,5 +1,5 @@
 // What an API refusal tells the model: GitLab's status and message, then what to do about it.
-import type { GitlabError } from './api'
+import type { GitlabError } from './api.ts'
 
 /** A hint for the status (and, for 403, whether the request wrote), or undefined when GitLab's message says enough. */
 export function hint(err: GitlabError, project: string, host: string): string | undefined {

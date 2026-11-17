@@ -1,8 +1,8 @@
 // gitlab_job_log: a job's log, cleaned of terminal codes and cut to what explains a failure.
-import type { McpToolInputs } from 'claude-code'
-import { InputError, MAX_CHARS, clip, id, need, str, type Ctx } from './context'
+import type { ToolInputs } from './inputs.ts'
+import { InputError, MAX_CHARS, clip, id, need, str, type Ctx } from './context.ts'
 
-export type LogInput = { [K in keyof McpToolInputs['mcp__gitlab__gitlab_job_log']]?: unknown }
+export type LogInput = { [K in keyof ToolInputs['gitlab_job_log']]?: unknown }
 
 /** Lines that usually say why a job failed. */
 export const ERROR_LINE =

@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
-import { SNIPPET_CHARS, cleanLog, errorExcerpt, failureSnippet, jobLog } from '../hooks/joblog'
-import { fakeCtx } from './fake-api'
+import { expect, test } from './expect.ts'
+import { SNIPPET_CHARS, cleanLog, errorExcerpt, failureSnippet, jobLog } from '../server/joblog.ts'
+import { fakeCtx } from './fake-api.ts'
 
 const ESC = '\x1b'
 

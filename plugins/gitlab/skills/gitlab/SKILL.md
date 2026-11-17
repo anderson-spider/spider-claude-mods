@@ -1,6 +1,6 @@
 ---
 name: gitlab
-description: GitLab work (merge requests, pipelines, jobs, job logs, labels, MR comments and draft notes) done by the main agent with this plugin's mcp__gitlab__* tools. Use automatically whenever the user pastes a GitLab URL or mentions an MR, merge request, pipeline, job, CI failure, "abre a MR", "vê o pipeline" or "comenta na MR", even without saying GitLab. Never for GitHub.
+description: GitLab work (merge requests, pipelines, jobs, job logs, labels, MR comments and draft notes) done by the main agent with this plugin's mcp__plugin_gitlab_gitlab__* tools. Use automatically whenever the user pastes a GitLab URL or mentions an MR, merge request, pipeline, job, CI failure, "abre a MR", "vê o pipeline" or "comenta na MR", even without saying GitLab. Never for GitHub.
 ---
 
 # GitLab
@@ -9,7 +9,7 @@ Do this yourself in the main agent; do not delegate to a subagent.
 
 ## Tools
 
-- Use this plugin's tools: `mcp__gitlab__gitlab_mr`, `mcp__gitlab__gitlab_mr_comment`, `mcp__gitlab__gitlab_pipeline`, `mcp__gitlab__gitlab_job_log`, `mcp__gitlab__gitlab_label` and `mcp__gitlab__gitlab_user`. Never use them for GitHub.
+- Use this plugin's tools: `mcp__plugin_gitlab_gitlab__gitlab_mr`, `mcp__plugin_gitlab_gitlab__gitlab_mr_comment`, `mcp__plugin_gitlab_gitlab__gitlab_pipeline`, `mcp__plugin_gitlab_gitlab__gitlab_job_log`, `mcp__plugin_gitlab_gitlab__gitlab_label` and `mcp__plugin_gitlab_gitlab__gitlab_user`. Never use them for GitHub.
 - Work from the full MR, pipeline or job URL when the user gives one. It holds the host, the project path and the id: `https://<host>/<group>/<project>/-/merge_requests/<iid>`, `.../-/pipelines/<id>`, `.../-/jobs/<id>`.
   - Inside a clone of that project, the tools read the host and project from the git remote: pass only the id (`iid`, `pipelineId`, `jobId`).
   - Elsewhere, pass `host` (the host name, never the URL) and `project` (`group/subgroup/project`, or the numeric id), plus `iid` for any MR action: with `project` there is no current-branch MR.
