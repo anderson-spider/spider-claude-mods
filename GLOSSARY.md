@@ -67,8 +67,12 @@ One task the orchestrator hands to another CLI's agent, which works in its own s
 _Avoid_: Job, run, subagent call
 
 **Runtime mode**:
-What a delegated task's agent may do, answered by the client to each of its permission requests: approval-required (reads only), auto-accept-edits (edits inside the folder) or full-access; never broader than the session's ceiling.
+What a delegated task's agent may do, answered by the client to each of its permission requests: read-only (reads only, the rest refused at once), approval-required (reads only, the rest refused as needing approval), auto-accept-edits (edits inside the folder) or full-access; never broader than the session's ceiling.
 _Avoid_: Permission level, sandbox
+
+**Thread**:
+The agent session a delegated task opens, with its folder, role, model and runtime mode fixed; follow-ups are later tasks on it that resume the session, one running at a time and the rest queued.
+_Avoid_: Conversation, chat
 
 **Notice**:
 The message a delegated task's end leaves for the session that started it, submitted as a prompt once, unless a wait or a status read already returned the result.

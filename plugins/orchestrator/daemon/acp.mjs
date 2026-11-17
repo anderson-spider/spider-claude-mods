@@ -27,6 +27,7 @@ export const MAX_RETRIES = 4
  * @property {string} cwd
  * @property {Record<string, string | undefined>} [env]
  * @property {string} prompt
+ * @property {string} [resumeSessionId] an agent session to go on with (`session/resume`, which replays nothing), else a new one
  * @property {string} [model]
  * @property {string} [effort]
  * @property {RuntimeMode} runtimeMode
@@ -76,7 +77,7 @@ export async function runTurn(input) {
           refused.push({
             kind: typeof toolCall?.kind === 'string' ? toolCall.kind : 'other',
             title: String(toolCall?.title ?? toolCall?.name ?? 'an action').slice(0, 200),
-            reason: disposition === 'deny' ? 'outside the work folder' : `needs approval in ${input.runtimeMode}`,
+            reason: disposition === 'ask' ? `needs approval in ${input.runtimeMode}` : input.runtimeMode === 'read-only' ? 'read-only' : 'outside the work folder',
           })
         }
         return outcomeOf(disposition, params?.options)
@@ -129,15 +130,27 @@ export async function runTurn(input) {
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
       clientInfo: { name: 'spider-orchestrator', version: input.clientVersion ?? '0' },
     })
-    const session = await rpc.request('session/new', { cwd: input.cwd, mcpServers: [] })
+    let session
+    if (input.resumeSessionId) {
+      try {
+        session = { sessionId: input.resumeSessionId, ...(await rpc.request('session/resume', { sessionId: input.resumeSessionId, cwd: input.cwd, mcpServers: [] })) }
+      } catch (error) {
+        if (cancelled) return end({ status: 'cancelled' })
+        if (timedOut) return end({ error: 'The task timed out.', errorKind: 'timed_out' })
+        return end({ error: `agy could not resume its session: ${messageOf(error)} Send with freshContext to start a new one.`, errorKind: 'agent_error' })
+      }
+    } else session = await rpc.request('session/new', { cwd: input.cwd, mcpServers: [] })
     sessionId = typeof session?.sessionId === 'string' ? session.sessionId : undefined
     if (!sessionId) return end({ error: 'agy started no session.', errorKind: 'agent_error' })
     executedModel = typeof session?.models?.currentModelId === 'string' ? session.models.currentModelId : null
     input.onUpdate?.({ sessionId, executedModel })
     if (cancelled || timedOut) return end(cancelled ? { status: 'cancelled' } : { error: 'The task timed out.', errorKind: 'timed_out' })
     // The agent's own mode stays its default, which asks before edits and commands; the runtime mode is the client's.
+    // A resumed session lists no modes: it is set all the same.
     const modes = session?.modes?.availableModes
-    if (Array.isArray(modes) && modes.some((mode) => mode?.id === 'default')) await rpc.request('session/set_mode', { sessionId, modeId: 'default' })
+    if (input.resumeSessionId || (Array.isArray(modes) && modes.some((mode) => mode?.id === 'default'))) {
+      await rpc.request('session/set_mode', { sessionId, modeId: 'default' }).catch(() => undefined)
+    }
     if (input.model) {
       try {
         await rpc.request('session/set_model', { sessionId, modelId: input.model })

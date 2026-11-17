@@ -16,6 +16,8 @@ let home
 /** @type {string} */
 let state
 let daemonPid = 0
+/** @type {import('node:child_process').ChildProcess[]} */
+const servers = []
 // Under /tmp: a socket path has a short length limit, which a macOS temporary folder can pass.
 before(async () => {
   home = await mkdtemp('/tmp/orch-')
@@ -25,7 +27,10 @@ before(async () => {
   await writeFile(join(home, 'bin', 'agy'), `#!/bin/sh\nexec "${process.execPath}" "${AGENT}" "$@"\n`)
   await chmod(join(home, 'bin', 'agy'), 0o755)
 })
+// A failed assertion leaves the server and the detached daemon running, which would hold the test run open.
 after(async () => {
+  for (const server of servers) server.kill('SIGKILL')
+  daemonPid ||= Number(/pid (\d+)/.exec(await readFile(join(state, 'daemon.log'), 'utf8').catch(() => ''))?.[1] ?? 0)
   if (daemonPid) {
     try {
       process.kill(daemonPid, 'SIGKILL')
@@ -39,6 +44,7 @@ function serve() {
   const env = { ...process.env, HOME: home, CLAUDE_CODE_SESSION_ID: 'sess-e2e', CLAUDE_PROJECT_DIR: join(home, 'proj'), SPIDER_ORCHESTRATOR_OPTION_AGY_PATH: join(home, 'bin', 'agy'), SPIDER_ORCHESTRATOR_OPTION_MAX_RUNTIME_MODE: 'approval-required', SPIDER_ORCHESTRATOR_OPTION_TASK_MINUTES: '${user_config.taskMinutes}', FAKE_AGENT_SCRIPT: JSON.stringify({ steps: [{ say: 'Reviewed: fine.' }] }), FAKE_AGENT_LOG: join(home, 'agent.log') }
   delete env.XDG_STATE_HOME
   const child = spawn(process.execPath, [MAIN], { env, stdio: ['pipe', 'pipe', 'inherit'] })
+  servers.push(child)
   /** @type {Map<number, (message: any) => void>} */
   const waiting = new Map()
   createInterface({ input: child.stdout }).on('line', (line) => {
@@ -78,16 +84,16 @@ const alive = (pid) => {
   }
 }
 
-test('the server lists the four tools, starts the daemon, and a delegated task runs agy acp in the session folder', async () => {
+test('the server lists the five tools, starts the daemon, and a delegated task runs agy acp in the session folder', async () => {
   const server = serve()
   const hello = await server.request('initialize', { protocolVersion: '2025-06-18', capabilities: {} })
   assert.equal(hello.result.serverInfo.name, 'orchestrator')
   const listed = await server.request('tools/list')
-  assert.deepEqual(listed.result.tools.map((/** @type {any} */ tool) => tool.name), ['orchestrator_capabilities', 'delegate_task', 'task_status', 'task_cancel'])
+  assert.deepEqual(listed.result.tools.map((/** @type {any} */ tool) => tool.name), ['orchestrator_capabilities', 'delegate_task', 'task_status', 'task_cancel', 'thread_send'])
 
   const capabilities = await server.call('orchestrator_capabilities', {})
   assert.equal(capabilities.value.providers[0].available, true)
-  assert.deepEqual(capabilities.value.runtimeModes, ['approval-required'])
+  assert.deepEqual(capabilities.value.runtimeModes, ['read-only', 'approval-required'])
 
   const escalated = await server.call('delegate_task', { task: 'Edit it', runtimeMode: 'full-access' })
   assert.equal(escalated.isError, true)
@@ -118,6 +124,26 @@ test('the server lists the four tools, starts the daemon, and a delegated task r
   const status = await server.call('task_status', { taskId: started.value.taskId })
   assert.equal(status.value.workState, 'result_available')
   assert.deepEqual(await readdir(inbox), [])
+
+  // A follow-up on the thread resumes the agent's session with the message alone.
+  const steer = await server.call('thread_send', { threadId: waited.value.threadId, message: 'Any test missing?', mode: 'steer' })
+  assert.equal(steer.isError, true)
+  const sent = await server.call('thread_send', { threadId: waited.value.threadId, message: 'Any test missing?' })
+  assert.equal(sent.isError, false)
+  assert.equal(sent.value.threadId, waited.value.threadId)
+  assert.equal(sent.value.delivery, 'started')
+  let followUp
+  for (let i = 0; i < 100 && followUp?.value.workState !== 'result_available'; i++) {
+    followUp = await server.call('task_status', { taskId: sent.value.taskId })
+    if (followUp.value.workState !== 'result_available') await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  assert.equal(followUp?.value.status, 'completed')
+  assert.equal(followUp?.value.summary, 'Reviewed: fine.')
+  const got = (await readFile(join(home, 'agent.log'), 'utf8')).split('\n').filter(Boolean).map((line) => JSON.parse(line)).filter((entry) => entry.got).map((entry) => entry.got)
+  const resume = got.filter((message) => message.method === 'session/resume')
+  assert.equal(resume.length, 1)
+  assert.equal(resume[0].params.sessionId, '11111111-2222-3333-4444-555555555555')
+  assert.equal(got.filter((message) => message.method === 'session/prompt').at(-1).params.prompt[0].text, 'Any test missing?')
 
   await server.stop()
   daemonPid = Number(/pid (\d+)/.exec(await readFile(join(state, 'daemon.log'), 'utf8'))?.[1])

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // @ts-nocheck -- a scripted stand-in whose messages are whatever the test sends; typing it would only restate them.
 // A scripted ACP agent standing in for `agy acp`: FAKE_AGENT_SCRIPT (JSON) says what each prompt does, and every
-// message it gets, its argv, cwd and pid go to FAKE_AGENT_LOG (one JSON line each).
+// message it gets, its argv, cwd and pid go to FAKE_AGENT_LOG (one JSON line each). session/resume takes any session id
+// (as agy keeps its sessions on disk), but fails when the script sets resumeError.
 import { appendFileSync } from 'node:fs'
 
 const script = JSON.parse(process.env.FAKE_AGENT_SCRIPT ?? '{}')
@@ -42,7 +43,12 @@ async function prompt(params) {
 
 const methods = {
   initialize: () => ({ protocolVersion: 1, agentCapabilities: { loadSession: true } }),
-  'session/new': () => ({ sessionId: '11111111-2222-3333-4444-555555555555', modes: { currentModeId: 'default', availableModes: [{ id: 'default' }, { id: 'plan' }] }, models: { currentModelId: 'gemini-4-argon-medium', availableModels: [{ modelId: 'gemini-4-argon-medium', name: 'Gemini 4 Argon' }, { modelId: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash' }] }, configOptions: [{ id: 'thought_level', options: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }] }] }),
+  'session/new': () => ({ sessionId: script.sessionId ?? '11111111-2222-3333-4444-555555555555', modes: { currentModeId: 'default', availableModes: [{ id: 'default' }, { id: 'plan' }] }, models: { currentModelId: 'gemini-4-argon-medium', availableModels: [{ modelId: 'gemini-4-argon-medium', name: 'Gemini 4 Argon' }, { modelId: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash' }] }, configOptions: [{ id: 'thought_level', options: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }] }] }),
+  'session/resume': (params) => {
+    if (script.resumeError) throw Object.assign(new Error(script.resumeError), { code: -32002 })
+    log({ resumed: params.sessionId })
+    return { models: { currentModelId: 'gemini-4-argon-medium', availableModels: [] } }
+  },
   'session/set_mode': () => ({}),
   'session/set_model': (params) => { if (!params.modelId.startsWith('gemini')) throw Object.assign(new Error(`Unknown model ID: ${params.modelId}`), { code: -32602 }); return {} },
   'session/set_config_option': () => ({ configOptions: [] }),

@@ -139,3 +139,32 @@ test('the probe reads the models and thinking levels and spends no prompt', asyn
   })
   assert.doesNotMatch(await readFile(logFile, 'utf8'), /session\/prompt/)
 })
+
+test('read-only refuses an edit and a command with the reason read-only, and lets a read pass', async () => {
+  const { result, log } = await turn(
+    { steps: [{ permission: { kind: 'read', title: 'Read a.ts' } }, { permission: { kind: 'edit', title: 'File a.ts', locations: [{ path: join(dir, 'a.ts') }] } }, { permission: { kind: 'execute', title: 'ls' } }, { say: 'Read it.' }] },
+    { runtimeMode: 'read-only' },
+  )
+  assert.equal(result.status, 'completed')
+  assert.deepEqual(log.filter((e) => e.permission).map((e) => e.answer.outcome.optionId), ['allow', 'deny', 'deny'])
+  assert.deepEqual(result.refused, [
+    { kind: 'edit', title: 'File a.ts', reason: 'read-only' },
+    { kind: 'execute', title: 'ls', reason: 'read-only' },
+  ])
+})
+
+test('a resumed turn goes on with the session through session/resume, and a failed resume says to send with freshContext', async () => {
+  const resumed = await turn({ steps: [{ say: 'Still here.' }] }, { resumeSessionId: 'session-from-before', prompt: 'And the tests?' })
+  assert.equal(resumed.result.status, 'completed')
+  assert.equal(resumed.result.sessionId, 'session-from-before')
+  assert.equal(resumed.result.summary, 'Still here.')
+  assert.deepEqual(resumed.got.map((m) => m.method), ['initialize', 'session/resume', 'session/set_mode', 'session/prompt'])
+  assert.deepEqual(resumed.got[1].params, { sessionId: 'session-from-before', cwd: dir, mcpServers: [] })
+  assert.equal(resumed.got.at(-1).params.prompt[0].text, 'And the tests?')
+
+  const lost = await turn({ resumeError: 'Session not found' }, { resumeSessionId: 'session-gone' })
+  assert.equal(lost.result.status, 'failed')
+  assert.equal(lost.result.errorKind, 'agent_error')
+  assert.match(lost.result.error ?? '', /could not resume its session: Session not found.*freshContext/)
+  assert.equal(lost.got.some((m) => m.method === 'session/new' || m.method === 'session/prompt'), false)
+})

@@ -1,14 +1,16 @@
-// The daemon's files: one JSON file a task, and the notices waiting for a session (one file a finished task, which
+// The daemon's files: one JSON file a task and one a thread (an agent session its tasks run on), and the notices waiting for a session (one file a finished task, which
 // that session's hooks module submits and removes). Every write is a temp file and a rename, in folders only the user
 // can read.
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SESSION_ID, inboxDirOf } from '../hooks/paths.ts'
 
-/** @import { Task } from './orchestrator.mjs' */
+/** @import { Task, Thread } from './orchestrator.mjs' */
 
 /** A task id: `task_` and lowercase letters and digits, so it is a file name. */
 export const TASK_ID = /^task_[a-z0-9]{6,40}$/
+/** A thread id: `thread_` and the same. */
+export const THREAD_ID = /^thread_[a-z0-9]{6,40}$/
 
 /**
  * @param {string} path
@@ -23,23 +25,30 @@ async function writeAtomic(path, text) {
 /** @param {string} stateDir */
 export function createStore(stateDir) {
   const tasksDir = join(stateDir, 'tasks')
+  const threadsDir = join(stateDir, 'threads')
+  /** @param {string} path */
+  const readJson = async (path) => {
+    const text = await readFile(path, 'utf8').catch(() => undefined)
+    try {
+      return text === undefined ? undefined : JSON.parse(text)
+    } catch {
+      return undefined
+    }
+  }
   return {
     async init() {
       await mkdir(tasksDir, { recursive: true, mode: 0o700 })
+      await mkdir(threadsDir, { recursive: true, mode: 0o700 })
       await mkdir(join(stateDir, 'inbox'), { recursive: true, mode: 0o700 })
     },
     /** @param {Task} task */
     save: (task) => writeAtomic(join(tasksDir, `${task.taskId}.json`), `${JSON.stringify(task, null, 2)}\n`),
     /** @param {string} taskId @returns {Promise<Task | undefined>} */
-    async load(taskId) {
-      if (!TASK_ID.test(taskId)) return undefined
-      const text = await readFile(join(tasksDir, `${taskId}.json`), 'utf8').catch(() => undefined)
-      try {
-        return text === undefined ? undefined : JSON.parse(text)
-      } catch {
-        return undefined
-      }
-    },
+    load: async (taskId) => (TASK_ID.test(taskId) ? readJson(join(tasksDir, `${taskId}.json`)) : undefined),
+    /** @param {Thread} thread */
+    saveThread: (thread) => writeAtomic(join(threadsDir, `${thread.threadId}.json`), `${JSON.stringify(thread, null, 2)}\n`),
+    /** @param {string} threadId @returns {Promise<Thread | undefined>} */
+    loadThread: async (threadId) => (THREAD_ID.test(threadId) ? readJson(join(threadsDir, `${threadId}.json`)) : undefined),
     /** @returns {Promise<Task[]>} */
     async all() {
       const names = await readdir(tasksDir).catch(() => /** @type {string[]} */ ([]))

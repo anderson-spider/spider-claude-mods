@@ -77,6 +77,8 @@ async function main() {
             return orchestrator.status(caller, input)
           case 'task_cancel':
             return orchestrator.cancel(caller, input)
+          case 'thread_send':
+            return orchestrator.threadSend(caller, input)
           default:
             throw new Error(`Unknown method ${method}`)
         }
