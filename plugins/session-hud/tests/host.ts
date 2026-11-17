@@ -1,6 +1,6 @@
-// The host fake the plugin's tests share: the session's model, usage and theme, the clock, the agents, the store and
-// panes, and the band and the session panel to mount.
-import type { AgentInfo, On, RenderElement } from 'claude-code'
+// The host fake the plugin's tests share: the session's model, usage and theme, the clock, the transcript, and the band
+// to mount.
+import type { On, RenderElement, ToolUseSummary } from 'claude-code'
 import { mock } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
@@ -21,11 +21,11 @@ export const USAGE = {
 /** What git answers for the session's directory: its working tree, the folder within it, the git dirs and the branch (empty on a detached head). */
 export type Repo = { top: string; prefix: string; gitDir: string; common: string; branch: string }
 
-/** A host with the session's model, usage, theme, directory and clock (stopped at NOW, or moving with the test's advances when `moving`); a spawn (refused with `denySpawn`) starts `agent-1`, `agent-2`... on its `model` (Sonnet 4.5 when none), `roster` is what `$.agent.list()` answers, and `place.repo` is what git answers for `place.cwd` (no repository when absent). */
-export function world(on: On, opts: { theme?: string; window?: number; denySpawn?: string; moving?: boolean; repo?: Repo; fork?: string; refuseFill?: boolean } = {}) {
-  const roster: AgentInfo[] = []
+/** A host with the session's model, usage, theme, directory and clock (stopped at NOW, or moving with the test's advances when `moving`); `transcript` is what `$.session.messages()` answers, and `place.repo` is what git answers for `place.cwd` (no repository when absent). */
+export function world(on: On, opts: { theme?: string; window?: number; moving?: boolean; repo?: Repo; fork?: string; refuseFill?: boolean } = {}) {
   const place: { cwd: string; repo?: Repo } = { cwd: '/proj', ...(opts.repo ? { repo: opts.repo } : {}) }
-  let spawns = 0
+  const transcript: { role: 'user' | 'assistant'; text: string; toolUses: ToolUseSummary[] }[] = []
+  on('session.messages', () => ({ value: transcript }) as never)
   // `mock.clock` registers `clock.now` itself and the engine refuses a second one: the test's own reads NOW.
   const clock = mock.clock(((name: string, ...rest: unknown[]) => (name === 'clock.now' ? undefined : (on as (...a: unknown[]) => unknown)(name, ...rest))) as unknown as On, { now: NOW })
   on('clock.now', () => ({ value: opts.moving ? clock.now() : NOW }))
@@ -61,8 +61,6 @@ export function world(on: On, opts: { theme?: string; window?: number; denySpawn
       : { model: e.model, input_tokens: 1_000, output_tokens: 700, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage } as never
   })
-  on('agent.spawn', (_$, e) => (opts.denySpawn !== undefined ? { deny: opts.denySpawn } : { model: e.model ?? 'claude-sonnet-4-5', agentId: `agent-${++spawns}` }))
-  on('agent.list', () => ({ value: roster }))
   // What draws beneath the card in the band: another plugin's tree, such as a row of suggestions.
   on('ui.render', { component: 'AbovePrompt' }, () => BENEATH)
   // The next steps: the fork answers `opts.fork` (nothing to fork without it), the session has two commands, and the
@@ -82,28 +80,11 @@ export function world(on: On, opts: { theme?: string; window?: number; denySpawn
   on('prompt.fill', (_$, e) => (opts.refuseFill ? { isFilled: false } : (fills.push(e.text), { isFilled: true })) as never)
   on('prompt.suggest', (_$, e) => (suggested.push(e.text), { isShown: true }) as never)
   on('ui.toast', (_$, e) => (toasts.push(e.text), { value: undefined }))
-  // The session panel: the session's id, the plugin's store, the panes it opened and the commands it registered.
-  const session = { id: 's1' }
-  const disk = new Map<string, unknown>()
-  const opened: string[] = []
-  const commands: string[] = []
-  on('session.id', () => ({ value: session.id }) as never)
-  on('store.get', (_$, e) => ({ value: disk.get(e.key) }) as never)
-  on('store.set', (_$, e) => (disk.set(e.key, JSON.parse(JSON.stringify(e.value))), { value: undefined }) as never)
-  on('store.delete', (_$, e) => (disk.delete(e.key), { value: undefined }) as never)
-  on('store.keys', () => ({ value: [...disk.keys()] }) as never)
-  on('command.register', (_$, e) => (commands.push(e.name), { value: undefined }) as never)
-  on('ui.open', (_$, e) => (opened.includes(e.id) || opened.push(e.id), { value: { isPlaced: true } }) as never)
-  on('ui.close', (_$, e) => (opened.splice(opened.indexOf(e.id), 1), { value: undefined }) as never)
-  on('ui.panes', () => ({ value: opened.map(pane => ({ id: pane, title: 'Session panel' })) }) as never)
-  return { clock, roster, place, asked, fills, suggested, toasts, session, disk, opened, commands }
+  return { clock, place, transcript, asked, fills, suggested, toasts }
 }
 
 /** The band's tree beneath the card. */
 export const BENEATH: RenderElement = { type: 'Text', props: {}, children: ['beneath'] }
-
-/** An agent as `$.agent.list()` lists it. */
-export const listed = (id: string, status: AgentInfo['status']): AgentInfo => ({ id, status, type: 'general-purpose', description: 'Fixture' })
 
 export const start = ($: { session: { start: (e: never) => Promise<unknown> } }) =>
   $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true } as never)
@@ -113,11 +94,9 @@ export const band = (columns = 110, hasSurvey = false, isWorking = false) => ({
   props: { hasSurvey, isCollapsed: false, isWorking, maxRows: 20, bodyColumns: columns, scroll: { offset: 0, bodyRows: 20 }, view: {} },
 }) as never
 
-/** The session panel as a pane on `surface`, `columns` wide. */
-export const pane = (columns = 100, surface: 'terminal' | 'desktop' = 'terminal') => ({
-  plugin: 'session-hud', component: 'Pane', surface, requestId: 'session-panel',
-  props: { title: 'Session panel', isFocused: true, bodyColumns: columns, placement: 'dock', scroll: { offset: 0, bodyRows: 60 }, view: {} },
-}) as never
+/** A tool call the transcript holds, answered with `text` (an error with `isError`), or in flight without it. */
+export const used = (id: string, tool: string, text?: string, isError = false): ToolUseSummary =>
+  ({ tool_use_id: id, tool, input: {}, ...(text !== undefined ? { text } : {}), ...(isError ? { isError: true as const } : {}) })
 
 /** The text a mounted surface drew, one Text per line. */
 export const drawn = async (ui: { findAll: (q: { type: string }) => Promise<{ text: string }[]> }) => (await ui.findAll({ type: 'Text' })).map(found => found.text).join('\n')

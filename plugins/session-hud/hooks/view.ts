@@ -65,36 +65,6 @@ export const LABELS: Readonly<Record<string, string>> = { five_hour: '5h', seven
 export const shownLimits = (card: SessionHudCard): SessionHudCard['limits'] => card.limits
   .filter(limit => WINDOW_MS[limit.kind] !== undefined && LABELS[limit.kind] !== undefined)
   .sort((a, b) => WINDOW_MS[a.kind]! - WINDOW_MS[b.kind]!).slice(0, 2)
-/** An agent type as the card names it (`Explore`, `codex:codex-rescue`); anything else is `?`, so no other text reaches the screen. */
-const TYPE = /^[A-Za-z0-9][\w.:@-]{0,63}$/
-export const typeName = (type: string | undefined): string | undefined => (type === undefined ? undefined : TYPE.test(type) ? type : '?')
-
-/**
- * The running agents grouped by type, model and effort, the most first, then by name:
- * `3 agents: codex:codex-rescue Opus 5.5 · high ×2, Explore Haiku 4.5`; a part the host has not reported is left out,
- * an unknown model is `?`; empty when none runs.
- */
-export function agentCells(card: SessionHudCard): Row {
-  const agents = Array.isArray(card.agents) ? card.agents : []
-  if (!agents.length) return []
-  const groups = new Map<string, { row: Row; n: number }>()
-  for (const agent of agents) {
-    const type = typeName(typeof agent?.type === 'string' ? agent.type : undefined)
-    const model = modelName(typeof agent?.model === 'string' ? agent.model : undefined) ?? '?'
-    const effort = typeof agent?.effort === 'string' && EFFORTS.has(agent.effort) ? agent.effort : undefined
-    const key = [type ?? '', model, effort ?? ''].join('|')
-    const row: Row = [...(type ? [seg(`${type} `)] : []), seg(model, 'model'), ...(effort ? [seg(` · ${effort}`, 'secondary')] : [])]
-    groups.set(key, { row, n: (groups.get(key)?.n ?? 0) + 1 })
-  }
-  const sorted = [...groups].sort(([a, { n: m }], [b, { n }]) => n - m || (a < b ? -1 : a > b ? 1 : 0))
-  return [seg(`${plural(agents.length, 'agent')}: `, 'secondary'),
-    ...joined(sorted.map(([, { row, n }]) => [...row, ...(n > 1 ? [seg(` ×${n}`, 'secondary')] : [])]), ', ')]
-}
-
-/** What the subagents and teammates processed since the plugin loaded: `agents used 1.2M tokens`; empty before any reported usage. */
-export const agentTokenCells = (card: SessionHudCard): Row =>
-  finite(card.agentTokens) && card.agentTokens > 0 ? [seg('agents used ', 'secondary'), seg(tokens(card.agentTokens), 'strong'), seg(' tokens', 'secondary')] : []
-
 /** The last turn, turn count, edits and errors: `last turn 5s · 4 turns · 2 edits · 1 error`. */
 export function turnCells(card: SessionHudCard): Row {
   const parts: string[] = []
