@@ -12,6 +12,7 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 | [github](plugins/github/README.md) | A skill for GitHub work with the `gh` CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments, never waiting on a run or writing what you did not ask for. |
 | [gitlab](plugins/gitlab/README.md) | Opens, edits, comments on (directly or as draft notes to publish later), reviews and (when asked, behind guards) merges GitLab merge requests, lists yours across projects, lists open review threads, lists and creates labels, runs, retries and cancels pipelines and jobs, waits for and reads pipelines, jobs and job errors, lists a job's artifacts with their URLs, picking the host and its token from the git remote or a host you name. The skill `gitlab:gitlab` has Claude work from a GitLab URL with these tools. The tools come from the plugin's MCP server, run with `node` (22.18 or later), and it has no hooks, so Code Mode stays available. |
 | [image-preview](plugins/image-preview/README.md) | Shows images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads under its row in the transcript, as the desktop app does. |
+| [orchestrator](plugins/orchestrator/README.md) | Lets Claude delegate a task to another CLI's agent as a subagent, as T3 Code does: Antigravity's `agy` works over ACP in its own session in your folder, under a runtime mode the plugin enforces (reads only, edits inside the folder, or full access), and the result comes back as a new message when it ends; a daemon shared by your sessions keeps the tasks. |
 | [secrets](plugins/secrets/README.md) | Claude asks you for a token or password in a card and gets a private file it can use inside a command but not read, while a fence and a scrubber keep the value out of the conversation |
 | [session-hud](plugins/session-hud/README.md) | A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; what the last turn sent and added, edits and errors; and, with the `nextSteps` option on, up to four next prompts from a fork of the session to pick one into the prompt box. It hooks no tool call, so Code Mode stays available. |
 | [sonarqube](plugins/sonarqube/README.md) | Lets Claude diagnose SonarQube 9.x analyses through the read-only Web API: the quality gate of a branch or pull request, its measures and issues, an issue's rule, security hotspots, and the analyzed branches and pull requests, finding the project in `sonar-project.properties`, with the server and token from the `url` and `token` plugin options or the `SONARQUBE_*` or `SONAR_*` environment variables. |
@@ -33,6 +34,7 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.322 
 /plugin install github@spider-claude-mods
 /plugin install gitlab@spider-claude-mods
 /plugin install image-preview@spider-claude-mods
+/plugin install orchestrator@spider-claude-mods
 /plugin install secrets@spider-claude-mods
 /plugin install session-hud@spider-claude-mods
 /plugin install sonarqube@spider-claude-mods
@@ -69,7 +71,7 @@ Load a plugin from its folder so edits reload automatically, with `claude --plug
 | --- | --- |
 | `pnpm check` | `validate`, `test` and `typecheck` below, in that order. |
 | `pnpm validate` | `claude plugin validate --strict` on the marketplace and every plugin. |
-| `pnpm test` | `claude plugin test` on every plugin with hooks, plus antigravity's Node tests (its skill script and MCP server). |
+| `pnpm test` | `claude plugin test` on every plugin with hooks, plus the Node tests of antigravity (its skill script and MCP server) and orchestrator (its MCP server, daemon and ACP client). |
 | `pnpm typecheck` | `tsc` on every plugin with TypeScript. It needs the plugin's typings, which Claude Code writes when you load the plugin once with `claude --plugin-dir plugins/<name>`. |
 | `pnpm --filter <name> <command>` | One of the three above, on one plugin. |
 

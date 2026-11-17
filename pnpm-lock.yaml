@@ -30,6 +30,8 @@ importers:
 
   plugins/image-preview: {}
 
+  plugins/orchestrator: {}
+
   plugins/secrets: {}
 
   plugins/session-hud: {}

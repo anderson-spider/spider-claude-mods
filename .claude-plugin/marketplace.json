@@ -38,6 +38,11 @@
       "description": "See images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads drawn under its row in the transcript"
     },
     {
+      "name": "orchestrator",
+      "source": "./plugins/orchestrator",
+      "description": "Delegate tasks to another CLI's agent as a subagent, as T3 Code does: Antigravity's agy over ACP, in its own session, under a runtime mode the plugin enforces, with a shared daemon that wakes the session when a task ends."
+    },
+    {
       "name": "secrets",
       "source": "./plugins/secrets",
       "description": "Claude asks you for a token or password in a card and gets a private file it can use inside a command but not read, while a fence and a scrubber keep the value out of the conversation"

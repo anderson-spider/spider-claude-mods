@@ -59,3 +59,17 @@ _Avoid_: Image job, generation
 **Artifacts folder**:
 agy's own folder for one Conversation (`~/.gemini/antigravity-cli/brain/<conversation>/`), where its image-generator subagent saves images.
 _Avoid_: Brain, output folder
+
+## Orchestrator
+
+**Delegated task**:
+One task the orchestrator hands to another CLI's agent, which works in its own session and returns a result; a task outlives the session that started it.
+_Avoid_: Job, run, subagent call
+
+**Runtime mode**:
+What a delegated task's agent may do, answered by the client to each of its permission requests: approval-required (reads only), auto-accept-edits (edits inside the folder) or full-access; never broader than the session's ceiling.
+_Avoid_: Permission level, sandbox
+
+**Notice**:
+The message a delegated task's end leaves for the session that started it, submitted as a prompt once, unless a wait or a status read already returned the result.
+_Avoid_: Notification, callback
