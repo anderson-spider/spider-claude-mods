@@ -9,12 +9,8 @@ A file of a plugin that reaches whoever installs it: everything in the plugin's 
 _Avoid_: Source file, plugin file
 
 **Release**:
-One published version of one plugin: its version number, its changelog entry and its tag, covering the shipped-file changes since the previous one.
+One version of one plugin: the `version` in its `.claude-plugin/plugin.json` and its `CHANGELOG.md` line, raised by hand in the pull request that ships the shipped-file change.
 _Avoid_: Bump, deploy, publish
-
-**Release pull request**:
-The pull request, kept open by the release app, that holds the next release of every plugin with unreleased changes; merging it publishes them.
-_Avoid_: Version PR, bump PR
 
 ## Second opinions
 

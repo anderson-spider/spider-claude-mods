@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 (2026-11-17)
+
+### Bug Fixes
+
+* drop the Blocked line gchat-reply and gchat-mr-review repeated right after the shared gchat-rules block
+
 ## 1.0.1 (2026-11-17)
 
 ### Bug Fixes

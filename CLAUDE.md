@@ -1,11 +1,5 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 @AGENTS.md
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues of this repository, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Domain docs
-
-Single-context: `GLOSSARY.md` at the root, created when first needed. See `docs/agents/domain.md`.
