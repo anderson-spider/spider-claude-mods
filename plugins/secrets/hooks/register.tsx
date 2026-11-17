@@ -1,24 +1,13 @@
 import { atom, read, update } from 'claude-code'
-import type { ElementTable, EngineInterface, McpToolInputs, Register } from 'claude-code'
+import type { ElementTable, EngineInterface, Register } from 'claude-code'
 
 import type { SecretRequest } from '../types'
-import { DENY, ancestors, bashReason, forms, toolReason } from './guard'
-import {
-  NO_FOLDER,
-  askedMessage,
-  declinedMessage,
-  enqueue,
-  failedMessage,
-  parseRequest,
-  savedMessage,
-  type RequestInput,
-} from './request'
-import { buildIndex, scrubBlock, scrub, type Block, type Index } from './scrub'
-import { type SchemaFor } from './schema'
+import { STALE_MS, TAKE_MS, ackFile, idOf, isPid, queueDir, queuesDir, type Placement } from './queue'
+import { declinedMessage, enqueue, failedMessage, parseQueued, savedMessage } from './request'
+import { buildIndex, scrubBlock, type Block, type Index } from './scrub'
 import { fileName, isExpired, nameOf, randomSuffix, secretsDir, writeArgv } from './store'
 
 const PANE = 'secrets'
-const TOOL = 'mcp__secrets__'
 const HOUR = 60 * 60 * 1000
 // A surface may seat the pane a moment after ui.open said it waits, so the request looks again, briefly, before it says so
 const SEAT_CHECKS = 4
@@ -31,7 +20,9 @@ const isWaiting = atom({ plugin: 'secrets', key: 'isWaiting' } as const, false)
 // folder at session start and every hour, so a reload or a resumed session loses nothing.
 let values = new Map<string, string>()
 let index: Index = []
-let cwd: string | undefined
+// The Claude Code process, whose id names this session's queue: the plugin's MCP server is its child too
+let pid: number | undefined
+let isTaking = false
 
 /** The private folder, or undefined where no home is known. */
 async function folder($: EngineInterface): Promise<string | undefined> {
@@ -68,6 +59,58 @@ async function refresh($: EngineInterface): Promise<void> {
   }
   values = live
   index = buildIndex(values)
+
+  // Queues left by sessions that ended
+  for (const entry of await $.fs.list(queuesDir(dir)).catch(() => [])) {
+    if (entry.kind !== 'dir' || !isPid(entry.name) || Number(entry.name) === pid || now - entry.mtimeMs < STALE_MS) continue
+    await $.process.run(['rm', '-rf', '--', `${queuesDir(dir)}/${entry.name}`]).catch(() => undefined)
+  }
+}
+
+/** The Claude Code process: the parent of a command this module runs, as it is of the MCP server. */
+async function claudePid($: EngineInterface): Promise<number | undefined> {
+  const run = await $.process.run(['sh', '-c', 'echo $PPID']).catch(() => undefined)
+  const found = Number(run?.stdout.trim())
+  return Number.isInteger(found) && found > 1 ? found : undefined
+}
+
+/** Queues the request, opens the pane and says where the card is: the pane, or the band while a narrow terminal leaves the pane undrawn. */
+async function show($: EngineInterface, asked: SecretRequest): Promise<Placement> {
+  await update($, requests, (queue) => enqueue(queue, asked))
+  // Opened by Claude, not the person, so a narrow terminal leaves the pane waiting undrawn;
+  // the card then shows in the band above the prompt
+  const opened = await $.ui.open({ id: PANE, title: 'secrets', focus: true })
+  // Only when it is still undrawn after looking again does Claude hear the card is above the prompt
+  const isPlaced = opened.isPlaced || (await isDrawn($))
+  await update($, isWaiting, () => !isPlaced)
+  $.ui.toast(isPlaced ? `Claude needs ${asked.name}` : `Claude needs ${asked.name}: paste it above the prompt`)
+  return isPlaced ? 'pane' : 'band'
+}
+
+/** Takes the requests the MCP server queued for this session, oldest first: each is shown, and the server told where. */
+async function take($: EngineInterface): Promise<void> {
+  if (isTaking || pid === undefined) return
+  const dir = await folder($)
+  if (!dir) return
+  isTaking = true
+  try {
+    const queue = queueDir(dir, pid)
+    const entries = (await $.fs.list(queue).catch(() => []))
+      .filter((entry) => entry.kind === 'file' && idOf(entry.name) !== undefined)
+      .sort((a, b) => a.mtimeMs - b.mtimeMs)
+    for (const entry of entries) {
+      const path = `${queue}/${entry.name}`
+      const text = await $.fs.read(path).catch(() => undefined)
+      // Taken: the server withdraws only a request still there when its wait ends
+      const removed = await $.process.run(['rm', '--', path]).catch(() => undefined)
+      const asked = typeof text === 'string' && removed?.exitCode === 0 ? parseQueued(text) : undefined
+      if (!asked) continue
+      const placement = await show($, asked)
+      await $.fs.write(`${queue}/${ackFile(idOf(entry.name) ?? '')}`, placement).catch(() => undefined)
+    }
+  } finally {
+    isTaking = false
+  }
 }
 
 /** Ends the card in front: saves the value to a private file, or tells Claude it was declined. */
@@ -172,7 +215,7 @@ function card(
 
 export const register: Register = (on) => {
   on('session.start', async ($, e, next) => {
-    cwd = e.cwd
+    pid = await claudePid($)
     await refresh($)
 
     await $.command.register({
@@ -181,37 +224,6 @@ export const register: Register = (on) => {
       immediate: true,
     })
 
-    await $.tool.register({
-      name: 'request_secret',
-      description:
-        'Asks the user for one secret (a token, a password, a pairing code) in a private card. You never see the ' +
-        'value: it is saved to an owner-only file and you are sent its path in a message. Use it for a secret only ' +
-        'the user has and the next step needs, never to ask in chat or in a question. One secret per request. ' +
-        'Make the card easy to act on: the exact steps to find the value (what to click, what the field is ' +
-        'labelled), the URL of the page, and what a valid value looks like. After calling this, stop and wait: ' +
-        'you get a message once the value is saved or declined. Then use it only inside a command, as ' +
-        'TOKEN="$(cat <file>)" cli, and never print, read, copy or write it anywhere else. If the user declines, ' +
-        'say what is blocked and go on without it: do not ask in chat and do not retry. A secret the user ' +
-        'already pasted in chat is not for this tool; do not call it when access already exists.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'What the value is called, e.g. CLOUDFLARE_API_TOKEN. Letters, digits, _ . - only.' },
-          label: { type: 'string', description: 'The title of the card, e.g. "Cloudflare API token"' },
-          reason: { type: 'string', description: 'Why it is needed, in under 12 words' },
-          steps: {
-            type: 'array',
-            items: { type: 'string' },
-            description:
-              '2-5 short imperative steps, one action each, naming the exact labels on screen. ' +
-              'E.g. ["Open the Cloudflare dashboard", "Go to My Profile > API Tokens", "Copy the token"]',
-          },
-          url: { type: 'string', description: 'The https page where the value can be found or created' },
-          format: { type: 'string', description: 'What a valid value looks like, e.g. "40 characters"' },
-        },
-        required: ['name', 'label'],
-      } satisfies SchemaFor<McpToolInputs['mcp__secrets__request_secret']>,
-    })
 
     // A waiting pane is placed once the terminal widens to its floor
     $.clock.every(2000, () => {
@@ -222,6 +234,8 @@ export const register: Register = (on) => {
       })
     })
     $.clock.every(HOUR, () => void refresh($))
+    // Claude's requests, which the plugin's MCP server queues for this session
+    $.clock.every(TAKE_MS, () => void take($))
 
     return next(e)
   })
@@ -243,21 +257,6 @@ export const register: Register = (on) => {
     return next(e)
   })
 
-  // The fence: keep the model's own tools away from the saved files
-  on('tool.call', async ($, e, next) => {
-    const tool = String(e.tool)
-    if (tool.startsWith(TOOL)) return next(e)
-    const dir = await folder($)
-    if (!dir) return next(e)
-    const home = await $.env.get('HOME')
-    const input = e as unknown as Record<string, unknown>
-
-    const reason =
-      tool === 'Bash' && typeof input.command === 'string'
-        ? bashReason(input.command, forms(dir, home), ancestors(dir, home))
-        : toolReason(tool, input, dir, home, cwd)
-    return reason ? { deny: `${DENY} (Blocked because ${reason}.)` } : next(e)
-  })
 
   // The backstop: any saved value that reaches the conversation by any route is replaced
   // with [secret:NAME] before the row is stored or sent
@@ -268,23 +267,7 @@ export const register: Register = (on) => {
     return isChanged ? next({ ...e, message: { ...e.message, content } as typeof e.message }) : next(e)
   })
 
-  on('session.send', ($, e, next) => (index.length === 0 ? next(e) : next({ ...e, text: scrub(e.text, index) })))
 
-  on('tool.call', { tool: 'mcp__secrets__request_secret' }, async ($, e) => {
-    const asked = parseRequest(e as unknown as RequestInput)
-    if ('error' in asked) return { result: asked.error, isError: true as const }
-    if (!(await folder($))) return { result: NO_FOLDER, isError: true as const }
-
-    await update($, requests, (queue) => enqueue(queue, asked))
-    // Opened by Claude, not the person, so a narrow terminal leaves the pane waiting undrawn;
-    // the card then shows in the band above the prompt
-    const opened = await $.ui.open({ id: PANE, title: 'secrets', focus: true })
-    // Only when it is still undrawn after looking again does Claude say the card is above the prompt
-    const isPlaced = opened.isPlaced || (await isDrawn($))
-    await update($, isWaiting, () => !isPlaced)
-    $.ui.toast(isPlaced ? `Claude needs ${asked.name}` : `Claude needs ${asked.name}: paste it above the prompt`)
-    return { result: askedMessage(asked.name, isPlaced) }
-  })
 
   // While the pane waits for a wider terminal, Claude's request shows here
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

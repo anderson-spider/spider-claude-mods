@@ -1,6 +1,8 @@
 // What the model asks for and what it is told back. Pure: nothing here touches the host.
 import type { SecretRequest } from '../types'
-import { NAME } from './store'
+
+/** Names the user and the model see: the placeholder is `[secret:NAME]` and the file starts with it. */
+export const NAME = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/
 
 /** The tool's input as the model may send it: nothing is trusted until checked here. */
 export type RequestInput = {
@@ -34,6 +36,19 @@ export function parseRequest(input: RequestInput): SecretRequest | { error: stri
   }
 }
 
+/** A request file from the session's queue, checked again, or undefined when it is not one. */
+export function parseQueued(text: string): SecretRequest | undefined {
+  let input: unknown
+  try {
+    input = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
+  const asked = parseRequest(input as RequestInput)
+  return 'error' in asked ? undefined : asked
+}
+
 /** The queue after a new request: one card a name, the newest asking replaces an older one of the same name. */
 export function enqueue(queue: readonly SecretRequest[], request: SecretRequest): SecretRequest[] {
   return [...queue.filter((asked) => asked.name !== request.name), request]
@@ -52,6 +67,9 @@ export function askedMessage(name: string, isPlaced: boolean): string {
 
 export const NO_FOLDER =
   'No home folder was found for the private secrets folder, so nothing can be saved. Do not ask for the secret in chat: tell the user what is blocked and carry on without it.'
+
+export const NO_PANE =
+  'No secrets card could be shown: this session draws none (it needs an interactive terminal or the desktop app, with the secrets plugin on). Do not ask for the secret in chat: tell the user what is blocked and carry on without it.'
 
 export function savedMessage(name: string, file: string): string {
   return (

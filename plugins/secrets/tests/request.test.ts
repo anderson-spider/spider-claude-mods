@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { askedMessage, declinedMessage, enqueue, failedMessage, parseRequest, savedMessage } from '../hooks/request'
+import { NO_PANE, askedMessage, declinedMessage, enqueue, failedMessage, parseQueued, parseRequest, savedMessage } from '../hooks/request'
 
 test('parseRequest keeps a checked request, trimmed and clipped', () => {
   const asked = parseRequest({
@@ -48,4 +48,15 @@ test('the messages tell Claude what to do and never carry a value', () => {
   expect(failedMessage('T')).toContain('Nothing was stored')
   expect(askedMessage('T', true)).toContain('Do not ask for it in chat')
   expect(askedMessage('T', false)).toContain('above the prompt')
+})
+
+test('parseQueued checks a queued request file again and drops one that is not a request', () => {
+  expect(parseQueued(JSON.stringify({ name: 'CF_TOKEN', label: 'Cloudflare token' }))).toEqual({ name: 'CF_TOKEN', label: 'Cloudflare token', reason: '', steps: [], url: undefined, format: undefined })
+  expect(parseQueued(JSON.stringify({ name: '../x', label: 'x' }))).toBeUndefined()
+  expect(parseQueued('[1]')).toBeUndefined()
+  expect(parseQueued('not json')).toBeUndefined()
+})
+
+test('without a card to show, Claude is told not to ask in chat', () => {
+  expect(NO_PANE).toContain('Do not ask for the secret in chat')
 })

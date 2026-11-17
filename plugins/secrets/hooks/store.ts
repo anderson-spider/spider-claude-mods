@@ -3,9 +3,6 @@
 /** A saved secret is deleted after this long, counted from its last write. */
 export const TTL_MS = 24 * 60 * 60 * 1000
 
-/** Names the user and the model see: the placeholder is `[secret:NAME]` and the file starts with it. */
-export const NAME = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/
-
 /** A name followed by the random suffix that keeps two saves of one name apart. */
 const FILE = /^([A-Za-z_][A-Za-z0-9_.-]{0,63})\.([0-9a-f]{16})$/
 
