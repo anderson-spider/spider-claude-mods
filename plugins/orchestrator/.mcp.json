@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "orchestrator": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server/main.mjs"
+      ],
+      "env": {
+        "SPIDER_ORCHESTRATOR_OPTION_AGY_PATH": "${user_config.agyPath}",
+        "SPIDER_ORCHESTRATOR_OPTION_MAX_RUNTIME_MODE": "${user_config.maxRuntimeMode}",
+        "SPIDER_ORCHESTRATOR_OPTION_TASK_MINUTES": "${user_config.taskMinutes}"
+      }
+    }
+  }
+}

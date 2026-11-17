@@ -11,6 +11,7 @@ Claude Code **function hooks mods** marketplace. User-facing setup is in [README
 - GitHub work skill with the gh CLI: `plugins/github/AGENTS.md`.
 - GitLab merge requests and pipelines of the current repository: `plugins/gitlab/AGENTS.md`.
 - Thumbnails of pasted images above the prompt: `plugins/image-preview/AGENTS.md`.
+- Delegated tasks to another CLI's agent (agy over ACP) as subagents, after T3 Code's orchestrator: `plugins/orchestrator/AGENTS.md`.
 - Secrets Claude asks for in a private card, kept out of the conversation: `plugins/secrets/AGENTS.md`.
 - Session card above the prompt: `plugins/session-hud/AGENTS.md`.
 - SonarQube 9.x Web API tools (quality gate, measures, issues, rules, hotspots, branches): `plugins/sonarqube/AGENTS.md`.
