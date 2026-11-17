@@ -1,42 +1,5 @@
-// The inputs of the tools this plugin registers in session.start, in the shape the engine lays for connected MCP
-// tools (.claude-plugin/types/claude-code-mcp), so `{ tool: 'mcp__antigravity__ask' }` matchers type `e` before a
-// save regenerates that file. Each inputSchema in hooks/tool-schemas.ts satisfies SchemaFor of its entry here, so tsc
-// fails when they differ.
+// The plugin's type contract. Its tools come from the MCP server (server/main.mjs), whose inputs are typed in
+// hooks/tool-schemas.ts, so nothing here extends the engine's types.
 
 /** The reasoning efforts `agy --effort` takes. */
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-
-declare module 'claude-code' {
-  interface McpToolInputs {
-    mcp__antigravity__ask: {
-      prompt: string
-      conversationId?: string
-      model?: string
-      effort?: Effort
-      files?: string[]
-      wait?: boolean
-      out?: string
-      maxChars?: number
-    }
-    mcp__antigravity__image: {
-      prompt: string
-      reference?: string
-      conversationId?: string
-      model?: string
-      effort?: Effort
-      wait?: boolean
-      out?: string
-    }
-    mcp__antigravity__review: {
-      base?: string
-      commit?: string
-      focus?: string
-      model?: string
-      effort?: Effort
-      wait?: boolean
-      out?: string
-      maxChars?: number
-    }
-    mcp__antigravity__jobs: {}
-  }
-}

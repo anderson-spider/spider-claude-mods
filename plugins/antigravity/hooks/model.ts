@@ -48,7 +48,7 @@ export type RunResult = {
 
 export type ProcessRunner = (
   argv: string[],
-  init?: { timeoutMs?: number; cwd?: string; env?: Record<string, string> },
+  init?: { timeoutMs?: number; cwd?: string; env?: Record<string, string>; stdin?: string },
 ) => Promise<{ exitCode: number; stdout: string; stderr: string }>
 
 /** A small copy of a saved image, handed back with the tool result so the model sees it. */
@@ -96,8 +96,9 @@ export type Workspace = {
 }
 
 /**
- * One run as `$.store` keeps it, under `job:<id>`: a foreground run until its wait runs out, then a background job.
- * It outlives a plugin reload and the session, since its agy process runs detached (`RunFiles`).
+ * One run as the job store keeps it (a file under `$TMPDIR/agy/jobs`, jobs.ts), under `job:<id>`: a foreground run
+ * until its wait runs out, then a background job. It outlives a plugin reload and the session, since its agy process
+ * runs detached (`RunFiles`).
  */
 export type Job = {
   /** Unique across sessions: time-based with a random suffix. */
@@ -119,6 +120,11 @@ export type Job = {
   seenAt: number
   /** The watcher that owns it now: a watcher whose token is no longer here stops, so one job has one watcher. */
   watcher?: string
+  /**
+   * The Claude Code process that started it. A background job the MCP server started, or moved there past the
+   * foreground wait, has no watcher: the hooks module of that process picks it up (`pickUp`) and sends its notice.
+   */
+  pid?: number
   /** Its run folder: events, stderr, pid and exit status. */
   dir: string
   /** False while a foreground call still waits on it: such a run is not listed as a job. */
@@ -170,7 +176,7 @@ export type Workspaces = {
   pathOf(id: string): string
 }
 
-/** The part of `$.store` the jobs use. */
+/** Where the jobs are kept: files the MCP server and the hooks module share (jobs.ts). */
 export type JobStore = {
   get(key: string): Promise<unknown>
   set(key: string, value: unknown): Promise<void>

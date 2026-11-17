@@ -18,7 +18,7 @@ const STALE_MS = 60_000
 const KEEP_MS = 7 * 24 * 60 * 60_000
 const KEEP_JOBS = 50
 
-// What a job keeps of its prompt: enough for the file name and the jobs list, and small in a store of 4 MiB in all.
+// What a job keeps of its prompt: enough for the file name and the jobs list, and small in a job file read every few seconds.
 const PROMPT_KEPT = 200
 
 const KEY = 'job:'
@@ -37,8 +37,14 @@ export type RunnerDeps = {
   output: OutputDeps
   /** The `agy` executable, or why there is none. */
   agy(): Promise<string | { error: string }>
+  /** The Claude Code process this side runs for, recorded on each job it starts; undefined when it is not known. */
+  pid?: number
   toast(text: string): void
-  submit(text: string): Promise<unknown>
+  /**
+   * Sends a job's end notice as a new turn. The MCP server has none: a background job it starts is handed off, left
+   * without a watcher for the hooks module of its Claude Code process to pick up (`pickUp`) and notify.
+   */
+  submit?(text: string): Promise<unknown>
   now?: () => number
   newId?: () => string
 }
@@ -75,7 +81,7 @@ type Seen = { ended: RunResult } | { running: string | undefined } | { gone: tru
 type Released = 'released'
 
 /**
- * Every run, foreground or background, in `$.store` and a detached process: the jobs outlive a plugin reload (the
+ * Every run, foreground or background, in the job store and a detached process: the jobs outlive a plugin reload (the
  * session's watch on them starts again in `resume`) and the session (the next one to start takes them over).
  */
 export function createRunner(limits: () => Limits) {
@@ -178,6 +184,7 @@ export function createRunner(limits: () => Limits) {
         background,
         request: kept(request),
         workspace: request.kind === 'review' ? { cwd: deps.workspaces.pathOf(id), worktree: deps.workspaces.pathOf(id) } : { cwd: project },
+        ...(deps.pid !== undefined ? { pid: deps.pid } : {}),
       }
       await save(deps, job)
       try {
@@ -247,7 +254,7 @@ export function createRunner(limits: () => Limits) {
     deps.toast(`agy job #${job.id} ${job.status}`)
     // A submitted prompt is a new turn that reaches the model like the person's words: send only the automated
     // notice, with paths and the conversation, never the answer (unverified agy output).
-    await deps.submit(jobMessage(job, outcome)).catch(() => undefined)
+    await deps.submit?.(jobMessage(job, outcome)).catch(() => undefined)
   }
 
   // A run past the background limit: stopped when its process is still that run, then reported as timed out. With no
@@ -286,6 +293,21 @@ export function createRunner(limits: () => Limits) {
 
   const adopt = (deps: RunnerDeps, job: Job, quiet = false) => void watch(deps, job, quiet).catch(() => undefined)
 
+  // A background job this side cannot see to its end (it has no `submit`): saved without a watcher, for the hooks
+  // module of its Claude Code process to pick up. Without that module it is unwatched, and the next session takes it over.
+  async function handOff(deps: RunnerDeps, job: Job) {
+    job.background = true
+    delete job.watcher
+    job.seenAt = nowOf(deps)
+    await save(deps, job)
+  }
+
+  // Watched here, or handed off where nothing here can send its notice.
+  const goOn = (deps: RunnerDeps, job: Job) => (deps.submit ? (adopt(deps, job), Promise.resolve()) : handOff(deps, job))
+
+  // The jobs `pickUp` has adopted, so a poll that comes before the watch has saved its token does not adopt one twice.
+  const picked = new Set<string>()
+
   /**
    * Runs a request in the foreground; past the foreground wait it goes on as a background job. The background limit
    * bounds the whole run, so it also cuts the foreground wait short. A run that ends in the foreground leaves no job;
@@ -309,7 +331,7 @@ export function createRunner(limits: () => Limits) {
       await deps.files.remove(job.dir).catch(() => undefined)
       return outcome
     }
-    adopt(deps, job)
+    await goOn(deps, job)
     const moved = movedToBackground(job, nowOf(deps) - job.startedAt)
     return failed === undefined ? moved : { ...moved, text: `The wait for agy failed (${failed}). ${moved.text}` }
   }
@@ -317,8 +339,27 @@ export function createRunner(limits: () => Limits) {
   /** Starts a request as a background job at once, or answers why it could not start. */
   async function startJob(deps: RunnerDeps, request: Request): Promise<Job | Outcome> {
     const job = await start(deps, request, true)
-    if ('dir' in job) adopt(deps, job)
+    if ('dir' in job) await goOn(deps, job)
     return job
+  }
+
+  /**
+   * For the hooks module, every few seconds: adopts the background jobs of its Claude Code process that were handed off
+   * (no watcher), so their notices come here, and says whether a run of that process is waited on in the foreground
+   * (the MCP server's), for the status line.
+   */
+  async function pickUp(deps: RunnerDeps): Promise<{ foreground: boolean }> {
+    let foreground = false
+    if (deps.pid === undefined) return { foreground }
+    for (const job of await jobs(deps)) {
+      if (job.status !== 'running' || job.pid !== deps.pid) continue
+      if (!job.background) foreground = true
+      else if (!job.watcher && !picked.has(job.id)) {
+        picked.add(job.id)
+        adopt(deps, job)
+      }
+    }
+    return { foreground }
   }
 
   // Finished jobs past a week, or past the newest KEEP_JOBS jobs, go with their run folders.
@@ -386,5 +427,5 @@ export function createRunner(limits: () => Limits) {
     return jobsReport((await jobs(deps)).filter(job => job.background && job.project === project), nowOf(deps))
   }
 
-  return { runNow, startJob, resume, report }
+  return { runNow, startJob, resume, report, pickUp }
 }

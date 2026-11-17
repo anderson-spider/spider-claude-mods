@@ -340,3 +340,52 @@ test('a follow-up image on a conversation that is still running is refused, nami
   expect(runs.launched).toHaveLength(1)
   release()
 })
+
+test('without a way to send notices, a run past the foreground wait is handed off: saved with its process and no watcher', async () => {
+  const { gate } = gated()
+  const { d, job } = deps([{ stdout: answered('Done.'), gate }], { pid: 77, submit: undefined })
+
+  const moved = await createRunner(limits).runNow(d, ask)
+
+  expect(moved).toMatchObject({ ok: false, conversationId: CONVERSATION })
+  const saved = await job('j1')
+  expect(saved).toMatchObject({ status: 'running', background: true, pid: 77 })
+  expect(saved?.watcher).toBe(undefined)
+})
+
+test('the hooks module of the same process picks a handed-off job up once and sends its notice; another process leaves it alone', async () => {
+  const { gate, release } = gated()
+  const memory = memoryStore()
+  const server = deps([{ stdout: answered('Done.'), gate }], { memory, pid: 77, submit: undefined })
+  await createRunner(limits).startJob(server.d, ask)
+
+  const other = deps([], { memory, pid: 88 })
+  const module = deps([], { memory, pid: 77 })
+  module.runs.states.set('/tmp/agy/runs/j1', server.runs.states.get('/tmp/agy/runs/j1')!)
+  const runner = createRunner(limits)
+  await createRunner(limits).pickUp(other.d)
+  await runner.pickUp(module.d)
+  await runner.pickUp(module.d)
+  release()
+  await module.submission()
+  for (let i = 0; i < 20; i++) await module.time.sleep(2_000)
+
+  expect(module.submitted).toHaveLength(1)
+  expect(module.toasts).toEqual(['agy job #j1 done'])
+  expect(other.submitted).toEqual([])
+  expect(server.submitted).toEqual([])
+})
+
+test('pick-up says a foreground run of the same process is going, for the status line', async () => {
+  const { gate, release } = gated()
+  const memory = memoryStore()
+  const server = deps([{ stdout: answered('Done.'), gate }], { memory, pid: 77, submit: undefined })
+  const running = createRunner(limits).runNow(server.d, ask)
+  await settle()
+
+  expect(await createRunner(limits).pickUp(deps([], { memory, pid: 77 }).d)).toEqual({ foreground: true })
+  expect(await createRunner(limits).pickUp(deps([], { memory, pid: 88 }).d)).toEqual({ foreground: false })
+  release()
+  await running
+  expect(await createRunner(limits).pickUp(deps([], { memory, pid: 77 }).d)).toEqual({ foreground: false })
+})

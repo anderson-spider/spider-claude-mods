@@ -72,7 +72,7 @@ Load a plugin from its folder so edits reload automatically, with `claude --plug
 | --- | --- |
 | `pnpm check` | `validate`, `test` and `typecheck` below, in that order. |
 | `pnpm validate` | `claude plugin validate --strict` on the marketplace and every plugin. |
-| `pnpm test` | `claude plugin test` on every plugin with hooks, plus antigravity's skill script tests. |
+| `pnpm test` | `claude plugin test` on every plugin with hooks, plus antigravity's Node tests (its skill script and MCP server). |
 | `pnpm typecheck` | `tsc` on every plugin with TypeScript. It needs the plugin's typings, which Claude Code writes when you load the plugin once with `claude --plugin-dir plugins/<name>`. |
 | `pnpm --filter <name> <command>` | One of the three above, on one plugin. |
 

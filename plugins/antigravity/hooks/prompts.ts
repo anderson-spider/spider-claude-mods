@@ -24,9 +24,11 @@ export const REVIEW_DESCRIPTION =
   'Returns a Markdown file, the conversation id and findings ranked P0 to P3 with file:line; follow up with the ask tool on that conversationId. ' +
   BOUNDARIES
 
-const ASK_TOOL = 'mcp__antigravity__ask'
-const IMAGE_TOOL = 'mcp__antigravity__image'
-const REVIEW_TOOL = 'mcp__antigravity__review'
+// The names Claude Code gives the MCP server's tools (.mcp.json names the server antigravity).
+export const TOOL_PREFIX = 'mcp__plugin_antigravity_antigravity__'
+const ASK_TOOL = `${TOOL_PREFIX}ask`
+const IMAGE_TOOL = `${TOOL_PREFIX}image`
+const REVIEW_TOOL = `${TOOL_PREFIX}review`
 
 // Discovery for deferred tools; send boundaries belong to their descriptions.
 export const PROMPT = [

@@ -1,4 +1,10 @@
 {
   "extends": "./.claude-plugin/types/tsconfig.json",
-  "compilerOptions": { "noEmit": true }
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "exclude": [
+    "server",
+    "tests/node"
+  ]
 }
