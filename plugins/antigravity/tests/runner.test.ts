@@ -389,3 +389,40 @@ test('pick-up says a foreground run of the same process is going, for the status
   await running
   expect(await createRunner(limits).pickUp(deps([], { memory, pid: 77 }).d)).toEqual({ foreground: false })
 })
+
+test('a running background review cancelled through the jobs tool is stopped, its worktree removed, and its watcher sends no notice', async () => {
+  const { gate, release } = gated()
+  const { d, runs, spaces, submitted, toasts, job } = deps([{ stdout: answered('Late.'), gate }])
+  const runner = createRunner(limits)
+
+  await runner.startJob(d, review)
+  await settle()
+  expect(await runner.find(d, 'j1')).toMatchObject({ status: 'running', background: true })
+
+  expect(await runner.cancel(d, 'j1')).toEqual({ text: `Cancelled job #j1: agy was stopped and nothing was saved. Conversation ${CONVERSATION} keeps what agy did so far.` })
+  expect(runs.stopped).toEqual(['/tmp/agy/runs/j1'])
+  expect(spaces.removed).toEqual([{ project: '/proj', worktree: '/tmp/agy/worktrees/j1' }])
+  expect(await job('j1')).toMatchObject({ status: 'cancelled', notified: true, error: 'Cancelled through the jobs tool; agy was stopped and nothing was saved.' })
+  expect((await job('j1'))?.watcher).toBeUndefined()
+
+  release()
+  for (let i = 0; i < 20; i++) await d.sleep(2_000)
+  expect(submitted).toEqual([])
+  expect(toasts).toEqual([])
+  expect(await job('j1')).toMatchObject({ status: 'cancelled' })
+  expect(await runner.cancel(d, 'j1')).toEqual({ error: 'Job #j1 already ended (cancelled); there is nothing to stop.' })
+  expect(await runner.report(d)).toMatch(/^#j1 review cancelled \(took 0 min\): review against main\n/)
+})
+
+test('cancel and find see only background jobs of this project: a foreground run or another project’s job is not found', async () => {
+  const { gate } = gated()
+  const { d } = deps([{ stdout: init(), gate }])
+  const runner = createRunner(limits)
+
+  void runner.runNow(d, ask)
+  await settle()
+  expect(await runner.find(d, 'j1')).toBeUndefined()
+  expect(await runner.cancel(d, 'j1')).toEqual({ error: 'No background agy job #j1 in this project; the jobs tool without an id lists them.' })
+  const other = { ...d, project: async () => '/elsewhere' }
+  expect(await runner.find(other, 'j1')).toBeUndefined()
+})

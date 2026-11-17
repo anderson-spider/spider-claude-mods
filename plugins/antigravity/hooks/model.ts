@@ -30,11 +30,16 @@ export type Request = {
 /** Why a run failed, in the closed set the person reads. */
 export type Reason = 'quota exhausted' | 'timed out' | 'interrupted' | 'local error' | 'agy error' | 'lost'
 
+/** One finding of a review, as `REVIEW_SCHEMA` (args.ts) has agy return it; `path` is relative to the repository root. */
+export type Finding = { priority: 'P0' | 'P1' | 'P2' | 'P3'; title: string; path: string; line: number; detail: string }
+
 /** What an agy run came to, read from its stream-json events, its stderr and its exit status. */
 export type RunResult = {
   conversationId?: string
   /** The `result` event's response: agy's answer. */
   message?: string
+  /** The `result` event's `structured_output`: a review's answer checked against `REVIEW_SCHEMA`, unread until `findingsOf`. */
+  structured?: unknown
   /** Why it failed, redacted; absent on success. */
   error?: string
   reason?: Reason
@@ -105,7 +110,8 @@ export type Job = {
   id: string
   kind: Kind
   prompt: string
-  status: 'running' | 'done' | 'failed' | 'lost'
+  /** `cancelled`: stopped through the jobs tool, with nothing saved. */
+  status: 'running' | 'done' | 'failed' | 'lost' | 'cancelled'
   startedAt: number
   endedAt?: number
   conversationId?: string

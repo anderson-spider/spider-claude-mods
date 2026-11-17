@@ -6,7 +6,7 @@ import { askRequestOf, commandRequestOf, imageRequestOf, placementError, reviewR
 import { fileStore } from './jobs'
 import { locateAgy } from './locate'
 import type { Entry, JobStore, Outcome, ProcessRunner, Request } from './model'
-import { answerOf, askCommandAnswer, errorText, failure, imageCommandAnswer, notPrivate, startedJob } from './presentation'
+import { answerOf, askCommandAnswer, errorText, failure, imageCommandAnswer, jobDetail, noJob, notPrivate, startedJob } from './presentation'
 import { ASK_DESCRIPTION, IMAGE_DESCRIPTION, REVIEW_DESCRIPTION } from './prompts'
 import { resolveReview, reviewCommandInput } from './review'
 import { createRunner, type RunnerDeps } from './runner'
@@ -207,6 +207,28 @@ export function createService(settings: () => Settings) {
     return answerOf(await runNow(host, checked))
   }
 
+  /** The jobs tool: the list, one job by its id, or that job stopped. */
+  async function jobsTool(host: Host, input: Record<string, unknown>): Promise<ToolAnswer> {
+    const deps = await depsOf(host)
+    const { id: rawId, cancel } = input
+    if (rawId !== undefined && typeof rawId !== 'string') return { result: 'id must be a job id, as the jobs list names it.', isError: true }
+    if (cancel !== undefined && typeof cancel !== 'boolean') return { result: 'cancel must be true or false.', isError: true }
+    const id = rawId?.trim().replace(/^#/, '')
+    if (id !== undefined && !/^[a-z0-9]+$/i.test(id)) return { result: 'id must be a job id, as the jobs list names it.', isError: true }
+    if (cancel && !id) return { result: 'cancel needs the id of the job to stop.', isError: true }
+    if (!id) return { result: await runner.report(deps) }
+    if (cancel) {
+      const done = await runner.cancel(deps, id)
+      return 'error' in done ? { result: done.error, isError: true } : { result: done.text }
+    }
+    const job = await runner.find(deps, id)
+    if (!job) return { result: noJob(id), isError: true }
+    // An image job saved images, not text; an ask or review saved its Markdown first.
+    const path = job.status === 'done' && job.kind !== 'image' ? job.paths?.[0] : undefined
+    const saved = path ? await host.read(path).catch(() => undefined) : undefined
+    return { result: jobDetail(job, saved, Date.now()) }
+  }
+
   return {
     /** Answers a tool call. */
     async tool(host: Host, name: ToolName, input: Record<string, unknown>): Promise<ToolAnswer> {
@@ -214,7 +236,7 @@ export function createService(settings: () => Settings) {
       if (name === 'ask') return serve(host, askRequestOf(input, model), input.wait)
       if (name === 'image') return serve(host, imageRequestOf(input, model), input.wait)
       if (name === 'review') return serve(host, await reviewOf(host, input), input.wait)
-      return { result: await runner.report(await depsOf(host)) }
+      return jobsTool(host, input)
     },
 
     async ask(host: Host, args: string) {

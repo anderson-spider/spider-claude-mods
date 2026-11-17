@@ -31,7 +31,7 @@ export type ReviewInput = {
   out?: string
   maxChars?: number
 }
-export type JobsInput = {}
+export type JobsInput = { id?: string; cancel?: boolean }
 
 /** The reasoning efforts `agy --effort` takes. */
 export const EFFORTS = allOf<Effort>()('low', 'medium', 'high', 'xhigh', 'max')
@@ -101,9 +101,16 @@ export const REVIEW_INPUT_SCHEMA = {
 } satisfies SchemaFor<ReviewInput>
 
 export const JOBS_DESCRIPTION =
-  'Find the background agy requests of this project, of every session, which outlive a plugin reload: status, conversation id and saved files, newest first. Local only; runs nothing.'
+  'Find the background agy requests of this project, of every session, which outlive a plugin reload: status, conversation id and saved files, newest first. ' +
+  'With id: that job alone, with the start of its saved answer. With id and cancel: stop that running job; nothing is saved. Local only; starts no agy run.'
 
-export const JOBS_INPUT_SCHEMA = { type: 'object', properties: {} } satisfies SchemaFor<JobsInput>
+export const JOBS_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'A job id as the list or a start message names it (such as mh3k2x9ab), with or without #.' },
+    cancel: { type: 'boolean', description: 'With id: stop that running background job. Only when the user asks to stop it or its result is no longer needed.' },
+  },
+} satisfies SchemaFor<JobsInput>
 
 export const ASK_COMMAND_DESCRIPTION = 'Ask Antigravity (agy): /antigravity-ask <question>'
 export const IMAGE_COMMAND_DESCRIPTION = 'Generate and save an image with agy: /antigravity-image <prompt>'

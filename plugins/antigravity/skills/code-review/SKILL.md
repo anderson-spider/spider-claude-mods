@@ -35,7 +35,7 @@ Call `mcp__plugin_antigravity_antigravity__review` with:
 - `model`: `gemini-4-hydrogen-high`. Send no `effort`: the id carries it.
 - `focus`: the sentence from step 2, when there is one.
 
-A review that outlasts the foreground wait becomes a background job and a message arrives when it ends; wait for it. Read the full review from the Markdown file the result names: the inline text is an excerpt.
+A review that outlasts the foreground wait becomes a background job and a message arrives when it ends; wait for it. Read the full review from the Markdown file the result names: the inline text is an excerpt. When the result also names a findings JSON file, it holds the same findings as data (`priority`, `title`, `path` relative to the repository, `line`, `detail`): use it to open each cited line in step 4.
 
 **Fallback.** When the tool is missing or the result is a failure (quota exhausted, timed out, agy error, local error, lost), run the review on a fresh native subagent instead: the `Agent` tool with `model: "opus"` and `effort: "medium"`. A run the user interrupted is not a failure: stop. The subagent's brief carries the repo's absolute path, the diff command, the commit list, the focus, a rule to change nothing, and this format:
 

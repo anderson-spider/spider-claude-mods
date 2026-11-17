@@ -40,14 +40,40 @@ export function reviewPrompt(request: Request, workspace: Workspace): string {
     `Review the code changes of this git repository (${request.prompt}). The full diff is in ${diff?.path ?? 'the diff file'}; the changed files are:`,
     files,
     '',
-    'Read the diff, then the surrounding code in this folder as needed. Report only real problems, most severe first, each as:',
-    '[P0|P1|P2|P3] short title — path:line',
-    'then one or two sentences on what goes wrong and when. P0 breaks the build, loses data or opens a security hole; P1 is a bug users hit;',
+    'Read the diff, then the surrounding code in this folder as needed. Report only real problems, most severe first, in the findings list, each with:',
+    'priority (P0, P1, P2 or P3), a short title, path (relative to the repository root), line (in the changed file) and detail: one or two sentences on what goes wrong and when.',
+    'P0 breaks the build, loses data or opens a security hole; P1 is a bug users hit;',
     'P2 a bug in an edge case or a missing check at a real boundary; P3 a minor correctness or clarity issue worth fixing.',
-    'Put correctness and security first. Leave out style, naming and formatting comments. If you find nothing, say "No findings." and stop: that is a valid answer.',
+    'Put correctness and security first. Leave out style, naming and formatting comments. If you find nothing, return an empty findings list and stop: that is a valid answer.',
     ...(request.focus ? ['', `Also look closely at: ${request.focus}`] : []),
   ].join('\n')
 }
+
+/**
+ * The shape of a review's answer. agy checks its final answer against it (`--json-schema`) and returns the object as
+ * the `result` event's `structured_output` (measured on agy 1.5.10), so the findings come back as data, not as text
+ * to parse. The order of `properties` is the order the saved findings keep.
+ */
+export const REVIEW_SCHEMA = {
+  type: 'object',
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          priority: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'] },
+          title: { type: 'string' },
+          path: { type: 'string' },
+          line: { type: 'integer' },
+          detail: { type: 'string' },
+        },
+        required: ['priority', 'title', 'path', 'line', 'detail'],
+      },
+    },
+  },
+  required: ['findings'],
+} as const
 
 /** The paths agy reads: the listed files and an image's reference. */
 export const readsOf = (request: Request) => (request.reference ? [...request.files, request.reference] : request.files)
@@ -72,7 +98,8 @@ export function promptOf(request: Request, workspace: Workspace): string {
  * sandbox's prompts. Never `--mode plan` either: agy ignores it under `--disable-slash-commands`, which keeps a prompt
  * that starts with `/` from running as a command. Every value is fused to its flag (`--flag=value`), so a value that
  * starts with `-` is never read as a flag. `--print-timeout` is the background limit less a margin, so agy ends on its
- * own, with its own reason, before the plugin's deadline (counted from just before the launch) stops it.
+ * own, with its own reason, before the plugin's deadline (counted from just before the launch) stops it. A review
+ * passes `REVIEW_SCHEMA` as `--json-schema`.
  */
 export function argsOf(request: Request, workspace: Workspace, timeoutMs: number): string[] {
   return [
@@ -84,6 +111,7 @@ export function argsOf(request: Request, workspace: Workspace, timeoutMs: number
     ...(request.effort ? [`--effort=${request.effort}`] : []),
     ...(request.conversationId ? [`--conversation=${request.conversationId}`] : []),
     ...outsideDirs(readsOf(request), workspace.cwd).map(dir => `--add-dir=${dir}`),
+    ...(request.kind === 'review' ? [`--json-schema=${JSON.stringify(REVIEW_SCHEMA)}`] : []),
     `--print=${promptOf(request, workspace)}`,
   ]
 }

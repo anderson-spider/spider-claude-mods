@@ -11,6 +11,18 @@ export const answered = (text: string, conversation = CONVERSATION) =>
   line({ event: 'step_update', step_update: { conversation_id: conversation, step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: text } }) +
   line({ event: 'result', result: { conversation_id: conversation, status: 'SUCCESS', response: text, num_turns: 1 } })
 
+/**
+ * A review run that answers with structured findings, as `--json-schema` makes agy do: the object as the
+ * `structured_output` of its `result` event and as JSON text in `response` (shape measured on agy 1.5.10).
+ */
+export const reviewed = (findings: unknown[], conversation = CONVERSATION) => {
+  const text = `${JSON.stringify({ findings })}\n`
+  return (
+    init(conversation) +
+    line({ event: 'result', result: { conversation_id: conversation, status: 'SUCCESS', response: text, num_turns: 1, structured_output: { findings } } })
+  )
+}
+
 /** A run whose `result` event reports an error, with its `finished_reason` when given. */
 export const failed = (error: string, finished_reason?: string, conversation = CONVERSATION) =>
   init(conversation) + line({ event: 'result', result: { conversation_id: conversation, status: 'ERROR', error, ...(finished_reason ? { finished_reason } : {}) } })

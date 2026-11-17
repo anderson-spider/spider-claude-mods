@@ -70,6 +70,30 @@ export const notPrivate = (dir: string) =>
 
 export const FAILURE_HINT = 'Run /antigravity-doctor to check the agy CLI, its sign-in and its quota.'
 
+/** The note a review's saved text starts with when agy's structured findings did not have the expected shape. */
+export const NO_STRUCTURED_FINDINGS = "agy's structured findings did not have the expected shape; its text follows as it wrote it."
+
+/** A review's outcome with its findings saved as JSON too: named in its text, listed after the Markdown. */
+export function withFindingsFile(outcome: Outcome, json: string): Outcome {
+  const [first, ...rest] = outcome.text.split('\n')
+  return { ...outcome, text: [first, `Findings as JSON (priority, title, path, line, detail): ${json}`, ...rest].join('\n'), paths: [...(outcome.paths ?? []), json] }
+}
+
+/** What the jobs tool says about one job: its line, then the start of its saved answer, or that it is still running. */
+export function jobDetail(job: Job, saved: string | undefined, now: number, maxChars = 3000): string {
+  const lines = [jobsReport([job], now)]
+  if (job.status === 'running') lines.push('', 'Still running; a message arrives when it ends. Pass cancel: true to stop it.')
+  if (saved !== undefined) {
+    const answer = saved.replace(/^<!--.*?-->\n\n/s, '').trimEnd()
+    const cut = answer.length > maxChars
+    lines.push('', `agy's ${job.kind === 'review' ? 'review' : 'answer'} (unverified; check facts before using them)${cut ? `, the first ${maxChars} of ${answer.length} chars; read the file for the rest` : ''}:`, '', cut ? answer.slice(0, maxChars) : answer)
+  }
+  return lines.join('\n')
+}
+
+/** No background job of this project has the id. */
+export const noJob = (id: string) => `No background agy job #${id} in this project; the jobs tool without an id lists them.`
+
 export function askOutcome(conversationId: string, markdown: string, path: string, maxChars: number | undefined): Outcome {
   return { ok: true, text: summary(path, conversationId, markdown, maxChars), conversationId, paths: [path], markdown }
 }

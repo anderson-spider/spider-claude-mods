@@ -2,7 +2,7 @@ import { argsOf } from './args'
 import { conversationOf, modelOf, readRun } from './events'
 import type { Job, JobStore, OutputDeps, Outcome, Request, RunFiles, RunResult, Workspaces } from './model'
 import { imagesBefore, saveAnswer, saveImages } from './output'
-import { errorText, failure, jobMessage, jobsReport, movedToBackground } from './presentation'
+import { errorText, failure, jobMessage, jobsReport, movedToBackground, noJob } from './presentation'
 import { NO_REPO_NOTE } from './workspace'
 
 // How often a run's folder is read while it runs, how many reads go by between checks that its process is still there
@@ -98,7 +98,7 @@ export function createRunner(limits: () => Limits) {
     if (!state) return { gone: true }
     const conversationId = conversationOf(state.head)
     if (state.exit === undefined) return { running: conversationId }
-    const result = readRun(state.tail ?? '', state.stderr ?? '', exitOf(state.exit))
+    const result = readRun(state.tail ?? '', state.stderr ?? '', exitOf(state.exit), state.endedAt ?? nowOf(deps))
     const model = modelOf(state.head)
     return {
       ended: { ...result, conversationId: result.conversationId ?? conversationId, ...(model ? { model } : {}), ...(state.endedAt ? { endedAt: state.endedAt } : {}) },
@@ -236,7 +236,7 @@ export function createRunner(limits: () => Limits) {
     const save = (result: RunResult) =>
       job.kind === 'image'
         ? saveImages(deps.output, result, request, job.before ?? [], request.model ?? result.model)
-        : saveAnswer(deps.output, result, request, request.model ?? result.model)
+        : saveAnswer(deps.output, result, request, request.model ?? result.model, job.workspace.worktree)
     const outcome =
       ended === 'lost' ? failure(LOST, { conversationId: job.conversationId, note: request.note }) : await save(ended).catch(error => failure(errorText(error)))
     job.status = ended === 'lost' ? 'lost' : outcome.ok ? 'done' : 'failed'
@@ -427,5 +427,35 @@ export function createRunner(limits: () => Limits) {
     return jobsReport((await jobs(deps)).filter(job => job.background && job.project === project), nowOf(deps))
   }
 
-  return { runNow, startJob, resume, report, pickUp }
+  /** A background job of this project, of any session, by its id; undefined for another project's or a foreground run. */
+  async function find(deps: RunnerDeps, id: string): Promise<Job | undefined> {
+    const job = await stored(deps, id)
+    return job?.background && job.project === (await deps.project()) ? job : undefined
+  }
+
+  /**
+   * Stops a running background job of this project through the jobs tool: it is recorded as cancelled, without a
+   * watcher, before its process is stopped, so its watcher (here or in another session) lets it go without a notice,
+   * then its worktree or work folder goes. Nothing is saved; agy's conversation keeps what it did so far.
+   */
+  async function cancel(deps: RunnerDeps, id: string): Promise<{ text: string } | { error: string }> {
+    const job = await find(deps, id)
+    if (!job) return { error: noJob(id) }
+    if (job.status !== 'running') return { error: `Job #${id} already ended (${job.status}); there is nothing to stop.` }
+    if (!(await deps.files.alive(job.dir))) return { error: `Job #${id} is ending on its own; its notice says how it ended.` }
+    job.status = 'cancelled'
+    job.endedAt = nowOf(deps)
+    job.error = 'Cancelled through the jobs tool; agy was stopped and nothing was saved.'
+    job.notified = true
+    delete job.watcher
+    await save(deps, job)
+    // A run whose pid is not written yet cannot be stopped at once: try again for a few seconds.
+    for (let tries = 0; tries < 5 && !(await deps.files.stop(job.dir).catch(() => false)) && (await deps.files.alive(job.dir)); tries++) await deps.sleep(1_000)
+    await removeWorktree(deps, job)
+    await discardWorkFolder(deps, job)
+    const conversation = job.conversationId ? ` Conversation ${job.conversationId} keeps what agy did so far.` : ''
+    return { text: `Cancelled job #${id}: agy was stopped and nothing was saved.${conversation}` }
+  }
+
+  return { runNow, startJob, resume, report, pickUp, find, cancel }
 }

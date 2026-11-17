@@ -1,6 +1,6 @@
-import type { Entry, OutputDeps, Outcome, Preview, Request, RunResult } from './model'
+import type { Entry, Finding, OutputDeps, Outcome, Preview, Request, RunResult } from './model'
 import { IMAGE_FILE } from './args'
-import { askOutcome, failure, imageSummary } from './presentation'
+import { askOutcome, failure, imageSummary, NO_STRUCTURED_FINDINGS, withFindingsFile } from './presentation'
 
 // The longest side of the preview an image request hands back with its files.
 const PREVIEW_SIDE = 768
@@ -93,18 +93,66 @@ export async function saveImages(deps: OutputDeps, result: RunResult, request: R
   return imageSummary(conversationId, paths, previews, said)
 }
 
+const PRIORITIES = ['P0', 'P1', 'P2', 'P3'] as const
+
+const isFinding = (value: unknown): value is Finding => {
+  const f = value as Finding
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    PRIORITIES.includes(f.priority) &&
+    typeof f.title === 'string' &&
+    f.title.trim() !== '' &&
+    typeof f.path === 'string' &&
+    f.path.trim() !== '' &&
+    Number.isInteger(f.line) &&
+    f.line > 0 &&
+    typeof f.detail === 'string'
+  )
+}
+
+/**
+ * A review's findings from its `structured_output`, most severe first (agy's order within one priority), each path
+ * relative to the repository: agy runs in the review worktree `root` and may name a file by its path there. Undefined
+ * when the output is not the shape `REVIEW_SCHEMA` asks for, so the review falls back to agy's text.
+ */
+export function findingsOf(structured: unknown, root?: string): Finding[] | undefined {
+  const list = (structured as { findings?: unknown } | null)?.findings
+  if (!Array.isArray(list) || !list.every(isFinding)) return undefined
+  const prefix = root ? `${root.replace(/\/$/, '')}/` : undefined
+  const relative = (path: string) => (prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path).replace(/^(?:\.\/)+/, '')
+  return list
+    .map(f => ({ priority: f.priority, title: f.title.trim(), path: relative(f.path.trim()), line: f.line, detail: f.detail.trim() }))
+    .sort((a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority))
+}
+
+/** Findings as the review's Markdown: `[P1] title — path:line`, then the detail, or "No findings." for none. */
+export function reviewMarkdown(findings: Finding[]): string {
+  if (!findings.length) return 'No findings.'
+  return findings.map(f => `[${f.priority}] ${f.title} — ${f.path}:${f.line}${f.detail ? `\n${f.detail}` : ''}`).join('\n\n')
+}
+
 /**
  * Saves an answer as Markdown, with the conversation, the model and (for a review) the target first and the plugin's
- * note before the answer, and says where. `model` is the one the run used: the request's, else the one agy picked.
+ * note before the answer, and says where. `model` is the one the run used: the request's, else the one agy picked. A
+ * review with structured findings is written from them, and they are also saved as JSON in the answers folder (never
+ * beside an `out` in the project); `root` is its worktree, whose prefix comes off their paths.
  */
-export async function saveAnswer(deps: OutputDeps, result: RunResult, request: Request, model: string | undefined): Promise<Outcome> {
+export async function saveAnswer(deps: OutputDeps, result: RunResult, request: Request, model: string | undefined, root?: string): Promise<Outcome> {
   const { conversationId, message } = result
   if (result.error || !conversationId || message === undefined) {
     return failure(result.error ?? 'agy ended without an answer.', { conversationId, note: request.note, timedOut: result.timedOut, hint: !result.timedOut })
   }
   const path = request.out ?? `${deps.outDir}/${fileName(request.prompt, new Date())}`
   const head = [`agy conversation ${conversationId}`, `model ${model ?? "agy's default"}`, ...(request.kind === 'review' ? [request.prompt] : [])].join(' · ')
-  const markdown = request.note ? `${request.note}\n\n${message.trim()}` : message.trim()
+  const findings = request.kind === 'review' ? findingsOf(result.structured, root) : undefined
+  const notes = [request.note, request.kind === 'review' && result.structured !== undefined && !findings ? NO_STRUCTURED_FINDINGS : undefined].filter(Boolean)
+  const body = findings ? reviewMarkdown(findings) : message.trim()
+  const markdown = notes.length ? `${notes.join('\n\n')}\n\n${body}` : body
   await deps.write(path, `<!-- ${head} -->\n\n${markdown}\n`)
-  return askOutcome(conversationId, markdown, path, request.maxChars)
+  const outcome = askOutcome(conversationId, markdown, path, request.maxChars)
+  if (!findings) return outcome
+  const json = `${deps.outDir}/${path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/i, '')}.findings.json`
+  await deps.write(json, `${JSON.stringify(findings, null, 2)}\n`)
+  return withFindingsFile(outcome, json)
 }
