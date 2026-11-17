@@ -20,7 +20,7 @@ github prints a review payload for \`gh api repos/O/R/pulls/N/reviews --input -\
        left out and listed on stderr.
        findings.mjs github <fixed-point> <findings.json> --commit <sha> --body <text>
 gitlab prints a JSON array of inputs for the gitlab plugin's
-       \`mcp__gitlab__gitlab_mr_comment\` tool, one call each: \`line\` draft notes
+       \`mcp__plugin_gitlab_gitlab__gitlab_mr_comment\` tool, one call each: \`line\` draft notes
        ({action, draft, iid, path, line and/or oldLine, body}, plus host and
        project when given). The tool builds the position from the MR's diff refs;
        an unchanged line carries both line numbers. Failing findings go to stderr.
@@ -185,7 +185,7 @@ export function githubPayload(placed, commit, body) {
 }
 
 /**
- * Inputs for `mcp__gitlab__gitlab_mr_comment`, one `line` draft note per finding. `path` is the finding's own
+ * Inputs for `mcp__plugin_gitlab_gitlab__gitlab_mr_comment`, one `line` draft note per finding. `path` is the finding's own
  * side path (the tool finds a renamed file's other path in the MR diff); an unchanged line carries both numbers.
  */
 export function gitlabInputs(placed, { iid, host, project }) {
