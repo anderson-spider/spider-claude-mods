@@ -12,6 +12,7 @@ A `bin/` executable with no hooks and no MCP server, so Code Mode stays availabl
 - ACP (`agy acp`): agy rejects the `yolo` and `auto_edit` modes; in `default` it sends `session/request_permission` for every read, edit and command, with absolute `locations`, outside the workspace too, and honors a refusal. After a refusal it often ends the turn with no text, so `cli/acp.ts` prompts it on (up to 4 times).
 - `session/resume` keeps the conversation's memory, also with a different `cwd`; conversations live in the `--gemini-dir`, so it must stay the same path. Two turns at once on one session hang agy, hence the session lock; a stale lock is taken over under a guard file, so only one process wins.
 - An allowed command runs unconfined, with network: no mode allows one.
+- `session/new` lists `configOptions` (`model` by family, `thought_level`, `mode`), flat `options` with string `value`s; the thinking levels are the session model's (Argon: low, medium, high), so after `set_model` the list no longer holds.
 - `agy models` prints `id<TAB>name` lines after a "Fetching available models..." line.
 
 ## Invariants
@@ -24,4 +25,11 @@ A `bin/` executable with no hooks and no MCP server, so Code Mode stays availabl
 - No edit reaches `.git` or `.gitattributes`, by name or by realpath: a rewritten `.git` could point git at a config whose filter runs when the patch is collected. The patch's git calls also name the worktree's git folder, read before agy starts.
 - The person's checkout is never written: reviews and changes run in a detached, locked worktree under the state folder, removed when the task ends whatever happens.
 - Git runs with `core.fsmonitor` off, no hooks, and diffs without external diff or textconv, and with fixed color, prefix and relative settings so a patch applies whatever the person's git config (`cli/review.ts`). A diff over 64 MB is refused, never cut. Revisions are checked as refs and end with `--`.
-- A task's worktree is unlocked before removal (git prunes no locked worktree) and removed in a `finally` that covers its creation; SIGTERM and SIGINT are caught for the whole task.
+- A task's worktree is unlocked before removal (git prunes no locked worktree) and removed in a `finally` that covers its creation; SIGTERM and SIGINT are caught for the whole task. Each task first sweeps the worktrees of tasks that are not running, which a task killed outright leaves behind.
+
+## Known limits
+
+- A process's liveness is its pid alone: after a crash and pid reuse, a stale session lock or a `running` record blocks follow-ups of that session until the lock file under `locks/` is removed.
+- A lock read between its creation and its first write looks stale and can be taken over; the window is one write.
+- The quota cache (`usage.json`, 5 minutes) does not tell agy executables or Google accounts apart.
+- A second signal exits at once: that task's record stays `running`, and the next task sweeps its worktree.

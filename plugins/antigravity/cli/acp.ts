@@ -56,6 +56,13 @@ export interface TurnResult {
   stderr: string
 }
 
+/** The thinking levels a configOptions list offers (flat `options`, or grouped ones), none when it lists none. */
+export function levelsOf(configOptions: unknown): string[] {
+  const level = Array.isArray(configOptions) ? configOptions.find((option: any) => option?.id === 'thought_level') : undefined
+  const flat = (list: unknown): unknown[] => (Array.isArray(list) ? list.flatMap((item: any) => (Array.isArray(item?.options) ? flat(item.options) : [item])) : [])
+  return flat(level?.options).map((option: any) => option?.value).filter((value): value is string => typeof value === 'string' && value !== '')
+}
+
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 2_000)
 
 export async function runTurn(input: TurnInput): Promise<TurnResult> {
@@ -160,9 +167,13 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
     if (early) return early
     // agy's own mode stays `default`, which asks before every action; the task's mode is the client's answers.
     await rpc.request('session/set_mode', { sessionId, modeId: 'default' }).catch(() => undefined)
+    // The thinking levels agy offers depend on the model (Hydrogen has xhigh, Argon not): the session's list holds for
+    // its own model, and set_model may send the new one's.
+    let options: unknown = session?.configOptions
     if (input.model) {
       try {
-        await rpc.request('session/set_model', { sessionId, modelId: input.model })
+        const changed = await rpc.request('session/set_model', { sessionId, modelId: input.model })
+        options = changed?.configOptions
       } catch (error) {
         return stopped_() ?? end({ error: messageOf(error), errorKind: 'model_unavailable' })
       }
@@ -170,11 +181,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       input.onUpdate?.({ executedModel })
     }
     if (input.effort) {
-      // The levels agy offers, when its session lists them (session/new does), named in the error.
-      const offered: string[] = (Array.isArray(session?.configOptions) ? session.configOptions : [])
-        .find((option: any) => option?.id === 'thought_level')
-        ?.options?.map((option: any) => String(option?.value))
-        .filter(Boolean) ?? []
+      const offered = levelsOf(options)
       const levels = offered.length ? ` (agy offers ${offered.join(', ')})` : ''
       if (offered.length && !offered.includes(input.effort)) return end({ error: `agy has no effort ${input.effort}${levels}.`, errorKind: 'effort_unavailable' })
       try {

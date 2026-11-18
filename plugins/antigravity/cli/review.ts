@@ -3,8 +3,8 @@
 // the answer and are checked here. Git runs with core.fsmonitor off and diffs without external diff or textconv: a
 // repository's config could otherwise name commands to run. Diffs also ignore the person's diff settings (color,
 // prefixes, diff.relative), so a patch always applies.
-import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import { runProcess } from './process.ts'
 
 const SAFE = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
@@ -121,6 +121,28 @@ export async function removeWorktree(project: string, path: string): Promise<voi
   const removed = await git(project, ['worktree', 'remove', '--force', '--force', path])
   if (removed.code !== 0) await runProcess(['rm', '-rf', '--', path], { timeoutMs: 60_000 })
   await git(project, ['worktree', 'prune'])
+}
+
+/**
+ * Removes the task worktrees under `worktreesDir` whose task is not running (`live` says which are): a task killed
+ * outright (SIGKILL, a second signal) leaves its worktree locked in the repository, where git never prunes it. The
+ * repository is the task's project, else the one the worktree's `.git` file names.
+ */
+export async function sweepWorktrees(worktreesDir: string, live: (taskId: string) => Promise<{ running: boolean; project?: string }>): Promise<void> {
+  for (const name of await readdir(worktreesDir).catch(() => [] as string[])) {
+    const path = join(worktreesDir, name)
+    const task = await live(name)
+    if (task.running) continue
+    let project = task.project
+    if (!project) {
+      // `gitdir: <repository>/.git/worktrees/<name>`: the repository is two folders up from its git folder.
+      const gitdir = (await readFile(join(path, '.git'), 'utf8').catch(() => '')).match(/^gitdir:\s*(.+)$/m)?.[1]?.trim()
+      const common = gitdir ? dirname(dirname(gitdir)) : undefined
+      project = common && basename(common) === '.git' ? dirname(common) : undefined
+    }
+    if (project) await removeWorktree(project, path)
+    else await runProcess(['rm', '-rf', '--', path], { timeoutMs: 60_000 })
+  }
 }
 
 export const PRIORITIES = ['P0', 'P1', 'P2', 'P3'] as const

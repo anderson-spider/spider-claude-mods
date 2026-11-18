@@ -9,7 +9,7 @@ import { classify } from './errors.ts'
 import { headOf, makeTaskWorktree, patchOf, uncommittedOf } from './implement.ts'
 import { decide, type Mode, type Scope } from './policy.ts'
 import { bucketLine, bucketsFor, cachedUsage, gateOf } from './quota.ts'
-import { findingLine, findingsOf, makeReviewWorktree, projectRoot, removeWorktree, resolveTarget, reviewPrompt } from './review.ts'
+import { findingLine, findingsOf, makeReviewWorktree, projectRoot, removeWorktree, resolveTarget, reviewPrompt, sweepWorktrees } from './review.ts'
 import { alive, createTaskDir, loadTask, lockSession, newTaskId, pruneTasks, saveTask, writeJson, type Role, type Status, type Task } from './tasks.ts'
 
 export interface RunIo {
@@ -99,6 +99,10 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
   if (typeof agy !== 'string') return fail(io, agy.error, RUN_EXIT.unavailable)
   const refused = await prepareHome(paths)
   if (refused) return fail(io, refused, RUN_EXIT.failed)
+  await sweepWorktrees(paths.worktrees, async taskId => {
+    const record = await loadTask(paths.tasks, taskId)
+    return 'id' in record ? { running: record.status === 'running' && alive(record.pid), project: record.project } : { running: false }
+  })
   const warnings: string[] = []
   const model = args.model ?? parent?.model
   const usageNow = await cachedUsage(agy, join(paths.state, 'usage.json'), paths.tasks, io.env, io.now())

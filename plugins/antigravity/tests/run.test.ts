@@ -334,3 +334,34 @@ test('a task stopped before agy starts ends cancelled without a session', async 
   assert.equal(code, EXIT.cancelled)
   assert.deepEqual(await h.entries(), [])
 })
+
+test('levelsOf reads flat and grouped thinking levels, and nothing else', async () => {
+  const { levelsOf } = await import('../cli/acp.ts')
+  assert.deepEqual(levelsOf([{ id: 'thought_level', options: [{ value: 'low' }, { value: 'high' }] }]), ['low', 'high'])
+  assert.deepEqual(levelsOf([{ id: 'thought_level', options: [{ group: 'g', options: [{ value: 'xhigh' }] }, { value: 3 }] }]), ['xhigh'])
+  assert.deepEqual(levelsOf(undefined), [])
+})
+
+test('the effort is checked against the chosen model, not the session default', async () => {
+  // The fake's set_model sends no configOptions: the session's (low, medium, high) do not hold for it.
+  const h = await harness({ steps: [{ say: 'ok' }] })
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief, '--model', 'gemini-4-hydrogen-high', '--effort', 'xhigh', '--force'], h.io), EXIT.ok)
+  assert.ok((await h.entries()).some(entry => entry.got?.method === 'session/set_config_option' && entry.got.params.value === 'xhigh'))
+})
+
+test('a worktree left by a killed task is removed by the next task', async () => {
+  const repo = await repository()
+  const h = await harness({ steps: [{ say: 'ok' }] }, repo)
+  // A task killed outright: its locked worktree stays registered, and its record says it was running.
+  const left = join(h.state, 'spider-antigravity', 'worktrees', '20260101-000000-aaaaaa')
+  await mkdir(join(h.state, 'spider-antigravity', 'worktrees'), { recursive: true, mode: 0o700 })
+  execFileSync('git', ['-C', repo, 'worktree', 'add', '--detach', '--lock', left, 'HEAD'], { stdio: 'ignore' })
+  const orphan = join(h.state, 'spider-antigravity', 'worktrees', '20260101-000000-bbbbbb')
+  execFileSync('git', ['-C', repo, 'worktree', 'add', '--detach', '--lock', orphan, 'HEAD'], { stdio: 'ignore' })
+  const tasks = join(h.state, 'spider-antigravity', 'tasks', '20260101-000000-aaaaaa')
+  await mkdir(tasks, { recursive: true })
+  await writeFile(join(tasks, 'task.json'), JSON.stringify({ id: '20260101-000000-aaaaaa', status: 'running', pid: 999_999_999, project: repo }))
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief], h.io), EXIT.ok)
+  assert.ok(!existsSync(left) && !existsSync(orphan))
+  assert.equal(execFileSync('git', ['-C', repo, 'worktree', 'list']).toString().trim().split('\n').length, 1)
+})
