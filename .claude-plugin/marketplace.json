@@ -8,6 +8,11 @@
   },
   "plugins": [
     {
+      "name": "antigravity",
+      "source": "./plugins/antigravity",
+      "description": "Delegate a task to Google's Antigravity CLI (agy) over ACP, with every read, edit and command it asks for answered by a mode the plugin enforces: read-only questions, reviews and searches, or an implementation in a throwaway worktree that comes back as a patch."
+    },
+    {
       "name": "file-explorer",
       "source": "./plugins/file-explorer",
       "description": "File tree pane that follows Claude's reads, edits and searches, with git status, search, preview and path references"

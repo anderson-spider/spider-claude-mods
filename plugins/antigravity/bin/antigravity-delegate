@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+// Claude Code puts the plugin's bin/ on the Bash tool's PATH. Node 22.18 or later runs cli/main.ts by stripping types;
+// a dynamic import works whether Node reads this extensionless file as CommonJS or as a module.
+import('../cli/main.ts').then(
+  (main) => main.cli(process.argv.slice(2)).then((code) => (process.exitCode = code)),
+  (error) => {
+    process.stderr.write(`antigravity-delegate could not start (it needs Node 22.18 or later): ${error instanceof Error ? error.message : error}\n`)
+    process.exitCode = 70
+  },
+)

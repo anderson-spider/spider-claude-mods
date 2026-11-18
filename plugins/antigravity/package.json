@@ -1,0 +1,10 @@
+{
+  "name": "antigravity",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "claude plugin validate --strict .",
+    "test": "node --test 'tests/*.test.ts'",
+    "typecheck": "tsc"
+  }
+}
