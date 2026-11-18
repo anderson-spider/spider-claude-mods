@@ -1,7 +1,7 @@
 // `run` and `follow`: one delegated task, from the brief to the saved answer. A task gets its own folder, runs agy over
 // ACP in the private agy home with every action answered by the mode, and prints a short summary that Claude reads when
 // the background command ends. A follow-up resumes the same agy session.
-import { readFile, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runTurn } from './acp.ts'
 import { PROFILE, agyEnv, locateAgy, pathsOf, prepareHome } from './agy.ts'
@@ -69,6 +69,25 @@ const plugin = async (): Promise<string> =>
 
 const seconds = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.floor(ms / 60_000)}m${Math.round((ms % 60_000) / 1000)}s`)
 
+// One task's record is written by its turn's progress and by its end: each save waits for the one before, so an early
+// progress save never lands after the final record.
+const saving = new WeakMap<Task, Promise<void>>()
+function save(task: Task): Promise<void> {
+  const next = (saving.get(task) ?? Promise.resolve()).then(() => saveTask(task)).catch(() => undefined)
+  saving.set(task, next)
+  return next
+}
+
+const alive = (pid: number | undefined) => {
+  if (typeof pid !== 'number') return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
   const brief = await readFile(args.briefFile, 'utf8').catch(() => undefined)
   if (brief === undefined) return usage(io, `Cannot read the brief ${args.briefFile}.`)
@@ -81,6 +100,8 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
     const loaded = await loadTask(paths.tasks, args.follow)
     if (!('id' in loaded)) return usage(io, loaded.error)
     if (!loaded.sessionId) return usage(io, `Task ${loaded.id} has no agy session to follow up (it failed before one started); start a new task.`)
+    // A first task holds no session lock (it has no session until agy starts one): its record says it still runs.
+    if (loaded.status === 'running' && alive(loaded.pid)) return fail(io, `Task ${loaded.id} is still running on this agy session; follow up once it ends.`, RUN_EXIT.failed)
     parent = loaded
   }
 
@@ -105,7 +126,7 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
   if (args.mode === 'implement' && role === 'review') return usage(io, 'A review is read-only: run it with --mode read-only.')
   const now = new Date(io.now())
   const id = newTaskId(now)
-  await pruneTasks(paths.tasks, io.now())
+  await pruneTasks(paths.tasks, io.now(), parent ? [parent.id] : [])
   const files = await createTaskDir(paths.tasks, id, brief)
   const task: Task = {
     id,
@@ -117,60 +138,67 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
     ...(model ? { model } : {}),
     ...(args.effort ? { effort: args.effort } : {}),
     status: 'running',
+    pid: process.pid,
     startedAt: now.toISOString(),
     ...(parent?.sessionId ? { sessionId: parent.sessionId } : {}),
     refused: [],
     notes: [...warnings],
     files,
   }
-  await saveTask(task)
+  // The parent's patch is copied in, so this task keeps it when the parent's folder is pruned.
+  if (parent?.files.patch) {
+    const copied = join(paths.tasks, id, 'patch.diff')
+    if (!(await copyFile(parent.files.patch, copied).then(() => true, () => false))) return finish(io, task, args, 'failed', `Task ${parent.id}'s patch is gone; start a new task.`, RUN_EXIT.failed)
+    task.files.patch = copied
+    if (parent.changed) task.changed = parent.changed
+  }
+  await save(task)
 
   // Where agy runs: a review's worktree at the reviewed commit, an implement task's (or a follow-up of one) at HEAD
-  // with the earlier patch applied, else the checkout itself, read-only.
+  // with the earlier patch applied, else the checkout itself, read-only. From here on the worktree goes whatever happens.
   let worktree: string | undefined
-  let prompt: string
-  const inWorktree = args.mode === 'implement' || parent?.files.patch !== undefined
-  if (role === 'review' && !parent) {
-    if (!(await projectRoot(io.cwd))) return finish(io, task, args, 'failed', 'A review needs a git repository.', RUN_EXIT.usage)
-    const target = await resolveTarget(project, { ...(args.base ? { base: args.base } : {}), ...(args.commit ? { commit: args.commit } : {}) })
-    if ('error' in target) return finish(io, task, args, 'failed', target.error, RUN_EXIT.usage)
-    const made = await makeReviewWorktree(project, join(paths.worktrees, id), target)
-    if ('error' in made) return finish(io, task, args, 'failed', made.error, RUN_EXIT.failed)
-    worktree = made.path
-    task.cwd = made.path
-    task.range = made.range
-    if (made.untracked) task.notes.push(`${made.untracked} untracked ${made.untracked === 1 ? 'file was' : 'files were'} not reviewed; commit them to include them.`)
-    prompt = reviewPrompt(made, brief)
-  } else if (inWorktree) {
-    const base = parent?.base ?? (await headOf(project))
-    if (typeof base !== 'string') return finish(io, task, args, 'failed', base.error, RUN_EXIT.usage)
-    const path = join(paths.worktrees, id)
-    const made = await makeTaskWorktree(project, path, base, parent?.files.patch)
-    worktree = path
-    task.cwd = path
-    task.base = base
-    if (made) {
-      await removeWorktree(project, path)
-      return finish(io, task, args, 'failed', made.error, RUN_EXIT.failed)
-    }
-    if (!parent?.base) {
-      const dirty = await uncommittedOf(project)
-      if (dirty) task.notes.push(`${dirty} uncommitted ${dirty === 1 ? 'change in your checkout is' : 'changes in your checkout are'} not in agy's copy, which starts at HEAD; the patch may need --3way to apply.`)
-    }
-    const lead = parent ? (parent.files.patch ? `Your earlier changes were applied in a fresh copy of the repository at ${path}; work there from now on.` : `You now work in a copy of the repository at ${path}.`) : IMPLEMENT_LEAD
-    prompt = `${lead}\n\n${brief}`
-  } else prompt = parent ? brief : `${ROLE_LEAD[role]}\n\n${brief}`
-  prompt = `${prompt}\n\n${rulesOf(args.mode, task.cwd)}`
-  await saveTask(task)
-
-  const release = task.sessionId ? await lockSession(join(paths.state, 'locks'), task.sessionId, id) : undefined
-  if (release && 'error' in release) {
-    if (worktree) await removeWorktree(project, worktree)
-    return finish(io, task, args, 'failed', release.error, RUN_EXIT.failed)
-  }
-  const scope: Scope = { cwd: task.cwd, readRoots: [task.cwd, paths.geminiDir], writeRoots: args.mode === 'implement' && worktree ? [worktree] : [] }
-  const started = io.now()
+  let gitDir: string | undefined
+  let release: (() => Promise<void>) | undefined
   try {
+    let prompt: string
+    const inWorktree = args.mode === 'implement' || task.files.patch !== undefined
+    if (role === 'review' && !parent) {
+      if (!(await projectRoot(io.cwd))) return await finish(io, task, args, 'failed', 'A review needs a git repository.', RUN_EXIT.usage)
+      const target = await resolveTarget(project, { ...(args.base ? { base: args.base } : {}), ...(args.commit ? { commit: args.commit } : {}) })
+      if ('error' in target) return await finish(io, task, args, 'failed', target.error, RUN_EXIT.usage)
+      worktree = join(paths.worktrees, id)
+      const made = await makeReviewWorktree(project, worktree, target)
+      if ('error' in made) return await finish(io, task, args, 'failed', made.error, RUN_EXIT.failed)
+      task.cwd = made.path
+      task.range = made.range
+      if (made.untracked) task.notes.push(`${made.untracked} untracked ${made.untracked === 1 ? 'file was' : 'files were'} not reviewed; commit them to include them.`)
+      prompt = reviewPrompt(made, brief)
+    } else if (inWorktree) {
+      const base = parent?.base ?? (await headOf(project))
+      if (typeof base !== 'string') return await finish(io, task, args, 'failed', base.error, RUN_EXIT.usage)
+      worktree = join(paths.worktrees, id)
+      task.cwd = worktree
+      task.base = base
+      const made = await makeTaskWorktree(project, worktree, base, task.files.patch)
+      if ('error' in made) return await finish(io, task, args, 'failed', made.error, RUN_EXIT.failed)
+      gitDir = made.gitDir
+      if (!parent?.base) {
+        const dirty = await uncommittedOf(project)
+        if (dirty) task.notes.push(`${dirty} uncommitted ${dirty === 1 ? 'change in your checkout is' : 'changes in your checkout are'} not in agy's copy, which starts at HEAD; the patch may need --3way to apply.`)
+      }
+      const lead = parent ? (task.files.patch ? `Your earlier changes were applied in a fresh copy of the repository at ${worktree}; work there from now on.` : `You now work in a copy of the repository at ${worktree}.`) : IMPLEMENT_LEAD
+      prompt = `${lead}\n\n${brief}`
+    } else prompt = parent ? brief : `${ROLE_LEAD[role]}\n\n${brief}`
+    prompt = `${prompt}\n\n${rulesOf(args.mode, task.cwd)}`
+    await save(task)
+
+    if (task.sessionId) {
+      const locked = await lockSession(join(paths.state, 'locks'), task.sessionId, id)
+      if ('error' in locked) return await finish(io, task, args, 'failed', locked.error, RUN_EXIT.failed)
+      release = locked
+    }
+    const scope: Scope = { cwd: task.cwd, readRoots: [task.cwd, paths.geminiDir], writeRoots: args.mode === 'implement' && worktree ? [worktree] : [] }
+    const started = io.now()
     const turn = await runTurn({
       argv: [agy, 'acp', `--gemini-dir=${paths.geminiDir}`, `--cli_dir_name=${PROFILE}`, '--disable-telemetry'],
       cwd: task.cwd,
@@ -187,7 +215,7 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
         if (update.sessionId && update.sessionId !== task.sessionId) {
           task.sessionId = update.sessionId
           // The record names the session as soon as there is one, so a stopped task can still be followed up.
-          saveTask(task).catch(() => undefined)
+          void save(task)
         }
         if (update.executedModel !== undefined) task.executedModel = update.executedModel
       },
@@ -210,30 +238,30 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
       } else task.notes.push(`${findings.error} The answer is saved as agy wrote it.`)
     }
     // The patch is kept whatever the end, a stopped or failed task's too: it holds the work done so far.
-    if (args.mode === 'implement' && worktree && task.base) {
-      const patch = await patchOf(worktree, task.base)
+    if (args.mode === 'implement' && worktree && gitDir && task.base) {
+      const patch = await patchOf(worktree, gitDir, task.base)
       if ('error' in patch) task.notes.push(`${patch.error} agy's changes are lost.`)
-      else if (patch.changed.length === 0) task.notes.push('agy changed no file.')
-      else {
+      else if (patch.changed.length === 0) {
+        task.notes.push('agy changed no file.')
+        delete task.changed
+      } else {
         task.changed = patch.changed
         task.files.patch = join(paths.tasks, id, 'patch.diff')
         await writeFile(task.files.patch, patch.diff, { mode: 0o600 })
         if (turn.status !== 'completed') task.notes.push('The patch holds the changes made before the task ended.')
       }
-    } else if (parent?.files.patch && !task.files.patch) {
-      // A read-only follow-up of an implement task changes nothing: its patch is still the parent's.
-      task.files.patch = parent.files.patch
-      if (parent.changed) task.changed = parent.changed
     }
     if (worktree) task.notes.push(`agy's worktree was removed; your checkout was not touched.`)
-    if (turn.status === 'completed') return finish(io, task, args, 'completed', undefined, RUN_EXIT.ok, took)
+    if (turn.status === 'completed') return await finish(io, task, args, 'completed', undefined, RUN_EXIT.ok, took)
     const failure = classify(turn, io.now())
     task.reason = failure.reason
-    if (failure.reason === 'cancelled') return finish(io, task, args, 'cancelled', failure.message, RUN_EXIT.cancelled, took)
-    if (failure.reason === 'no answer' && turn.refused.length > 0) return finish(io, task, args, 'needs_approval', 'agy stopped at actions this mode refuses and gave no answer.', RUN_EXIT.needsApproval, took)
-    return finish(io, task, args, 'failed', failure.message, RUN_EXIT.failed, took)
+    if (failure.reason === 'cancelled') return await finish(io, task, args, 'cancelled', failure.message, RUN_EXIT.cancelled, took)
+    if (failure.reason === 'no answer' && turn.refused.length > 0) return await finish(io, task, args, 'needs_approval', 'agy stopped at actions this mode refuses and gave no answer.', RUN_EXIT.needsApproval, took)
+    return await finish(io, task, args, 'failed', failure.message, RUN_EXIT.failed, took)
+  } catch (error) {
+    return await finish(io, task, args, 'failed', `The task broke: ${error instanceof Error ? error.message : String(error)}`, RUN_EXIT.failed)
   } finally {
-    if (release && !('error' in release)) await release()
+    await release?.()
     if (worktree) await removeWorktree(project, worktree)
   }
 }
@@ -241,8 +269,9 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
 async function finish(io: RunIo, task: Task, args: RunArgs, status: Status, error: string | undefined, code: number, took?: string): Promise<number> {
   task.status = status
   task.endedAt = new Date(io.now()).toISOString()
+  delete task.pid
   if (error) task.error = error
-  await saveTask(task)
+  await save(task)
   if (args.json) {
     io.out(JSON.stringify(task, null, 2))
     return code

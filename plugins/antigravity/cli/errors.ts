@@ -48,7 +48,9 @@ export interface Failure {
 /** The failure of a turn that did not complete; `endedAt` dates a quota reset given as a delay. */
 export function classify(turn: TurnResult, endedAt: number): Failure {
   const texts = [turn.error ?? '', turn.stderr].join('\n')
-  const said = firstLine(turn.error) || firstLine(turn.stderr)
+  // When agy exited, its reason is in stderr, not in the exit line.
+  const exited = /^agy exited\b/.test(turn.error ?? '')
+  const said = exited ? firstLine(turn.stderr) || firstLine(turn.error) : firstLine(turn.error) || firstLine(turn.stderr)
   const say = (reason: Reason, extra = '') => ({ reason, message: `agy failed (${reason})${said ? `: ${said}` : ''}${extra}` })
   if (turn.status === 'cancelled') return { reason: 'cancelled', message: 'The task was cancelled.' }
   if (turn.errorKind === 'timed_out') return { reason: 'timed out', message: 'agy failed (timed out): the task reached its time limit.' }

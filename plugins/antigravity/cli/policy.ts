@@ -61,18 +61,26 @@ export const isWithin = (path: string, root: string) => {
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
 }
 
-/** The paths a tool call names, `undefined` when one is malformed. */
+/**
+ * The paths a tool call names, `undefined` when one is malformed. A `..` segment is malformed: the OS resolves it after
+ * the symlink before it, which a check by realpath of the nearest existing folder cannot follow.
+ */
 function pathsOf(locations: unknown): string[] | undefined {
   if (locations === undefined || locations === null) return []
   if (!Array.isArray(locations)) return undefined
   const paths: string[] = []
   for (const location of locations) {
     const path = typeof location?.path === 'string' ? location.path.trim() : ''
-    if (!path) return undefined
+    if (!path || path.split(/[\\/]/).includes('..')) return undefined
     paths.push(path)
   }
   return paths
 }
+
+// Files whose edit would make git run code when the plugin collects the patch (a `.git` pointing at another git
+// folder with a filter in its config) or change how git reads the tree (`.gitattributes` filters and drivers).
+const GIT_CONTROL = (segment: string) => segment.toLowerCase() === '.git' || segment.toLowerCase() === '.gitattributes'
+const touchesGit = (path: string) => path.split(/[\\/]/).some(GIT_CONTROL)
 
 /** Whether every path lies inside one of the roots, by realpath; failing closed. */
 function allInside(cwd: string, paths: string[], roots: string[], canonical: (path: string) => string | undefined): boolean {
@@ -89,11 +97,19 @@ export function decide(mode: Mode, scope: Scope, toolCall: { kind?: unknown; loc
   const paths = pathsOf(toolCall?.locations)
   if (READ_KINDS.has(kind)) {
     if (paths === undefined) return { allow: false, reason: 'a read with a malformed location' }
+    if (paths.length === 0) return { allow: false, reason: 'a read that names no file' }
     return allInside(scope.cwd, paths, scope.readRoots, canonical) ? { allow: true } : { allow: false, reason: 'a read outside the task folder' }
   }
   if (MUTATION_KINDS.has(kind)) {
     if (mode !== 'implement') return { allow: false, reason: 'read-only' }
-    if (!paths || paths.length === 0) return { allow: false, reason: 'an edit that names no file' }
+    if (paths === undefined) return { allow: false, reason: 'an edit with a malformed location' }
+    if (paths.length === 0) return { allow: false, reason: 'an edit that names no file' }
+    // By realpath too, so a tracked symlink to the worktree's .git does not get around it.
+    const root = canonical(scope.cwd)
+    const named = (path: string) => (isAbsolute(path) ? path : resolve(scope.cwd, path))
+    if (paths.some(path => touchesGit(relative(scope.cwd, named(path))) || (root !== undefined && touchesGit(relative(root, canonical(named(path)) ?? root))))) {
+      return { allow: false, reason: 'an edit of .git or .gitattributes' }
+    }
     return allInside(scope.cwd, paths, scope.writeRoots, canonical) ? { allow: true } : { allow: false, reason: 'an edit outside the worktree' }
   }
   if (kind === 'execute') return { allow: false, reason: 'commands are not allowed' }

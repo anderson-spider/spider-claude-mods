@@ -19,7 +19,7 @@ test('parseModels reads id and name per line, skipping the fetching line, and ma
 
 test('firstLine keeps the first non-empty line with Google Cloud projects and regions blanked', () => {
   assert.equal(firstLine('\n  Error: projects/acme-123/locations/us-central1/models: quota\nmore'), 'Error: projects/…/locations/…/models: quota')
-  assert.equal(firstLine('denied for project_id: acme-123 today'), 'denied for project … today')
+  assert.equal(firstLine('denied for project_id: acme-123 today'), 'denied for project_id: … today')
   assert.equal(firstLine(undefined), '')
 })
 

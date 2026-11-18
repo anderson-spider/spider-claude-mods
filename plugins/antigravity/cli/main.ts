@@ -135,10 +135,11 @@ async function task(io: Io, command: 'run' | 'follow', values: Record<string, st
   const base = text('base')
   const commit = text('commit')
   // Claude Code stops a background command with SIGTERM: the task then ends as cancelled, its worktree removed.
+  // Every signal is caught while the task runs (a second one too), so it always ends through its cleanup.
   const controller = new AbortController()
   const stop = () => controller.abort()
-  process.once('SIGTERM', stop)
-  process.once('SIGINT', stop)
+  process.on('SIGTERM', stop)
+  process.on('SIGINT', stop)
   try {
     return await runTask(
       { ...io, cwd: io.cwd ?? process.cwd(), signal: controller.signal },

@@ -24,3 +24,10 @@ test('runProcess reports an executable that cannot start', async () => {
   const run = await runProcess(['/nonexistent/agy'], { timeoutMs: 1_000 })
   assert.match(run.spawnError ?? '', /ENOENT/)
 })
+
+test('runProcess says when stdout passed maxBytes', async () => {
+  const run = await runProcess(['/bin/sh', '-c', 'printf 0123456789'], { timeoutMs: 5_000, maxBytes: 4 })
+  assert.equal(run.stdout, '6789')
+  assert.equal(run.truncated, true)
+  assert.equal((await runProcess(['/bin/sh', '-c', 'printf ok'], { timeoutMs: 5_000 })).truncated, undefined)
+})

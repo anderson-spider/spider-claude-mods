@@ -164,6 +164,8 @@ async function repository(): Promise<string> {
   const repo = await realpath(await mkdtemp(join(tmpdir(), 'antigravity-repo-')))
   const git = (...args: string[]) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args])
   git('init', '-q', '-b', 'main')
+  // Diff settings a person may have: the plugin's diffs and patches must not depend on them.
+  for (const [key, value] of [['diff.noprefix', 'true'], ['color.ui', 'always'], ['diff.relative', 'true'], ['diff.external', 'false']]) git('config', key ?? '', value ?? '')
   await writeFile(join(repo, 'a.ts'), 'export const a = 1\n')
   git('add', '.')
   git('commit', '-qm', 'base')
@@ -261,4 +263,22 @@ test('a stopped implement task keeps the changes made so far', async () => {
   assert.deepEqual(task.changed, ['A\tb.ts'])
   assert.ok(task.notes.includes('The patch holds the changes made before the task ended.'))
   assert.equal(execFileSync('git', ['-C', repo, 'worktree', 'list']).toString().trim().split('\n').length, 1)
+})
+
+test('run review of one commit diffs a root commit against the empty tree', async () => {
+  const repo = await repository()
+  const root = execFileSync('git', ['-C', repo, 'rev-list', '--max-parents=0', 'HEAD']).toString().trim()
+  const h = await harness({ steps: [{ say: 'ok\n\n```json\n{"findings": []}\n```' }] }, repo)
+  assert.equal(await cli(['run', '--role', 'review', '--brief-file', h.brief, '--commit', root], h.io), EXIT.ok)
+  assert.match(h.out.join('\n'), /^No findings\.$/m)
+  assert.match(prompts(await h.entries())[0] ?? '', /changed files are:\n- a\.ts\n/)
+})
+
+test('follow refuses a parent task that is still running', async () => {
+  const h = await harness({ steps: [{ say: 'First.' }] })
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief], h.io), EXIT.ok)
+  const first = await h.record()
+  await writeFile(first.files.record, JSON.stringify({ ...first, status: 'running', pid: process.pid }))
+  assert.equal(await cli(['follow', '--task', first.id, '--brief-file', h.brief], h.io), EXIT.failed)
+  assert.match(h.err.join('\n'), /is still running on this agy session/)
 })

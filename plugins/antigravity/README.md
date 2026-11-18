@@ -40,9 +40,9 @@ agy runs over ACP (`agy acp`) in the private home below and asks before every re
 | `read-only` | read files in its folder; search the web | the checkout, or for `review` a throwaway worktree at the reviewed commit |
 | `implement` | read and edit files in its folder | a throwaway worktree at `HEAD`; the edits come back as `patch.diff` |
 
-No mode lets agy run a command: an allowed command would run with no confinement and with network. Reads and edits outside the folder are refused, symlinks resolved. When refusals leave agy with no answer, the task ends `needs approval` with the list of what was refused.
+No mode lets agy run a command: an allowed command would run with no confinement and with network. Reads and edits outside the folder are refused, symlinks resolved, as are paths with `..`, requests that name no file, and edits of `.git` or `.gitattributes`. When refusals leave agy with no answer, the task ends `needs approval` with the list of what was refused.
 
-- `review` covers the branch against `--base <ref>` (default `origin/HEAD`, then `main` or `master`) or one `--commit <sha>`, and ends with findings ranked P0 to P3, checked and saved as `findings.json`. Untracked files are not reviewed.
+- `review` covers the branch against `--base <ref>` (default `origin/HEAD`, then `main` or `master`) or one `--commit <sha>` against its first parent, and ends with findings ranked P0 to P3, checked and saved as `findings.json`. Untracked files are not reviewed.
 - `implement` starts from `HEAD`, without your uncommitted changes (the summary says how many), and prints the command that applies the patch: `git -C <project> apply --3way <patch>`. A stopped or failed task keeps the changes made so far. Files `.gitignore` covers are not in the patch.
 - `follow` resumes the agy session, which keeps the earlier turns; a follow-up of an `implement` task rebuilds its worktree with the earlier patch applied, and in `implement` mode its patch holds both changes. One session runs one turn at a time.
 - Before each task the quota is checked: under 30% left in a window the summary warns, under 10% the task does not start unless `--force` is given. A task stops after `--minutes` (30) or when agy sends nothing for `--idle-minutes` (15); stopping the command (SIGTERM or SIGINT) ends it as cancelled.

@@ -164,7 +164,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       try {
         await rpc.request('session/set_model', { sessionId, modelId: input.model })
       } catch (error) {
-        return end({ error: messageOf(error), errorKind: 'model_unavailable' })
+        return stopped_() ?? end({ error: messageOf(error), errorKind: 'model_unavailable' })
       }
       executedModel = input.model
       input.onUpdate?.({ executedModel })
@@ -173,9 +173,11 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       try {
         await rpc.request('session/set_config_option', { sessionId, configId: 'thought_level', value: input.effort })
       } catch (error) {
-        return end({ error: `agy refused effort ${input.effort}: ${messageOf(error)}`, errorKind: 'model_unavailable' })
+        return stopped_() ?? end({ error: `agy refused effort ${input.effort}: ${messageOf(error)}`, errorKind: 'model_unavailable' })
       }
     }
+    const ready = stopped_()
+    if (ready) return ready
     collecting = true
     let seen = refused.length
     let turn = await rpc.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: input.prompt }] })

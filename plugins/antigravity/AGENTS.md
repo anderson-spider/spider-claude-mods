@@ -20,6 +20,8 @@ A `bin/` executable with no hooks and no MCP server, so Code Mode stays availabl
 - The agy home must configure no MCP servers, hooks, plugins or skills (`config/`), since those run outside the permission checks.
 - agy never inherits `GEMINI_*`, `GOOGLE_*`, `AGY_*` or `CLOUDSDK_*`.
 - Errors name the failing check, never a Google Cloud project or region.
-- `cli/policy.ts` decides every permission request: reads inside the task folder and the agy home, edits only in `implement` and only inside its worktree, by realpath, failing closed; `execute` and unknown kinds are refused.
+- `cli/policy.ts` decides every permission request: reads inside the task folder and the agy home, edits only in `implement` and only inside its worktree, by realpath, failing closed; `execute` and unknown kinds are refused. A request must name its files, and a path with a `..` segment is refused, since the OS resolves `..` after the symlink before it.
+- No edit reaches `.git` or `.gitattributes`, by name or by realpath: a rewritten `.git` could point git at a config whose filter runs when the patch is collected. The patch's git calls also name the worktree's git folder, read before agy starts.
 - The person's checkout is never written: reviews and changes run in a detached, locked worktree under the state folder, removed when the task ends whatever happens.
-- Git runs with `core.fsmonitor` off, no hooks, and diffs without external diff or textconv (`cli/review.ts`).
+- Git runs with `core.fsmonitor` off, no hooks, and diffs without external diff or textconv, and with fixed color, prefix and relative settings so a patch applies whatever the person's git config (`cli/review.ts`). A diff over 64 MB is refused, never cut. Revisions are checked as refs and end with `--`.
+- A task's worktree is unlocked before removal (git prunes no locked worktree) and removed in a `finally` that covers its creation; SIGTERM and SIGINT are caught for the whole task.

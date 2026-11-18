@@ -34,6 +34,8 @@ export interface Task {
   model?: string
   effort?: string
   status: Status
+  /** The process running the task, while it runs. */
+  pid?: number
   startedAt: string
   endedAt?: string
   sessionId?: string
@@ -56,7 +58,7 @@ export function newTaskId(now: Date): string {
 export const TASK_ID = /^\d{8}-\d{6}-[0-9a-f]{6}$/
 
 export async function writeJson(path: string, value: unknown): Promise<void> {
-  const temp = `${path}.${process.pid}.tmp`
+  const temp = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
   await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 })
   await rename(temp, path)
 }
@@ -113,12 +115,12 @@ export async function lockSession(locksDir: string, sessionId: string, taskId: s
   return { error: 'Could not take the session lock.' }
 }
 
-/** Removes task folders past the newest `keep` or older than `maxAgeMs`. */
-export async function pruneTasks(tasksDir: string, now: number, keep = 50, maxAgeMs = 7 * 24 * 3_600_000): Promise<void> {
+/** Removes task folders past the newest `keep` or older than `maxAgeMs`, but never those `spare` names. */
+export async function pruneTasks(tasksDir: string, now: number, spare: string[] = [], keep = 50, maxAgeMs = 7 * 24 * 3_600_000): Promise<void> {
   const names = (await readdir(tasksDir).catch(() => [] as string[])).filter(name => TASK_ID.test(name)).sort().reverse()
   for (const [index, name] of names.entries()) {
     const info = await stat(join(tasksDir, name)).catch(() => undefined)
-    if (!info) continue
+    if (!info || spare.includes(name)) continue
     if (index >= keep || now - info.mtimeMs > maxAgeMs) await rm(join(tasksDir, name), { recursive: true, force: true })
   }
 }

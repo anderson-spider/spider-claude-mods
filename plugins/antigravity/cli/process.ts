@@ -8,6 +8,8 @@ export interface RunResult {
   stdout: string
   stderr: string
   timedOut: boolean
+  /** Set when stdout passed `maxBytes`, so its start was dropped. */
+  truncated?: boolean
   /** Set when the executable could not be started at all. */
   spawnError?: string
 }
@@ -29,6 +31,7 @@ export function runProcess(argv: readonly string[], options: RunOptions): Promis
     let stdout = ''
     let stderr = ''
     let timedOut = false
+    let truncated = false
     let settled = false
     const child = spawn(command, args, { cwd: options.cwd, env: options.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
     const signalGroup = (signal: NodeJS.Signals) => {
@@ -52,9 +55,15 @@ export function runProcess(argv: readonly string[], options: RunOptions): Promis
       clearTimeout(killTimer)
       resolve(result)
     }
-    child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout = (stdout + chunk).slice(-keep)))
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      stdout += chunk
+      if (stdout.length > keep) {
+        truncated = true
+        stdout = stdout.slice(-keep)
+      }
+    })
     child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr = (stderr + chunk).slice(-keep)))
-    child.once('error', error => finish({ code: null, signal: null, stdout, stderr, timedOut, spawnError: error.message }))
-    child.once('close', (code, signal) => finish({ code, signal, stdout, stderr, timedOut }))
+    child.once('error', error => finish({ code: null, signal: null, stdout, stderr, timedOut, ...(truncated ? { truncated } : {}), spawnError: error.message }))
+    child.once('close', (code, signal) => finish({ code, signal, stdout, stderr, timedOut, ...(truncated ? { truncated } : {}) }))
   })
 }

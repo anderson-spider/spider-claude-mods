@@ -109,8 +109,9 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 
 /** Whether an agy config file configures nothing under `key`: missing, empty, or JSON whose `key` is empty. */
 async function configuresNothing(path: string, key: string): Promise<boolean> {
-  const info = await stat(path).catch(() => undefined)
-  if (!info) return true
+  const info = await stat(path).catch((error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? null : undefined))
+  if (info === null) return true
+  if (!info) return false
   if (!info.isFile() || info.size > 64_000) return false
   const text = await readFile(path, 'utf8').catch(() => undefined)
   if (text === undefined) return false
@@ -125,7 +126,7 @@ async function configuresNothing(path: string, key: string): Promise<boolean> {
 }
 
 /** Whether a folder is missing or empty. */
-const emptyOrMissing = (path: string) => readdir(path).then(entries => entries.length === 0, () => true)
+const emptyOrMissing = (path: string) => readdir(path).then(entries => entries.length === 0, (error: NodeJS.ErrnoException) => error.code === 'ENOENT')
 
 /**
  * Prepares the private agy home before a task: private folders, the profile's settings and agy's config, then refuses
@@ -139,8 +140,10 @@ export async function prepareHome(paths: Paths): Promise<string | undefined> {
   }
   const profile = join(paths.geminiDir, 'antigravity-cli', PROFILE)
   const config = join(paths.geminiDir, 'config')
-  await mkdir(profile, { recursive: true, mode: 0o700 })
-  await mkdir(config, { recursive: true, mode: 0o700 })
+  for (const dir of [join(paths.geminiDir, 'antigravity-cli'), profile, config]) {
+    const refused = await privateDir(dir)
+    if (refused) return refused
+  }
   await writeAtomic(join(profile, 'settings.json'), `${JSON.stringify(PROFILE_SETTINGS, null, 2)}\n`)
   await writeAtomic(join(config, 'config.json'), `${JSON.stringify(HOME_CONFIG, null, 2)}\n`)
   const checks: [boolean, string][] = [
@@ -155,7 +158,11 @@ export async function prepareHome(paths: Paths): Promise<string | undefined> {
 }
 
 /** Text from agy that may name a Google Cloud project or region (its errors do), with those parts blanked. */
-export const redact = (text: string) => text.replace(/\b(projects|locations)\/[^/\s"']+/g, '$1/…').replace(/\bproject[ _-]?(?:id)?[:=]\s*\S+/gi, 'project …')
+export const redact = (text: string) =>
+  text
+    .replace(/\b(projects|locations|regions|zones)\/[^/\s"',}]+/gi, '$1/…')
+    // A key naming a project or place, quoted or not, `project_id: x`, `"projectId": "x"`, `location=us-central1`.
+    .replace(/(["']?)\b(project(?:[ _-]?(?:id|number|name))?|consumer|location|region|zone)\1(\s*[:=]\s*)(["']?)[^\s"',}]+\4/gi, '$1$2$1$3$4…$4')
 
 /** The first non-empty line of a text from agy, redacted and cut short. */
 export function firstLine(text: string | undefined): string {
