@@ -28,16 +28,6 @@
       "description": "Work on GitLab merge requests and pipelines of the current repository, picking the host and token from its git remote, or from a host you name."
     },
     {
-      "name": "image-preview",
-      "source": "./plugins/image-preview",
-      "description": "See images in the terminal: thumbnails of what you paste above the prompt, and each image Claude reads drawn under its row in the transcript"
-    },
-    {
-      "name": "secrets",
-      "source": "./plugins/secrets",
-      "description": "Claude asks you for a token or password in a card and gets a private file it can use inside a command but not read, while a fence and a scrubber keep the value out of the conversation"
-    },
-    {
       "name": "session-hud",
       "source": "./plugins/session-hud",
       "description": "A card above the prompt: model, the repository, folder and branch, context and cache; the five-hour and seven-day limits with their pace; what the last turn sent and added, edits and errors; and, when turned on, next steps to tick and put in the prompt."
@@ -56,11 +46,6 @@
       "name": "tailscale",
       "source": "./plugins/tailscale",
       "description": "Read or change your tailnet through the Tailscale API using the apiKey plugin option."
-    },
-    {
-      "name": "verification-planning",
-      "source": "./plugins/verification-planning",
-      "description": "A skill that plans, before non-trivial coding work, the project-specific evidence that will establish or refute the change, and closes that path after implementation."
     }
   ]
 }

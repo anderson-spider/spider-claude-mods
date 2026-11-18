@@ -26,10 +26,6 @@ importers:
 
   plugins/gitlab: {}
 
-  plugins/image-preview: {}
-
-  plugins/secrets: {}
-
   plugins/session-hud: {}
 
   plugins/sonarqube: {}
@@ -37,8 +33,6 @@ importers:
   plugins/subagent-effort: {}
 
   plugins/tailscale: {}
-
-  plugins/verification-planning: {}
 
 packages:
 
