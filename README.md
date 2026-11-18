@@ -6,6 +6,7 @@ Marketplace of [Claude Code](https://claude.com/claude-code) plugins made by and
 
 | Plugin | What it does |
 | --- | --- |
+| [antigravity](plugins/antigravity/README.md) | Gives Claude an `antigravity-delegate` command that delegates tasks to Google's Antigravity CLI (`agy`) over ACP, answering every read, edit and command agy asks for by the task's mode: read-only questions, searches, analyses and reviews with findings, or a change made in a throwaway worktree and returned as a patch. agy runs in a private agy home without your own agy MCP servers, hooks, plugins and skills, and never runs a command. It has no hooks, so Code Mode stays available. |
 | [file-explorer](plugins/file-explorer/README.md) | A file tree pane beside the conversation: git status per file and folder, a mark on each file Claude reads, edits, creates, removes, finds or commits, search across unopened folders, preview, and `@path` into the prompt. |
 | [gchat](plugins/gchat/README.md) | Skills that read, summarize and reply in Google Chat and post merge request review requests through Claude in Chrome, sending only a text and a recipient you approved; the default space and account come from plugin options. |
 | [github](plugins/github/README.md) | A skill for GitHub work with the `gh` CLI in the main agent: pull requests, pending reviews, Actions runs and workflow logs, issues and comments, never waiting on a run or writing what you did not ask for. |
@@ -23,6 +24,7 @@ Requires Claude Code v2.1.287 or later. The repository is checked with v2.1.322 
 
 ```
 /plugin marketplace add anderson-spider/claude-mods
+/plugin install antigravity@spider-claude-mods
 /plugin install file-explorer@spider-claude-mods
 /plugin install gchat@spider-claude-mods
 /plugin install github@spider-claude-mods

@@ -1,0 +1,23 @@
+{
+  "name": "antigravity",
+  "version": "3.0.0",
+  "description": "Delegate a task to Google's Antigravity CLI (agy) over ACP, with every read, edit and command it asks for answered by a mode the plugin enforces: read-only questions, reviews and searches, or an implementation in a throwaway worktree that comes back as a patch.",
+  "author": {
+    "name": "anderson-spider"
+  },
+  "license": "MIT",
+  "userConfig": {
+    "agyPath": {
+      "type": "string",
+      "title": "agy CLI path",
+      "description": "Absolute path of the agy executable; leave empty to look on PATH, then in ~/.local/bin, /opt/homebrew/bin and /usr/local/bin.",
+      "default": ""
+    },
+    "defaultModel": {
+      "type": "string",
+      "title": "Default model",
+      "description": "agy model id a task uses when it names none (antigravity-delegate models lists them); leave empty for agy's own default.",
+      "default": ""
+    }
+  }
+}

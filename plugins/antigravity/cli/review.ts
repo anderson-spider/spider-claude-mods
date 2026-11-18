@@ -1,0 +1,210 @@
+// Git for the tasks: the project's root, a review's target, the throwaway worktree a review runs in (so the checkout is
+// never touched), and the findings agy returns. ACP has no --json-schema, so the findings come back as a JSON block in
+// the answer and are checked here. Git runs with core.fsmonitor off and diffs without external diff or textconv: a
+// repository's config could otherwise name commands to run. Diffs also ignore the person's diff settings (color,
+// prefixes, diff.relative), so a patch always applies.
+import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
+import { runProcess } from './process.ts'
+
+const SAFE = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']
+
+/** The flags every diff the plugin reads or saves runs with. */
+export const DIFF = ['--no-ext-diff', '--no-textconv', '--no-color', '--no-relative', '--src-prefix=a/', '--dst-prefix=b/']
+// What a diff may hold; past it the diff is refused rather than cut.
+const MAX_DIFF = 64_000_000
+
+export interface GitResult {
+  code: number | null
+  stdout: string
+  stderr: string
+}
+
+/** Runs git in `cwd`; `gitDir` names the git folder outright, so a `.git` file in the folder is not read. */
+export function git(cwd: string, args: string[], timeoutMs = 60_000, gitDir?: string): Promise<GitResult> {
+  const where = gitDir ? [`--git-dir=${gitDir}`, `--work-tree=${cwd}`] : ['-C', cwd]
+  return runProcess(['git', ...where, ...SAFE, ...args], { cwd, timeoutMs, maxBytes: MAX_DIFF, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' } }).then(run => ({
+    code: run.spawnError ? null : run.truncated ? 1 : run.code,
+    stdout: run.stdout,
+    stderr: run.spawnError ?? (run.truncated ? `the output passed ${MAX_DIFF / 1_000_000} MB` : run.stderr),
+  }))
+}
+
+/** git's first line of error, for a message. */
+export const why = (result: GitResult) => result.stderr.trim().split('\n')[0] || `exit code ${result.code}`
+
+/** The repository's top folder, or undefined outside a git repository. */
+export async function projectRoot(cwd: string): Promise<string | undefined> {
+  const top = await git(cwd, ['rev-parse', '--show-toplevel'])
+  return top.code === 0 && top.stdout.trim() ? top.stdout.trim() : undefined
+}
+
+/** A branch against its base, or one commit against its first parent (the empty tree for a root commit). */
+export type Target = { base: string } | { commit: string; parent: string }
+
+// git's empty tree, which a root commit is diffed against.
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+/** The git range a target covers, as shown to the person. */
+export const rangeOf = (target: Target) => ('base' in target ? `${target.base}...HEAD` : `${target.commit}^!`)
+/** The revisions `git diff` takes for a target. */
+const revisionsOf = (target: Target) => ('base' in target ? [`${target.base}...HEAD`] : [target.parent, target.commit])
+
+// A ref as a person types it; anything else (an option, a range, odd characters) is refused before git sees it.
+const REF = /^(?!-)[A-Za-z0-9._\/@{}~^-]+$/
+
+/** The target a review covers: the commit or base given, else the branch against origin/HEAD, else main or master. */
+export async function resolveTarget(project: string, given: { base?: string; commit?: string }): Promise<Target | { error: string }> {
+  if (given.base && given.commit) return { error: 'Give --base or --commit, not both.' }
+  const ref = given.commit ?? given.base
+  if (ref !== undefined && !REF.test(ref)) return { error: `${ref} is not a git ref.` }
+  if (given.commit) {
+    const sha = await git(project, ['rev-parse', '--verify', '--quiet', `${given.commit}^{commit}`])
+    if (sha.code !== 0) return { error: `${given.commit} is not a commit here.` }
+    const commit = sha.stdout.trim()
+    const parent = await git(project, ['rev-parse', '--verify', '--quiet', `${commit}^1`])
+    return { commit, parent: parent.code === 0 ? parent.stdout.trim() : EMPTY_TREE }
+  }
+  if (given.base) {
+    const known = await git(project, ['rev-parse', '--verify', '--quiet', `${given.base}^{commit}`])
+    return known.code === 0 ? { base: given.base } : { error: `${given.base} is not a branch or commit here.` }
+  }
+  const head = await git(project, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])
+  if (head.code === 0 && REF.test(head.stdout.trim())) return { base: head.stdout.trim() }
+  for (const branch of ['main', 'master']) if ((await git(project, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])).code === 0) return { base: branch }
+  return { error: 'No default branch found (origin/HEAD, main or master): pass --base.' }
+}
+
+/** The diff file a review's worktree holds, named in its prompt. */
+export const DIFF_FILE = '.agy-review.diff'
+
+export interface ReviewWorktree {
+  path: string
+  range: string
+  files: string[]
+  diffPath: string
+  /** Files git does not track, which a branch review leaves out. */
+  untracked: number
+}
+
+/** Makes the review's worktree at HEAD (or the commit), detached, with the diff written into it. */
+export async function makeReviewWorktree(project: string, path: string, target: Target): Promise<ReviewWorktree | { error: string }> {
+  const range = rangeOf(target)
+  const revisions = revisionsOf(target)
+  const names = await git(project, ['diff', ...DIFF, '--name-only', ...revisions, '--'])
+  if (names.code !== 0) return { error: `git could not diff ${range}: ${why(names)}` }
+  const files = names.stdout.split('\n').filter(Boolean)
+  if (files.length === 0) return { error: `Nothing to review: ${range} changes no file.` }
+  const diff = await git(project, ['diff', ...DIFF, ...revisions, '--'], 120_000)
+  if (diff.code !== 0) return { error: `git could not diff ${range}: ${why(diff)}` }
+  const added = await git(project, ['worktree', 'add', '--detach', '--lock', path, 'commit' in target ? target.commit : 'HEAD'], 300_000)
+  if (added.code !== 0) return { error: `git could not make the review worktree: ${why(added)}` }
+  const diffPath = join(path, DIFF_FILE)
+  try {
+    await writeFile(diffPath, diff.stdout, { mode: 0o600 })
+  } catch (error) {
+    await removeWorktree(project, path)
+    return { error: `Could not write the review's diff: ${error instanceof Error ? error.message : String(error)}` }
+  }
+  let untracked = 0
+  if ('base' in target) {
+    const listed = await git(project, ['ls-files', '--others', '--exclude-standard'])
+    untracked = listed.code === 0 ? listed.stdout.split('\n').filter(Boolean).length : 0
+  }
+  return { path, range, files, diffPath, untracked }
+}
+
+/** Removes a task's worktree; a folder git no longer knows goes all the same. */
+export async function removeWorktree(project: string, path: string): Promise<void> {
+  // Unlocked first: git prunes no locked worktree, so one removed by rm would stay registered.
+  await git(project, ['worktree', 'unlock', path])
+  const removed = await git(project, ['worktree', 'remove', '--force', '--force', path])
+  if (removed.code !== 0) await runProcess(['rm', '-rf', '--', path], { timeoutMs: 60_000 })
+  await git(project, ['worktree', 'prune'])
+}
+
+/**
+ * Removes the task worktrees under `worktreesDir` whose task is not running (`live` says which are): a task killed
+ * outright (SIGKILL, a second signal) leaves its worktree locked in the repository, where git never prunes it. The
+ * repository is the task's project, else the one the worktree's `.git` file names.
+ */
+export async function sweepWorktrees(worktreesDir: string, live: (taskId: string) => Promise<{ running: boolean; project?: string }>): Promise<void> {
+  for (const name of await readdir(worktreesDir).catch(() => [] as string[])) {
+    const path = join(worktreesDir, name)
+    const task = await live(name)
+    if (task.running) continue
+    let project = task.project
+    if (!project) {
+      // `gitdir: <repository>/.git/worktrees/<name>`: the repository is two folders up from its git folder.
+      const gitdir = (await readFile(join(path, '.git'), 'utf8').catch(() => '')).match(/^gitdir:\s*(.+)$/m)?.[1]?.trim()
+      const common = gitdir ? dirname(dirname(gitdir)) : undefined
+      project = common && basename(common) === '.git' ? dirname(common) : undefined
+    }
+    if (project) await removeWorktree(project, path)
+    else await runProcess(['rm', '-rf', '--', path], { timeoutMs: 60_000 })
+  }
+}
+
+export const PRIORITIES = ['P0', 'P1', 'P2', 'P3'] as const
+export interface Finding {
+  priority: (typeof PRIORITIES)[number]
+  title: string
+  path: string
+  line: number
+  detail: string
+}
+
+/** The review's instructions: the diff file and its files, the scale, the JSON block to answer with, and the focus. */
+export function reviewPrompt(review: ReviewWorktree, focus: string): string {
+  return [
+    `Review the code changes of this git repository (${review.range}). The full diff is in ${DIFF_FILE} in the current folder; the changed files are:`,
+    ...review.files.map(path => `- ${path}`),
+    '',
+    'Read the diff, then the surrounding code in this folder as needed. Report only real problems, most severe first.',
+    'P0 breaks the build, loses data or opens a security hole; P1 is a bug users hit; P2 a bug in an edge case or a missing check at a real boundary; P3 a minor correctness or clarity issue worth fixing.',
+    'Put correctness and security first. Leave out style, naming and formatting comments.',
+    '',
+    'End your answer with one fenced ```json block holding exactly {"findings": [...]}, each finding',
+    '{"priority": "P0"|"P1"|"P2"|"P3", "title": "<short>", "path": "<relative to the repository root>", "line": <line in the changed file>, "detail": "<one or two sentences: what goes wrong and when>"}.',
+    'If you find nothing, the block is {"findings": []}: that is a valid answer.',
+    ...(focus.trim() ? ['', 'The person asking adds:', focus.trim()] : []),
+  ].join('\n')
+}
+
+/**
+ * The findings in an answer's last ```json block, checked; a finding that does not fit is left out and counted, and an
+ * error when there is no block or it holds no findings list.
+ */
+export function findingsOf(answer: string): { findings: Finding[]; invalid: number } | { error: string } {
+  const blocks = [...answer.matchAll(/```[ \t]*json[^\n]*\n([\s\S]*?)```/gi)]
+  const last = blocks.at(-1)?.[1]
+  if (last === undefined) return { error: 'The answer has no ```json findings block.' }
+  let parsed: any
+  try {
+    parsed = JSON.parse(last)
+  } catch {
+    return { error: 'The findings block is not valid JSON.' }
+  }
+  if (!Array.isArray(parsed?.findings)) return { error: 'The findings block has no findings list.' }
+  const findings: Finding[] = []
+  let invalid = 0
+  for (const item of parsed.findings) {
+    // A line written as a string ("42") is taken as the number it names.
+    const line = typeof item?.line === 'string' && /^\d+$/.test(item.line.trim()) ? Number(item.line) : item?.line
+    const priority = typeof item?.priority === 'string' ? item.priority.trim().toUpperCase() : undefined
+    const ok =
+      (PRIORITIES as readonly string[]).includes(priority ?? '') &&
+      typeof item.title === 'string' && item.title.trim() &&
+      typeof item.path === 'string' && item.path.trim() && !item.path.startsWith('/') &&
+      Number.isInteger(line) && line >= 0 &&
+      typeof item.detail === 'string'
+    if (!ok) {
+      invalid++
+      continue
+    }
+    findings.push({ priority: priority as Finding['priority'], title: item.title.trim(), path: item.path.trim(), line, detail: item.detail.trim() })
+  }
+  return { findings: findings.sort((a, b) => a.priority.localeCompare(b.priority)), invalid }
+}
+
+export const findingLine = (finding: Finding) => `[${finding.priority}] ${finding.title} — ${finding.path}:${finding.line}`
