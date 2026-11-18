@@ -41,7 +41,7 @@ export interface TurnInput {
   clientVersion: string
 }
 
-export type ErrorKind = 'model_unavailable' | 'timed_out' | 'idle' | 'agent_error' | 'resume_failed'
+export type ErrorKind = 'model_unavailable' | 'timed_out' | 'idle' | 'agent_error' | 'resume_failed' | 'no_answer'
 
 export interface TurnResult {
   status: 'completed' | 'failed' | 'cancelled'
@@ -189,7 +189,7 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
     if (late) return late
     if (turn?.stopReason === 'cancelled') return end({ status: 'cancelled' })
     if (turn?.stopReason === 'refusal') return end({ error: 'agy refused the task.', errorKind: 'agent_error' })
-    if (!text.trim()) return end({ error: 'agy ended its turn without an answer.', errorKind: 'agent_error' })
+    if (!text.trim()) return end({ error: 'agy ended its turn without an answer.', errorKind: 'no_answer' })
     return end({ status: 'completed' })
   } catch (error) {
     return stopped_() ?? end({ error: messageOf(error), errorKind: 'agent_error' })

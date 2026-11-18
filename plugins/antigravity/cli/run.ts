@@ -1,7 +1,7 @@
 // `run` and `follow`: one delegated task, from the brief to the saved answer. A task gets its own folder, runs agy over
 // ACP in the private agy home with every action answered by the mode, and prints a short summary that Claude reads when
 // the background command ends. A follow-up resumes the same agy session.
-import { copyFile, readFile, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runTurn } from './acp.ts'
 import { PROFILE, agyEnv, locateAgy, pathsOf, prepareHome } from './agy.ts'
@@ -10,7 +10,7 @@ import { headOf, makeTaskWorktree, patchOf, uncommittedOf } from './implement.ts
 import { decide, type Mode, type Scope } from './policy.ts'
 import { bucketLine, bucketsFor, gateOf, readUsage } from './quota.ts'
 import { findingLine, findingsOf, makeReviewWorktree, projectRoot, removeWorktree, resolveTarget, reviewPrompt } from './review.ts'
-import { createTaskDir, loadTask, lockSession, newTaskId, pruneTasks, saveTask, writeJson, type Role, type Status, type Task } from './tasks.ts'
+import { alive, createTaskDir, loadTask, lockSession, newTaskId, pruneTasks, saveTask, writeJson, type Role, type Status, type Task } from './tasks.ts'
 
 export interface RunIo {
   out: (text: string) => void
@@ -78,16 +78,6 @@ function save(task: Task): Promise<void> {
   return next
 }
 
-const alive = (pid: number | undefined) => {
-  if (typeof pid !== 'number') return false
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
-
 export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
   const brief = await readFile(args.briefFile, 'utf8').catch(() => undefined)
   if (brief === undefined) return usage(io, `Cannot read the brief ${args.briefFile}.`)
@@ -121,7 +111,8 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
     }
   } else warnings.push(`The quota could not be read (${usageNow.error}); the task started anyway.`)
 
-  const project = parent?.project ?? (await projectRoot(io.cwd)) ?? io.cwd
+  const repository = parent ? undefined : await projectRoot(io.cwd)
+  const project = parent?.project ?? repository ?? io.cwd
   const role: Role = parent ? (args.role === 'review' ? 'ask' : args.role) : args.role
   if (args.mode === 'implement' && role === 'review') return usage(io, 'A review is read-only: run it with --mode read-only.')
   const now = new Date(io.now())
@@ -163,7 +154,7 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
     let prompt: string
     const inWorktree = args.mode === 'implement' || task.files.patch !== undefined
     if (role === 'review' && !parent) {
-      if (!(await projectRoot(io.cwd))) return await finish(io, task, args, 'failed', 'A review needs a git repository.', RUN_EXIT.usage)
+      if (!repository) return await finish(io, task, args, 'failed', 'A review needs a git repository.', RUN_EXIT.usage)
       const target = await resolveTarget(project, { ...(args.base ? { base: args.base } : {}), ...(args.commit ? { commit: args.commit } : {}) })
       if ('error' in target) return await finish(io, task, args, 'failed', target.error, RUN_EXIT.usage)
       worktree = join(paths.worktrees, id)
@@ -223,7 +214,8 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
     })
     task.refused = turn.refused
     if (turn.sessionId) task.sessionId = turn.sessionId
-    task.executedModel = turn.executedModel
+    // A resumed session may not say its model; it keeps the one the earlier task ran.
+    task.executedModel = turn.executedModel ?? parent?.executedModel ?? null
     const took = seconds(io.now() - started)
     if (turn.answer) {
       task.files.answer = join(paths.tasks, id, 'answer.md')
@@ -243,7 +235,10 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
       if ('error' in patch) task.notes.push(`${patch.error} agy's changes are lost.`)
       else if (patch.changed.length === 0) {
         task.notes.push('agy changed no file.')
+        // A follow-up whose changes cancel out the earlier ones leaves no patch, not the copied one.
         delete task.changed
+        if (task.files.patch) await rm(task.files.patch, { force: true })
+        delete task.files.patch
       } else {
         task.changed = patch.changed
         task.files.patch = join(paths.tasks, id, 'patch.diff')

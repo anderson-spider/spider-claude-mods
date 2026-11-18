@@ -1,9 +1,7 @@
 // The implement mode's workspace: a throwaway worktree at the checkout's HEAD where agy may edit, and the patch its
 // edits come back as. The checkout is never touched; the person (or Claude) applies the patch. A follow-up rebuilds the
 // worktree at the same commit with the earlier patch applied, so agy goes on from its own changes.
-import { DIFF, git } from './review.ts'
-
-const why = (result: { code: number | null; stderr: string }) => result.stderr.trim().split('\n')[0] || `exit code ${result.code}`
+import { DIFF, git, why } from './review.ts'
 
 /** The commit HEAD points at, or an error outside a repository or before the first commit. */
 export async function headOf(project: string): Promise<string | { error: string }> {

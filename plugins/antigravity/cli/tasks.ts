@@ -85,7 +85,9 @@ export async function createTaskDir(tasksDir: string, id: string, brief: string)
   return files
 }
 
-const alive = (pid: number) => {
+/** Whether a process is running (one another user owns counts). */
+export const alive = (pid: number | undefined) => {
+  if (typeof pid !== 'number') return false
   try {
     process.kill(pid, 0)
     return true

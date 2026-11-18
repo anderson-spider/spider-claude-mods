@@ -282,3 +282,16 @@ test('follow refuses a parent task that is still running', async () => {
   assert.equal(await cli(['follow', '--task', first.id, '--brief-file', h.brief], h.io), EXIT.failed)
   assert.match(h.err.join('\n'), /is still running on this agy session/)
 })
+
+test('an implement follow-up that undoes every change leaves no patch', async () => {
+  const repo = await repository()
+  const h = await harness({ steps: [{ edit: { path: 'a.ts', content: 'export const a = 9\n' } }, { say: 'Set.' }], resumeSteps: [{ edit: { path: 'a.ts', content: 'export const a = 2\n' } }, { say: 'Undone.' }] }, repo)
+  assert.equal(await cli(['run', '--mode', 'implement', '--brief-file', h.brief], h.io), EXIT.ok)
+  const first = await h.record()
+  assert.equal(await cli(['follow', '--task', first.id, '--mode', 'implement', '--brief-file', h.brief], h.io), EXIT.ok)
+  const second = await h.record()
+  assert.equal(second.files.patch, undefined)
+  assert.equal(second.changed, undefined)
+  assert.ok(second.notes.includes('agy changed no file.'))
+  assert.equal(second.executedModel, first.executedModel)
+})

@@ -30,7 +30,8 @@ export function git(cwd: string, args: string[], timeoutMs = 60_000, gitDir?: st
   }))
 }
 
-const why = (result: GitResult) => result.stderr.trim().split('\n')[0] || `exit code ${result.code}`
+/** git's first line of error, for a message. */
+export const why = (result: GitResult) => result.stderr.trim().split('\n')[0] || `exit code ${result.code}`
 
 /** The repository's top folder, or undefined outside a git repository. */
 export async function projectRoot(cwd: string): Promise<string | undefined> {

@@ -36,7 +36,7 @@ export function resetSentence(resetAt: number, endedAt: number): string {
   return `The quota resets ${wait} (at ${new Date(resetAt).toISOString().slice(0, 16).replace('T', ' ')} UTC).`
 }
 
-const QUOTA = /\b(RESOURCE_EXHAUSTED|QUOTA_EXHAUSTED)\b|\bquota\b.*\b(exceeded|exhausted)\b|\b429\b/i
+const QUOTA = /\b(RESOURCE_EXHAUSTED|QUOTA_EXHAUSTED)\b|\bquota\b.*\b(exceeded|exhausted)\b|\b(?:status|code|http)\W{0,3}429\b|\b429 Too Many Requests\b/i
 const AUTH = /\b(UNAUTHENTICATED|PERMISSION_DENIED|not (?:signed|logged) in|sign in|login required|auth(?:entication)? (?:required|failed))\b/i
 
 export interface Failure {
@@ -62,6 +62,6 @@ export function classify(turn: TurnResult, endedAt: number): Failure {
   if (AUTH.test(texts)) return say('signed out', ' Run agy once to sign in.')
   if (turn.errorKind === 'model_unavailable') return say('model unavailable', ' antigravity-delegate models lists the ids.')
   if (turn.errorKind === 'resume_failed') return say('resume failed', ' Start a new task instead.')
-  if (turn.error === 'agy ended its turn without an answer.') return { reason: 'no answer', message: 'agy ended its turn without an answer.' }
+  if (turn.errorKind === 'no_answer') return { reason: 'no answer', message: 'agy ended its turn without an answer.' }
   return say('agy error')
 }

@@ -1,9 +1,10 @@
 // The agy CLI: where it is, its version and models, the environment it gets, and the private agy home every task runs
 // in. A private `--gemini-dir` is what keeps the user's own MCP servers, hooks, plugins and skills out of a task (measured
 // on agy 1.5.11: `--cli_dir_name` and `--include-default-customizations=false` do not); sign-in still works from it.
-import { access, constants, lstat, mkdir, readdir, readFile, rename, stat, writeFile, chmod } from 'node:fs/promises'
+import { access, constants, lstat, mkdir, readdir, readFile, stat, chmod } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { runProcess } from './process.ts'
+import { writeJson } from './tasks.ts'
 
 /** The subfolder of the agy home that holds this plugin's agy settings (`--cli_dir_name`). */
 export const PROFILE = 'spider-antigravity'
@@ -100,13 +101,6 @@ export async function privateDir(path: string): Promise<string | undefined> {
   return undefined
 }
 
-/** Writes a file through a temp file and a rename, so a reader never sees half of it. */
-async function writeAtomic(path: string, text: string): Promise<void> {
-  const temp = `${path}.${process.pid}.tmp`
-  await writeFile(temp, text, { mode: 0o600 })
-  await rename(temp, path)
-}
-
 /** Whether an agy config file configures nothing under `key`: missing, empty, or JSON whose `key` is empty. */
 async function configuresNothing(path: string, key: string): Promise<boolean> {
   const info = await stat(path).catch((error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? null : undefined))
@@ -144,8 +138,8 @@ export async function prepareHome(paths: Paths): Promise<string | undefined> {
     const refused = await privateDir(dir)
     if (refused) return refused
   }
-  await writeAtomic(join(profile, 'settings.json'), `${JSON.stringify(PROFILE_SETTINGS, null, 2)}\n`)
-  await writeAtomic(join(config, 'config.json'), `${JSON.stringify(HOME_CONFIG, null, 2)}\n`)
+  await writeJson(join(profile, 'settings.json'), PROFILE_SETTINGS)
+  await writeJson(join(config, 'config.json'), HOME_CONFIG)
   const checks: [boolean, string][] = [
     [await configuresNothing(join(config, 'mcp_config.json'), 'mcpServers'), 'MCP servers in config/mcp_config.json'],
     [await configuresNothing(join(config, 'hooks.json'), 'hooks'), 'hooks in config/hooks.json'],
