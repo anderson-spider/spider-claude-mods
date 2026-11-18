@@ -3,7 +3,7 @@
 import { firstLine } from './agy.ts'
 import type { TurnResult } from './acp.ts'
 
-export type Reason = 'quota exhausted' | 'signed out' | 'timed out' | 'idle' | 'model unavailable' | 'resume failed' | 'cancelled' | 'no answer' | 'agy error'
+export type Reason = 'quota exhausted' | 'signed out' | 'timed out' | 'idle' | 'model unavailable' | 'effort unavailable' | 'resume failed' | 'cancelled' | 'no answer' | 'agy error'
 
 // When an exhausted quota comes back, as a Google API error renders it (google.rpc.ErrorInfo metadata or RetryInfo),
 // whether Go-printed (`quotaResetDelay:2h5m0s`) or JSON (`"quotaResetDelay":"7500s"`).
@@ -60,6 +60,7 @@ export function classify(turn: TurnResult, endedAt: number): Failure {
     return say('quota exhausted', resetAt === undefined ? '' : ` ${resetSentence(resetAt, endedAt)}`)
   }
   if (AUTH.test(texts)) return say('signed out', ' Run agy once to sign in.')
+  if (turn.errorKind === 'effort_unavailable') return say('effort unavailable', ' Pass another --effort, or none for the model\'s own.')
   if (turn.errorKind === 'model_unavailable') return say('model unavailable', ' antigravity-delegate models lists the ids.')
   if (turn.errorKind === 'resume_failed') return say('resume failed', ' Start a new task instead.')
   if (turn.errorKind === 'no_answer') return { reason: 'no answer', message: 'agy ended its turn without an answer.' }

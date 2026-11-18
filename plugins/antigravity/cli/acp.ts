@@ -41,7 +41,7 @@ export interface TurnInput {
   clientVersion: string
 }
 
-export type ErrorKind = 'model_unavailable' | 'timed_out' | 'idle' | 'agent_error' | 'resume_failed' | 'no_answer'
+export type ErrorKind = 'model_unavailable' | 'effort_unavailable' | 'timed_out' | 'idle' | 'agent_error' | 'resume_failed' | 'no_answer'
 
 export interface TurnResult {
   status: 'completed' | 'failed' | 'cancelled'
@@ -170,10 +170,17 @@ export async function runTurn(input: TurnInput): Promise<TurnResult> {
       input.onUpdate?.({ executedModel })
     }
     if (input.effort) {
+      // The levels agy offers, when its session lists them (session/new does), named in the error.
+      const offered: string[] = (Array.isArray(session?.configOptions) ? session.configOptions : [])
+        .find((option: any) => option?.id === 'thought_level')
+        ?.options?.map((option: any) => String(option?.value))
+        .filter(Boolean) ?? []
+      const levels = offered.length ? ` (agy offers ${offered.join(', ')})` : ''
+      if (offered.length && !offered.includes(input.effort)) return end({ error: `agy has no effort ${input.effort}${levels}.`, errorKind: 'effort_unavailable' })
       try {
         await rpc.request('session/set_config_option', { sessionId, configId: 'thought_level', value: input.effort })
       } catch (error) {
-        return stopped_() ?? end({ error: `agy refused effort ${input.effort}: ${messageOf(error)}`, errorKind: 'model_unavailable' })
+        return stopped_() ?? end({ error: `agy refused effort ${input.effort}${levels}: ${messageOf(error)}`, errorKind: 'effort_unavailable' })
       }
     }
     const ready = stopped_()

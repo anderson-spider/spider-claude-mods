@@ -10,7 +10,7 @@ A `bin/` executable with no hooks and no MCP server, so Code Mode stays availabl
 - `-p /usage --output-format json` spends no quota only with slash commands on.
 - `--cli_dir_name` and `--include-default-customizations=false` still load the user's MCP servers and skills; a private `--gemini-dir` loads neither, keeps the sign-in, and asks permission for every read, edit and command even with no settings file.
 - ACP (`agy acp`): agy rejects the `yolo` and `auto_edit` modes; in `default` it sends `session/request_permission` for every read, edit and command, with absolute `locations`, outside the workspace too, and honors a refusal. After a refusal it often ends the turn with no text, so `cli/acp.ts` prompts it on (up to 4 times).
-- `session/resume` keeps the conversation's memory, also with a different `cwd`; conversations live in the `--gemini-dir`, so it must stay the same path. Two turns at once on one session hang agy, hence the session lock.
+- `session/resume` keeps the conversation's memory, also with a different `cwd`; conversations live in the `--gemini-dir`, so it must stay the same path. Two turns at once on one session hang agy, hence the session lock; a stale lock is taken over under a guard file, so only one process wins.
 - An allowed command runs unconfined, with network: no mode allows one.
 - `agy models` prints `id<TAB>name` lines after a "Fetching available models..." line.
 

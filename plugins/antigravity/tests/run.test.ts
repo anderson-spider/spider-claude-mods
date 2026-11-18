@@ -295,3 +295,42 @@ test('an implement follow-up that undoes every change leaves no patch', async ()
   assert.ok(second.notes.includes('agy changed no file.'))
   assert.equal(second.executedModel, first.executedModel)
 })
+
+test('run review keeps the findings that fit and counts the rest', async () => {
+  const repo = await repository()
+  const answer = 'Two.\n\n```JSON\n{"findings": [{"priority": "p1", "title": "string line", "path": "a.ts", "line": "1", "detail": "d"}, {"priority": "P9", "title": "bad", "path": "a.ts", "line": 1, "detail": "d"}]}\n```'
+  const h = await harness({ steps: [{ say: answer }] }, repo)
+  assert.equal(await cli(['run', '--role', 'review', '--brief-file', h.brief], h.io), EXIT.ok)
+  const text = h.out.join('\n')
+  assert.match(text, /^Findings \(1\):\n\[P1\] string line — a\.ts:1$/m)
+  assert.match(text, /^Note: 1 finding does not fit the findings format and is only in the answer\.$/m)
+})
+
+test('an effort agy does not offer fails as effort unavailable, naming the levels', async () => {
+  const h = await harness()
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief, '--effort', 'extreme'], h.io), EXIT.failed)
+  assert.match(h.out.join('\n'), /^agy failed \(effort unavailable\): agy has no effort extreme \(agy offers low, medium, high\)\. Pass another --effort/m)
+  assert.ok(!(await h.entries()).some(entry => entry.got?.method === 'session/set_config_option'))
+})
+
+test('the quota gate reuses a recent read', async () => {
+  const h = await harness({ steps: [{ say: 'ok' }] })
+  const cache = join(h.state, 'spider-antigravity', 'usage.json')
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief], h.io), EXIT.ok)
+  const first = JSON.parse(await readFile(cache, 'utf8'))
+  // A spent quota in the cache refuses the next task without asking agy again.
+  await writeFile(cache, JSON.stringify({ at: first.at, buckets: first.buckets.map((bucket: { remaining: number }) => ({ ...bucket, remaining: 0.01 })) }))
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief], h.io), EXIT.failed)
+  assert.match(h.err.join('\n'), /Not started: agy's quota is nearly spent/)
+  await writeFile(cache, JSON.stringify({ at: first.at - 10 * 60_000, buckets: [] }))
+  assert.equal(await cli(['run', '--role', 'ask', '--brief-file', h.brief], h.io), EXIT.ok)
+})
+
+test('a task stopped before agy starts ends cancelled without a session', async () => {
+  const h = await harness()
+  const controller = new AbortController()
+  controller.abort()
+  const code = await runTask({ ...h.io, cwd: h.project, signal: controller.signal }, { mode: 'read-only', role: 'ask', briefFile: h.brief, minutes: 30, idleMinutes: 15, force: false, json: false })
+  assert.equal(code, EXIT.cancelled)
+  assert.deepEqual(await h.entries(), [])
+})

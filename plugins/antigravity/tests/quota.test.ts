@@ -41,5 +41,6 @@ test('resetText says how long until the reset and when, in UTC', () => {
   assert.equal(resetText('2026-11-18T14:00:00Z', now), 'resets in about 2 h 5 min (at 2026-11-18 14:00 UTC)')
   assert.equal(resetText('2026-11-18T12:00:00Z', now), 'resets in about 5 min (at 2026-11-18 12:00 UTC)')
   assert.equal(resetText('2026-11-25T14:00:00Z', now), 'resets in about 7 d 2 h (at 2026-11-25 14:00 UTC)')
+  assert.equal(resetText('2026-11-18T11:00:00Z', now), 'reset at 2026-11-18 11:00 UTC')
   assert.equal(resetText(undefined, now), '')
 })

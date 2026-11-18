@@ -3,7 +3,9 @@
 // `gemini-weekly`, `gemini-argon-wtu-weekly`, `3p-5h` for the Claude and GPT models), a window (`5h` or `weekly`), a
 // `remaining_fraction` and a `reset_time`.
 import { agyEnv, firstLine } from './agy.ts'
+import { readFile } from 'node:fs/promises'
 import { runProcess } from './process.ts'
+import { writeJson } from './tasks.ts'
 
 export interface Bucket {
   id: string
@@ -71,6 +73,7 @@ export function gateOf(buckets: Bucket[]): Gate {
 export function resetText(resetsAt: string | undefined, now: number): string {
   if (!resetsAt) return ''
   const at = Date.parse(resetsAt)
+  if (at <= now) return `reset at ${new Date(at).toISOString().slice(0, 16).replace('T', ' ')} UTC`
   const minutes = Math.max(0, Math.round((at - now) / 60_000))
   const days = Math.floor(minutes / 1440)
   const hours = Math.floor((minutes % 1440) / 60)
@@ -82,6 +85,18 @@ export function resetText(resetsAt: string | undefined, now: number): string {
 export function bucketLine(bucket: Bucket, now: number): string {
   const reset = resetText(bucket.resetsAt, now)
   return `${bucket.label}: ${Math.round(bucket.remaining * 100)}% left${reset ? `, ${reset}` : ''}`
+}
+
+// How long a task's gate trusts a quota read before it: agy's print mode starts the person's own MCP servers.
+export const USAGE_CACHE_MS = 5 * 60_000
+
+/** The quota read at most `maxAgeMs` ago (from `cacheFile`), else read now and kept there. */
+export async function cachedUsage(agy: string, cacheFile: string, cwd: string, env: NodeJS.ProcessEnv, now: number, maxAgeMs = USAGE_CACHE_MS): Promise<Bucket[] | { error: string }> {
+  const kept = await readFile(cacheFile, 'utf8').then(text => JSON.parse(text) as { at?: number; buckets?: Bucket[] }, () => undefined)
+  if (kept && typeof kept.at === 'number' && Array.isArray(kept.buckets) && now - kept.at >= 0 && now - kept.at < maxAgeMs) return kept.buckets
+  const buckets = await readUsage(agy, cwd, env)
+  if (Array.isArray(buckets)) await writeJson(cacheFile, { at: now, buckets }).catch(() => undefined)
+  return buckets
 }
 
 /** Runs `agy -p /usage` in an empty folder, with slash commands on (with them off it would be a prompt that spends quota). */

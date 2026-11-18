@@ -149,9 +149,12 @@ export function reviewPrompt(review: ReviewWorktree, focus: string): string {
   ].join('\n')
 }
 
-/** The findings in an answer's last ```json block, checked; an error when there is none or it does not fit. */
-export function findingsOf(answer: string): Finding[] | { error: string } {
-  const blocks = [...answer.matchAll(/```json\s*\n([\s\S]*?)```/g)]
+/**
+ * The findings in an answer's last ```json block, checked; a finding that does not fit is left out and counted, and an
+ * error when there is no block or it holds no findings list.
+ */
+export function findingsOf(answer: string): { findings: Finding[]; invalid: number } | { error: string } {
+  const blocks = [...answer.matchAll(/```[ \t]*json[^\n]*\n([\s\S]*?)```/gi)]
   const last = blocks.at(-1)?.[1]
   if (last === undefined) return { error: 'The answer has no ```json findings block.' }
   let parsed: any
@@ -162,17 +165,24 @@ export function findingsOf(answer: string): Finding[] | { error: string } {
   }
   if (!Array.isArray(parsed?.findings)) return { error: 'The findings block has no findings list.' }
   const findings: Finding[] = []
-  for (const [index, item] of parsed.findings.entries()) {
+  let invalid = 0
+  for (const item of parsed.findings) {
+    // A line written as a string ("42") is taken as the number it names.
+    const line = typeof item?.line === 'string' && /^\d+$/.test(item.line.trim()) ? Number(item.line) : item?.line
+    const priority = typeof item?.priority === 'string' ? item.priority.trim().toUpperCase() : undefined
     const ok =
-      (PRIORITIES as readonly string[]).includes(item?.priority) &&
+      (PRIORITIES as readonly string[]).includes(priority ?? '') &&
       typeof item.title === 'string' && item.title.trim() &&
       typeof item.path === 'string' && item.path.trim() && !item.path.startsWith('/') &&
-      Number.isInteger(item.line) && item.line >= 0 &&
+      Number.isInteger(line) && line >= 0 &&
       typeof item.detail === 'string'
-    if (!ok) return { error: `Finding ${index + 1} does not fit the schema.` }
-    findings.push({ priority: item.priority, title: item.title.trim(), path: item.path.trim(), line: item.line, detail: item.detail.trim() })
+    if (!ok) {
+      invalid++
+      continue
+    }
+    findings.push({ priority: priority as Finding['priority'], title: item.title.trim(), path: item.path.trim(), line, detail: item.detail.trim() })
   }
-  return findings.sort((a, b) => a.priority.localeCompare(b.priority))
+  return { findings: findings.sort((a, b) => a.priority.localeCompare(b.priority)), invalid }
 }
 
 export const findingLine = (finding: Finding) => `[${finding.priority}] ${finding.title} — ${finding.path}:${finding.line}`

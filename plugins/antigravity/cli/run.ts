@@ -8,7 +8,7 @@ import { PROFILE, agyEnv, locateAgy, pathsOf, prepareHome } from './agy.ts'
 import { classify } from './errors.ts'
 import { headOf, makeTaskWorktree, patchOf, uncommittedOf } from './implement.ts'
 import { decide, type Mode, type Scope } from './policy.ts'
-import { bucketLine, bucketsFor, gateOf, readUsage } from './quota.ts'
+import { bucketLine, bucketsFor, cachedUsage, gateOf } from './quota.ts'
 import { findingLine, findingsOf, makeReviewWorktree, projectRoot, removeWorktree, resolveTarget, reviewPrompt } from './review.ts'
 import { alive, createTaskDir, loadTask, lockSession, newTaskId, pruneTasks, saveTask, writeJson, type Role, type Status, type Task } from './tasks.ts'
 
@@ -101,7 +101,7 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
   if (refused) return fail(io, refused, RUN_EXIT.failed)
   const warnings: string[] = []
   const model = args.model ?? parent?.model
-  const usageNow = await readUsage(agy, paths.tasks, io.env)
+  const usageNow = await cachedUsage(agy, join(paths.state, 'usage.json'), paths.tasks, io.env, io.now())
   if (Array.isArray(usageNow)) {
     const gate = gateOf(bucketsFor(usageNow, model))
     if (gate.lowest && gate.verdict !== 'ok') {
@@ -188,6 +188,8 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
       if ('error' in locked) return await finish(io, task, args, 'failed', locked.error, RUN_EXIT.failed)
       release = locked
     }
+    // Stopped during the setup: end here, before agy starts a session.
+    if (io.signal?.aborted) return await finish(io, task, args, 'cancelled', 'The task was cancelled.', RUN_EXIT.cancelled)
     const scope: Scope = { cwd: task.cwd, readRoots: [task.cwd, paths.geminiDir], writeRoots: args.mode === 'implement' && worktree ? [worktree] : [] }
     const started = io.now()
     const turn = await runTurn({
@@ -222,12 +224,13 @@ export async function runTask(io: RunIo, args: RunArgs): Promise<number> {
       await writeFile(task.files.answer, `${turn.answer}\n`, { mode: 0o600 })
     }
     if (turn.status === 'completed' && task.role === 'review' && !parent) {
-      const findings = findingsOf(turn.answer)
-      if (Array.isArray(findings)) {
-        task.findings = findings
+      const checked = findingsOf(turn.answer)
+      if ('findings' in checked) {
+        task.findings = checked.findings
         task.files.findings = join(paths.tasks, id, 'findings.json')
-        await writeJson(task.files.findings, findings)
-      } else task.notes.push(`${findings.error} The answer is saved as agy wrote it.`)
+        await writeJson(task.files.findings, checked.findings)
+        if (checked.invalid) task.notes.push(`${checked.invalid} ${checked.invalid === 1 ? 'finding does' : 'findings do'} not fit the findings format and ${checked.invalid === 1 ? 'is' : 'are'} only in the answer.`)
+      } else task.notes.push(`${checked.error} The answer is saved as agy wrote it.`)
     }
     // The patch is kept whatever the end, a stopped or failed task's too: it holds the work done so far.
     if (args.mode === 'implement' && worktree && gitDir && task.base) {

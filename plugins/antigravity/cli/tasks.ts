@@ -96,25 +96,51 @@ export const alive = (pid: number | undefined) => {
   }
 }
 
+// A takeover's guard older than this was left by a process that died during it.
+const GUARD_STALE_MS = 10_000
+
+const createExclusive = (path: string, text: string) =>
+  writeFile(path, text, { flag: 'wx', mode: 0o600 }).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EEXIST') return false
+      throw error
+    },
+  )
+
 /**
- * Takes the session's lock, or says which task holds it. A lock whose process is gone is taken over.
- * Resolves a release function.
+ * Takes the session's lock, or says which task holds it. A lock whose process is gone is taken over under a guard
+ * file, so two processes that both find it stale cannot each remove the other's new lock. Resolves a release function.
  */
 export async function lockSession(locksDir: string, sessionId: string, taskId: string): Promise<(() => Promise<void>) | { error: string }> {
   await mkdir(locksDir, { recursive: true, mode: 0o700 })
   const path = join(locksDir, `${sessionId.replace(/[^A-Za-z0-9_-]/g, '_')}.lock`)
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const guard = `${path}.takeover`
+  const mine = JSON.stringify({ pid: process.pid, task: taskId })
+  const release = () => rm(path, { force: true })
+  const holder = () => readFile(path, 'utf8').then(text => JSON.parse(text) as { pid?: number; task?: string }, () => undefined)
+  const busy = (task?: string) => ({ error: `Task ${task ?? '?'} is still running on this agy session; follow up once it ends.` })
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (await createExclusive(path, mine)) return release
+    const held = await holder()
+    if (held && alive(held.pid)) return busy(held.task)
+    if (!(await createExclusive(guard, mine))) {
+      const info = await stat(guard).catch(() => undefined)
+      if (info && Date.now() - info.mtimeMs > GUARD_STALE_MS) await rm(guard, { force: true })
+      else await new Promise(resolve => setTimeout(resolve, 100))
+      continue
+    }
     try {
-      await writeFile(path, JSON.stringify({ pid: process.pid, task: taskId }), { flag: 'wx', mode: 0o600 })
-      return () => rm(path, { force: true })
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      const held = await readFile(path, 'utf8').then(text => JSON.parse(text) as { pid?: number; task?: string }, () => ({}) as { pid?: number; task?: string })
-      if (typeof held.pid === 'number' && alive(held.pid)) return { error: `Task ${held.task ?? '?'} is still running on this agy session; follow up once it ends.` }
+      // Under the guard, the lock is checked again: another process may have taken it over meanwhile.
+      const again = await holder()
+      if (again && alive(again.pid)) return busy(again.task)
       await rm(path, { force: true })
+      if (await createExclusive(path, mine)) return release
+    } finally {
+      await rm(guard, { force: true })
     }
   }
-  return { error: 'Could not take the session lock.' }
+  return { error: 'Could not take the session lock; try again.' }
 }
 
 /** Removes task folders past the newest `keep` or older than `maxAgeMs`, but never those `spare` names. */
