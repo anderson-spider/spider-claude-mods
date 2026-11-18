@@ -1,9 +1,0 @@
-{
-  "name": "verification-planning",
-  "version": "1.0.0",
-  "description": "A skill that plans, before non-trivial coding work, the project-specific evidence that will establish or refute the change, and closes that path after implementation.",
-  "author": {
-    "name": "anderson-spider"
-  },
-  "license": "MIT"
-}
